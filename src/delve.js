@@ -6,7 +6,7 @@
      target value  what one biome-exclusive fossil encounter is worth.
      biome share   how much of the mine that biome occupies at a given
                    depth, from the data-mined spawn weights.
-     depth value   expected value of one fossil node outside Smuggler's Caches using the
+     depth value   expected value of one fossil node outside Smuggler's Stashes using the
                    explicitly labelled community special-node curve.
      opportunity   a relative 0-100 routing index from biome share and that
                    community depth-adjusted node value.
@@ -151,9 +151,9 @@ export function fossilRows(priceOf) {
 
    A normal biome's headline is its exclusive fossil encounter: the active
    sample profile's quantity times the live fossil price. The community depth
-   value treats a fossil node outside Smuggler's Caches as either that special encounter or
+   value treats a fossil node outside Smuggler's Stashes as either that special encounter or
    a generic fossil node. City bosses live in their own calculation and never
-   enter this ranking. Generic nodes and Smuggler's caches use low/median/high
+   enter this ranking. Generic nodes and Smuggler's Stashes use low/median/high
    pool scenarios because no public data establishes equal fossil probabilities. */
 
 export function computeBiome(biome, priceOf, settings = {}) {
@@ -186,7 +186,6 @@ export function computeBiome(biome, priceOf, settings = {}) {
     high: range.high * qty,
   });
   const genericRange = scale(poolRange, s.genericQty);
-  const cacheRange = scale(poolRange, s.cacheQty);
   const headline = exclusive ? exclusive.nodeValue : 0;
   const headlineLabel = exclusive ? exclusive.node : "No exclusive fossil node";
   const specialChance = exclusive?.available
@@ -201,32 +200,64 @@ export function computeBiome(biome, priceOf, settings = {}) {
 
   return {
     biome, poolNames, poolPrices, poolRange, poolCoverage,
-    exclusive, genericRange, cacheRange,
+    exclusive, genericRange,
     // Median aliases keep price-history and older callers on one clear
     // scenario while the UI exposes the complete low/median/high range.
     genericNode: genericRange.median,
-    cacheNode: cacheRange.median,
     headline, headlineLabel,
     specialChance, depthAdjustedRange, depthAdjustedFound,
   };
 }
 
-export function personalProjection(row, sample) {
+/* A Smuggler's Stash is not a biome encounter. It drops a cluster from the
+   generic fossil pool — every fossil that is not one of the six biome-exclusive
+   targets — so it is computed once for the mine rather than per biome, and it
+   spans a count range because a cluster is not one fossil. Wall-locked fossils
+   follow the same openWalls setting the biome pools use. */
+export function computeStash(priceOf, settings = {}) {
+  const s = { ...DEFAULTS, ...GUIDE_SAMPLE, ...settings };
+  const poolNames = FOSSILS
+    .filter((f) => !f.exclusive && (s.openWalls || !f.wall))
+    .map((f) => f.name);
+  const poolPrices = poolNames.map((n) => ({ name: n, ...priceOf(n) }));
+  const priced = poolPrices.filter((p) => p.found).map((p) => p.chaos);
+  const poolRange = rangeStats(priced);
+  const qtyLow = Math.min(s.stashQtyLow, s.stashQtyHigh);
+  const qtyHigh = Math.max(s.stashQtyLow, s.stashQtyHigh);
+  return {
+    poolNames, poolPrices, poolRange,
+    poolCoverage: poolNames.length ? priced.length / poolNames.length : 1,
+    qtyLow, qtyHigh,
+    /* Cheapest pool outcome at the smallest cluster, dearest at the largest,
+       and a middle scenario at the mean cluster size: the same low/median/high
+       shape the biome pools use, extended over the count as well as the price.
+       Nothing here claims a distribution — no public data gives one. */
+    range: {
+      low: qtyLow * poolRange.low,
+      median: ((qtyLow + qtyHigh) / 2) * poolRange.median,
+      high: qtyHigh * poolRange.high,
+    },
+    found: priced.length > 0,
+  };
+}
+
+export function personalProjection(row, sample, stashRange = null) {
   if (!sample?.hasTimedSample || !row.exclusive?.found) return null;
   const point = (key) => (
     sample.exclusivePerHour * row.exclusive.nodeValue
     + sample.genericPerHour * row.genericRange[key]
-    + sample.cachePerHour * row.cacheRange[key]
+    + sample.stashPerHour * (stashRange ? stashRange[key] : 0)
   );
   return { low: point("low"), median: point("median"), high: point("high") };
 }
 
 /* Opportunity combines the community depth-adjusted value of one fossil node
-   outside Smuggler's Caches with the data-mined biome share, then normalises the result.
+   outside Smuggler's Stashes with the data-mined biome share, then normalises the result.
    It remains a relative routing score rather than chaos per generated node. */
 export function computeBiomes(priceOf, settings = {}, sample = null) {
   const s = { ...DEFAULTS, ...GUIDE_SAMPLE, ...settings };
   const { rows } = biomeShares(s.depth);
+  const stash = computeStash(priceOf, s);
   const shareBy = Object.fromEntries(rows.map((r) => [r.biome.id, r]));
   let out = BIOMES.map((b) => {
     const c = computeBiome(b, priceOf, s);
@@ -240,7 +271,7 @@ export function computeBiomes(priceOf, settings = {}, sample = null) {
       share: sh.share,
       exact: sh.exact,
       opportunityRaw,
-      personalRange: personalProjection(c, sample),
+      personalRange: personalProjection(c, sample, stash.range),
     };
   });
   const topOpportunity = Math.max(0, ...out.map((r) => r.opportunityRaw));
@@ -258,6 +289,7 @@ export function computeBiomes(priceOf, settings = {}, sample = null) {
   const anyInterpolated = out.some((r) => !r.exact && r.weight > 0);
   return {
     rows: out,
+    stash,
     targets: out.filter((r) => !r.biome.city && r.exclusive),
     cities: out.filter((r) => r.biome.city),
     avgGenericRange,
@@ -415,8 +447,11 @@ export const SAMPLE_FIELDS = [
   { key: "exclusiveFossils", label: "Exclusive fossils dropped", step: 1 },
   { key: "genericNodes", label: "Generic fossil nodes", step: 1 },
   { key: "genericFossils", label: "Generic fossils dropped", step: 1 },
-  { key: "cacheNodes", label: "Smuggler's caches", step: 1 },
-  { key: "cacheFossils", label: "Cache fossils dropped", step: 1 },
+  /* Stored keys stay `cache*`: they are persisted in the saved sample profiles
+     under sl.delve.sampleProfiles.v1, so renaming them would silently discard
+     everyone's logged observations. Only the labels changed. */
+  { key: "cacheNodes", label: "Smuggler's Stashes", step: 1 },
+  { key: "cacheFossils", label: "Stash fossils dropped", step: 1 },
 ];
 
 const emptyObservations = () => Object.fromEntries(SAMPLE_FIELDS.map((f) => [f.key, 0]));
@@ -488,7 +523,12 @@ export function sampleMetrics(profile) {
   const average = (nodes, fossils, fallback) => nodes > 0 ? fossils / nodes : fallback;
   const exclusiveQty = average(o.exclusiveNodes, o.exclusiveFossils, GUIDE_SAMPLE.exclusiveQty);
   const genericQty = average(o.genericNodes, o.genericFossils, GUIDE_SAMPLE.genericQty);
-  const cacheQty = average(o.cacheNodes, o.cacheFossils, GUIDE_SAMPLE.cacheQty);
+  /* A measured average is a point estimate, so a profile with logged stashes
+     collapses the guide's 4-10 spread onto its own number rather than keeping
+     a range it did not observe. */
+  const stashObserved = o.cacheNodes > 0 ? o.cacheFossils / o.cacheNodes : null;
+  const stashQtyLow = stashObserved ?? GUIDE_SAMPLE.stashQtyLow;
+  const stashQtyHigh = stashObserved ?? GUIDE_SAMPLE.stashQtyHigh;
   const totalEncounters = o.exclusiveNodes + o.genericNodes + o.cacheNodes;
   // A timed route with zero fossil encounters is still real evidence. Keeping
   // it as a zero-rate sample avoids biasing profiles toward successful runs.
@@ -498,21 +538,22 @@ export function sampleMetrics(profile) {
   for (const [nodes, fossils, label] of [
     [o.exclusiveNodes, o.exclusiveFossils, "exclusive"],
     [o.genericNodes, o.genericFossils, "generic"],
-    [o.cacheNodes, o.cacheFossils, "cache"],
+    [o.cacheNodes, o.cacheFossils, "stash"],
   ]) if (nodes === 0 && fossils > 0) warnings.push(`${label} fossils need at least one matching node`);
   return {
     profile: p,
     sampleDepth: p.sampleDepth,
     observations: o,
-    quantities: { exclusiveQty, genericQty, cacheQty },
+    quantities: { exclusiveQty, genericQty, stashQtyLow, stashQtyHigh },
     quantitySources: {
       exclusiveQty: o.exclusiveNodes > 0 ? "personal" : "observed",
       genericQty: o.genericNodes > 0 ? "personal" : "placeholder",
-      cacheQty: o.cacheNodes > 0 ? "personal" : "observed",
+      stashQtyLow: o.cacheNodes > 0 ? "personal" : "observed",
+      stashQtyHigh: o.cacheNodes > 0 ? "personal" : "observed",
     },
     exclusivePerHour: perHour(o.exclusiveNodes),
     genericPerHour: perHour(o.genericNodes),
-    cachePerHour: perHour(o.cacheNodes),
+    stashPerHour: perHour(o.cacheNodes),
     exclusiveShare: totalEncounters > 0 ? o.exclusiveNodes / totalEncounters : null,
     totalEncounters,
     hasTimedSample,

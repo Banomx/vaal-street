@@ -174,7 +174,7 @@ guide control sits beside Assumptions so both explanatory panels share one place
 ## Delve estimation boundary
 
 The six biome-exclusive fossil encounters share PoEDB tier 4 and encounter
-weight 100. `src/delve.js` calculates Depth EV for one fossil node outside Smuggler's Caches:
+weight 100. `src/delve.js` calculates Depth EV for one fossil node outside Smuggler's Stashes:
 the community special-node chance times the live target-node value, plus the
 remaining generic-node share. Opportunity is biome share times median Depth EV,
 normalised to 0–100. City boss EV is calculated separately and never enters the
@@ -201,9 +201,25 @@ to expose the four live inputs, and the one-kill simulation rolls an actual
 variant rather than a fixed average item. Exchange-backed boss drops use the
 same GGG-first resolver as the main Boss profit tab.
 
-Generic fossil nodes and Smuggler's caches use low/median/high outcomes from the
-priced biome pool instead of assuming equal fossil probabilities. The active
-Delve sample profile supplies per-encounter quantities. A custom profile gets a
+Generic fossil nodes use low/median/high outcomes from the priced biome pool
+instead of assuming equal fossil probabilities.
+
+A Smuggler's Stash is modelled separately by `computeStash`, because it is not a
+biome encounter. Its pool is every fossil that is not one of the six
+biome-exclusive targets, taken across the whole mine rather than the biome you
+are standing in, and it follows the same `openWalls` setting the biome pools
+use. It also carries a count range — 4 to 10 fossils by default — since a stash
+drops a cluster: low is the smallest cluster at the cheapest pool outcome, high
+the largest at the dearest, median the mean cluster at the median outcome. It
+appears as its own card at the end of the Biome targets grid, outside the biome
+ranking, since it has no share of the mine and no depth ramp. A sample profile
+with logged stashes replaces both ends of the range with its own measured
+average, because a measurement is a point estimate rather than a spread.
+
+The active Delve sample profile supplies per-encounter quantities. Its stored
+observation keys remain `cacheNodes` and `cacheFossils`: they are persisted in
+`sl.delve.sampleProfiles.v1`, so renaming them would discard logged samples.
+Only the labels say Stash. A custom profile gets a
 personal hourly projection when it contains elapsed minutes; a timed route with
 zero recorded encounters remains valid zero-rate evidence. Profiles and active selection use the versioned
 `sl.delve.sampleProfiles.v1` and `sl.delve.activeSampleProfile.v1` localStorage

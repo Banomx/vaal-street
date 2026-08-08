@@ -2133,6 +2133,10 @@ const css = `
   border-left: 3px solid var(--tone); padding: 0 0 10px; overflow: hidden;
 }
 .dl-biome.dead { opacity: 0.5; }
+/* Not a biome — dashed edge so the stash reads as the odd card in the grid. */
+.dl-stash { border-style: dashed; border-left-style: solid; }
+.dl-stash .dl-biome-head { cursor: default; }
+.dl-stash .dl-biome-head:hover { background: none; }
 .dl-biome.open { border-color: #7a361b; }
 .dl-biome-head {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;

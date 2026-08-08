@@ -1,7 +1,7 @@
 import { Fragment, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
-  BIOMES, NODES, TUNABLES, DEFAULTS, SOURCES, DELVE_BOSSES, RESONATOR_ORDER, RESONATOR_SOCKETS,
-  COMMUNITY_DEPTH_GUIDE,
+  BIOMES, NODES, NODE_KINDS, TUNABLES, DEFAULTS, SOURCES, DELVE_BOSSES,
+  RESONATOR_ORDER, RESONATOR_SOCKETS, COMMUNITY_DEPTH_GUIDE,
 } from "./delveData.js";
 import {
   makePriceOf, fossilRows, computeBiomes, computeDelveBosses, killDistribution,
@@ -335,6 +335,10 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
   const money = (c) => (c > 0 ? fmtPrice(c, currency, rate) : "—");
   const observedMoney = (c) => (Number.isFinite(c) && c >= 0 ? fmtPrice(c, currency, rate) : "—");
   const pricedMoney = (c, found) => (found ? observedMoney(c) : "—");
+  // Node counts are whole numbers from the guide baseline but fractional once
+  // a profile averages its own observations, so trailing zeros are trimmed.
+  const qtyText = (n) => (Number.isFinite(n) ? Number(n.toFixed(2)).toString() : "—");
+  const stashPerHour = rankBy === "sample" ? sample.stashPerHour : 0;
   const chgKey = CHANGE_KEYS[chgWindow] || "change24";
   const chgOf = (name) => {
     const it = trendBy[name];
@@ -698,7 +702,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                 <div className="dl-depth-guide">
                   <strong>{settings.depth >= COMMUNITY_DEPTH_GUIDE.specialNode.capDepth ? "Special-node cap reached" : "Special-node chance still scaling"}</strong>
                   <span>
-                    Active community estimate: {pctText(specialChanceNow)} of fossil nodes outside Smuggler's Caches become the
+                    Active community estimate: {pctText(specialChanceNow)} of fossil nodes outside Smuggler's Stashes become the
                     biome's special node at depth {settings.depth}. The working curve rises linearly from each node's
                     unlock depth to {Math.round(COMMUNITY_DEPTH_GUIDE.specialNode.capChance * 100)}% at depth {COMMUNITY_DEPTH_GUIDE.specialNode.capDepth}.
                     Biome cards use it for Depth EV and Opportunity.
@@ -730,7 +734,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                 </label>
                 <p className="dl-assume-note">
                   Those three sit behind fractured walls. Turning this off removes them from generic-node and
-                  cache ranges; it never changes the exclusive fossil target.
+                  stash ranges; it never changes the exclusive fossil target.
                 </p>
               </div>
             </div>
@@ -766,7 +770,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
           too high. The unit is one NODE now: price x count, both checkable.
           Said out loud, because a unit you have to infer is the bug. */}
       <p className="dl-define">
-        <strong>Depth EV</strong> estimates one fossil node outside Smuggler's Caches at the selected depth. <strong>Target value</strong> prices
+        <strong>Depth EV</strong> estimates one fossil node outside Smuggler's Stashes at the selected depth. <strong>Target value</strong> prices
         the exclusive fossil encounter by itself, while <strong>Opportunity</strong> combines biome share with Depth EV. Absolute hourly profit only appears as
         <strong> your observed pace</strong> after a custom sample contains timed observations.
       </p>
@@ -891,7 +895,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
 
           <h4 className="dl-h">Node value scenarios</h4>
           <p className="dl-note">
-            Exclusive targets use the active profile's observed or guide quantity. Generic nodes and caches
+            Exclusive targets use the active profile's observed or guide quantity. Generic nodes and stashes
             show the cheapest, median and dearest <em>priced</em> pool outcomes because their fossil distribution
             is not published; an equal-weight average would be false precision. Missing-price coverage is shown per biome.
           </p>
@@ -909,10 +913,10 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                     </tr>
                   );
                 })}
-                <tr className="dl-sep"><td colSpan={5}>Generic node / Smuggler's cache, priced per biome</td></tr>
+                <tr className="dl-sep"><td colSpan={5}>Generic fossil node, priced per biome</td></tr>
                 {biomes.rows.filter((r) => r.poolNames.length).map((r) => (
                   <tr key={`g-${r.biome.id}`}>
-                    <td>Fossil node / smuggler's cache</td>
+                    <td>Generic fossil node</td>
                     <td>
                       {r.biome.name}
                       {r.poolCoverage < 1 && (
@@ -921,11 +925,28 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                         </em>
                       )}
                     </td>
-                    <td className="r num">{pricedMoney(r.genericRange.low, r.poolCoverage > 0)} / {pricedMoney(r.cacheRange.low, r.poolCoverage > 0)}</td>
-                    <td className="r num">{pricedMoney(r.genericRange.median, r.poolCoverage > 0)} / {pricedMoney(r.cacheRange.median, r.poolCoverage > 0)}</td>
-                    <td className="r num">{pricedMoney(r.genericRange.high, r.poolCoverage > 0)} / {pricedMoney(r.cacheRange.high, r.poolCoverage > 0)}</td>
+                    <td className="r num">{pricedMoney(r.genericRange.low, r.poolCoverage > 0)}</td>
+                    <td className="r num">{pricedMoney(r.genericRange.median, r.poolCoverage > 0)}</td>
+                    <td className="r num">{pricedMoney(r.genericRange.high, r.poolCoverage > 0)}</td>
                   </tr>
                 ))}
+                {/* One row, not one per biome: a stash draws on the generic
+                    pool for the whole mine rather than the biome you stand in. */}
+                <tr className="dl-sep"><td colSpan={5}>Smuggler's Stash, one pool for the whole mine</td></tr>
+                <tr>
+                  <td>Smuggler's Stash<em className="dl-flag">{biomes.stash.qtyLow}–{biomes.stash.qtyHigh}× pool</em></td>
+                  <td>
+                    Any biome
+                    {biomes.stash.poolCoverage < 1 && (
+                      <em className="dl-flag warn">
+                        {biomes.stash.poolPrices.filter((p) => p.found).length}/{biomes.stash.poolNames.length} priced
+                      </em>
+                    )}
+                  </td>
+                  <td className="r num">{pricedMoney(biomes.stash.range.low, biomes.stash.found)}</td>
+                  <td className="r num">{pricedMoney(biomes.stash.range.median, biomes.stash.found)}</td>
+                  <td className="r num">{pricedMoney(biomes.stash.range.high, biomes.stash.found)}</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -955,7 +976,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
           <div className="dl-subbar">
             <div className="st-seg">
               <button className={rankBy === "depth" ? "on" : ""} onClick={() => setRankBy("depth")}
-                title="Community-estimated value of one fossil node outside Smuggler's Caches at this depth">Depth EV</button>
+                title="Community-estimated value of one fossil node outside Smuggler's Stashes at this depth">Depth EV</button>
               <button className={rankBy === "target" ? "on" : ""} onClick={() => setRankBy("target")}
                 title="Live value of one exclusive fossil encounter">Target value</button>
               <button className={rankBy === "opportunity" ? "on" : ""} onClick={() => setRankBy("opportunity")}
@@ -978,7 +999,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
             {rankBy === "depth" && (
               <>
                 <span className="dl-mode-kicker"><em className="dl-src warn">community estimate</em> active depth {settings.depth}</span>
-                <strong>Expected value of non-Smugglers cache fossil nodes</strong>
+                <strong>Expected value of fossil nodes outside Smuggler's Stashes</strong>
                 <p>Each biome blends its live special-target value with its generic fossil pool using that biome's estimated special-node chance. This is the practical value to compare when choosing a fossil route.</p>
               </>
             )}
@@ -1022,7 +1043,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                   <span className="st-panel-total" title={`One ${openRow.headlineLabel} at the active profile's quantity.`}>
                     {pricedMoney(openRow.headline, openRow.exclusive?.found)} · {openRow.headlineLabel}
                   </span>
-                  <span className="st-panel-total" title="Community depth-adjusted median value of one fossil node outside Smuggler's Caches">
+                  <span className="st-panel-total" title="Community depth-adjusted median value of one fossil node outside Smuggler's Stashes">
                     {pricedMoney(openRow.depthAdjustedRange.median, openRow.depthAdjustedFound)} · depth EV
                   </span>
                   <span className="st-panel-total">{pctText(openRow.share)} of the mine</span>
@@ -1050,7 +1071,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                   <div className="dl-panel-detail">
                     {openRow.exclusive && (
                       <p className="dl-excl">
-                        <strong>{openRow.exclusive.node}</strong> → {sample.quantities.exclusiveQty.toFixed(2).replace(/\.00$/, "")}× {openRow.exclusive.fossil}
+                        <strong>{openRow.exclusive.node}</strong> → {qtyText(sample.quantities.exclusiveQty)}× {openRow.exclusive.fossil}
                         <em className={`dl-src ${SOURCES[sample.quantitySources.exclusiveQty]?.tone || ""}`}>
                           {SOURCES[sample.quantitySources.exclusiveQty]?.tag}
                         </em>
@@ -1064,12 +1085,12 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                       <tbody>
                         {openRow.exclusive && (
                           <tr className="dl-parts-total">
-                            <td>{openRow.exclusive.node} <em className="dl-implied">{sample.quantities.exclusiveQty.toFixed(2).replace(/\.00$/, "")}× {openRow.exclusive.fossil.replace(/ Fossil$/, "")}</em></td>
+                            <td>{openRow.exclusive.node} <em className="dl-implied">{qtyText(sample.quantities.exclusiveQty)}× {openRow.exclusive.fossil.replace(/ Fossil$/, "")}</em></td>
                             <td>{pricedMoney(openRow.exclusive.nodeValue, openRow.exclusive.found)}</td>
                           </tr>
                         )}
-                        {!!openRow.poolNames.length && <tr><td>Generic fossil node <em className="dl-implied">{sample.quantities.genericQty.toFixed(2).replace(/\.00$/, "")}× pool</em></td><td>{pricedMoney(openRow.genericRange.low, openRow.poolCoverage > 0)}–{pricedMoney(openRow.genericRange.high, openRow.poolCoverage > 0)} <em className="dl-implied">median {pricedMoney(openRow.genericRange.median, openRow.poolCoverage > 0)}</em></td></tr>}
-                        {!!openRow.poolNames.length && <tr><td>Smuggler's cache <em className="dl-implied">{sample.quantities.cacheQty.toFixed(2).replace(/\.00$/, "")}× pool</em></td><td>{pricedMoney(openRow.cacheRange.low, openRow.poolCoverage > 0)}–{pricedMoney(openRow.cacheRange.high, openRow.poolCoverage > 0)} <em className="dl-implied">median {pricedMoney(openRow.cacheRange.median, openRow.poolCoverage > 0)}</em></td></tr>}
+                        {!!openRow.poolNames.length && <tr><td>Generic fossil node <em className="dl-implied">{qtyText(sample.quantities.genericQty)}× pool</em></td><td>{pricedMoney(openRow.genericRange.low, openRow.poolCoverage > 0)}–{pricedMoney(openRow.genericRange.high, openRow.poolCoverage > 0)} <em className="dl-implied">median {pricedMoney(openRow.genericRange.median, openRow.poolCoverage > 0)}</em></td></tr>}
+                        <tr><td>Smuggler's Stash <em className="dl-implied">{qtyText(biomes.stash.qtyLow)}–{qtyText(biomes.stash.qtyHigh)}× generic pool</em></td><td>{pricedMoney(biomes.stash.range.low, biomes.stash.found)}–{pricedMoney(biomes.stash.range.high, biomes.stash.found)} <em className="dl-implied">median {pricedMoney(biomes.stash.range.median, biomes.stash.found)}</em></td></tr>
                         {openRow.exclusive && (
                           <tr className="dl-parts-total">
                             <td>Community Depth EV <em className="dl-implied">{pctText(openRow.specialChance)} special, otherwise generic</em></td>
@@ -1184,7 +1205,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
 
                   {r.exclusive && (
                     <div className="dl-excl">
-                      <strong>{r.exclusive.node}</strong> → {sample.quantities.exclusiveQty.toFixed(2).replace(/\.00$/, "")}× {r.exclusive.fossil}
+                      <strong>{r.exclusive.node}</strong> → {qtyText(sample.quantities.exclusiveQty)}× {r.exclusive.fossil}
                       {r.exclusive.found
                         ? <> @ {money(r.exclusive.chaos)} = <b>{observedMoney(r.exclusive.nodeValue)}</b> a node</>
                         : <em className="dl-flag warn">no price</em>}
@@ -1194,7 +1215,7 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                   {r.exclusive && (
                     <div className="dl-community-range">
                       <em className="dl-src ok">estimate</em>
-                      {pctText(r.specialChance)} special → {pricedMoney(r.depthAdjustedRange.median, r.depthAdjustedFound)} median per fossil node outside Smuggler's Caches
+                      {pctText(r.specialChance)} special → {pricedMoney(r.depthAdjustedRange.median, r.depthAdjustedFound)} median per fossil node outside Smuggler's Stashes
                       {r.poolCoverage < 1 && <em className="dl-flag warn">partial prices</em>}
                     </div>
                   )}
@@ -1207,6 +1228,47 @@ export default function Delve({ league, staticBase, currency, divineRate, fmtPri
                 </article>
               );
             })}
+
+            {/* A stash takes no share of the mine and follows no depth ramp, so
+                it is not ranked against the biomes — it sits at the end as the
+                other thing you can steer towards, priced off the generic pool
+                for the whole mine rather than the biome you are standing in. */}
+            <article className="dl-biome dl-stash" style={{ "--tone": NODE_KINDS.stash.tone }}>
+              <div className="dl-biome-head">
+                <span className="dl-dot" />
+                <span className="dl-biome-name">{NODE_KINDS.stash.label}</span>
+                <span className="dl-biome-val"
+                  title={stashPerHour > 0
+                    ? `${qtyText(stashPerHour)} stashes an hour at ${activeSampleName}'s observed pace, median pool outcome.`
+                    : "Median outcome of one stash. Not depth-adjusted and not weighted by biome share."}>
+                  {stashPerHour > 0
+                    ? observedMoney(stashPerHour * biomes.stash.range.median)
+                    : pricedMoney(biomes.stash.range.median, biomes.stash.found)}
+                  <em>{stashPerHour > 0 ? "/h, median" : "/stash EV"}</em>
+                </span>
+              </div>
+
+              <div className="dl-share">
+                <span>Any biome · not part of the biome ranking</span>
+              </div>
+
+              <div className="dl-excl">
+                <strong>{NODE_KINDS.stash.label}</strong> → {qtyText(biomes.stash.qtyLow)}–{qtyText(biomes.stash.qtyHigh)}× generic fossils
+                {biomes.stash.found
+                  ? <> = <b>{observedMoney(biomes.stash.range.low)}</b>–<b>{observedMoney(biomes.stash.range.high)}</b> a stash</>
+                  : <em className="dl-flag warn">no price</em>}
+                <em className="dl-node-data">
+                  {biomes.stash.poolNames.length} fossils in pool · the six biome targets are excluded
+                  {!settings.openWalls && " · wall-locked fossils excluded"}
+                </em>
+              </div>
+
+              <div className="dl-community-range">
+                <em className="dl-src ok">estimate</em>
+                {qtyText(biomes.stash.qtyLow)}–{qtyText(biomes.stash.qtyHigh)} fossils → {pricedMoney(biomes.stash.range.median, biomes.stash.found)} median per stash
+                {biomes.stash.poolCoverage < 1 && <em className="dl-flag warn">partial prices</em>}
+              </div>
+            </article>
           </div>
         </>
       )}

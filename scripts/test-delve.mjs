@@ -14,7 +14,7 @@ import {
 } from "../src/delveData.js";
 import {
   weightAt, weightExact, biomeShares, makePriceOf, fossilRows, rangeStats,
-  computeBiome, computeBiomes, computeDelveBosses, killDistribution, sanitizeSettings,
+  computeBiome, computeBiomes, computeStash, computeDelveBosses, killDistribution, sanitizeSettings,
   biomeValueSeries, defaultSampleProfile, sanitizeSampleProfile, uniqueSampleName, sampleMetrics,
   communityChanceAt, communitySpecialChance, communityBossChance,
 } from "../src/delve.js";
@@ -80,15 +80,17 @@ test("every guide yield names a real fallback and declares where it came from", 
 test("the guide baseline has no hidden extra fossil or boss-frequency knob", () => {
   const by = Object.fromEntries(TUNABLES.map((t) => [t.key, t]));
   assert.equal(by.exclusiveQty.source, "observed");
-  assert.equal(by.cacheQty.source, "observed");
+  assert.equal(by.stashQtyLow.source, "observed");
+  assert.equal(by.stashQtyHigh.source, "observed");
   assert.equal(by.genericQty.source, "placeholder");
   assert.ok(!("exclusiveExtra" in GUIDE_SAMPLE));
   assert.ok(!("bossPerCity" in DEFAULTS));
-  assert.ok(GUIDE_SAMPLE.genericQty < GUIDE_SAMPLE.cacheQty,
-    "a generic node should not be assumed richer than an observed cache");
+  assert.ok(GUIDE_SAMPLE.genericQty < GUIDE_SAMPLE.stashQtyLow,
+    "a generic node should not be assumed richer than the smallest stash");
+  assert.ok(GUIDE_SAMPLE.stashQtyLow < GUIDE_SAMPLE.stashQtyHigh, "the stash range must not be inverted");
   // Pinned so a stray edit to the baseline shows up as a failing test rather
   // than as quietly different EV on every biome card.
-  assert.deepEqual(GUIDE_SAMPLE, { exclusiveQty: 1, genericQty: 1, cacheQty: 4 });
+  assert.deepEqual(GUIDE_SAMPLE, { exclusiveQty: 1, genericQty: 1, stashQtyLow: 4, stashQtyHigh: 10 });
 });
 
 test("all six exclusive encounters carry the data-mined tier, weight and minimum depth", () => {
@@ -234,19 +236,18 @@ const priceOf = makePriceOf([PRICES]);
 
 test("pool range and node values use the declared scenarios", () => {
   const abyssal = BIOMES.find((b) => b.id === "abyssal");
-  const s = { ...DEFAULTS, exclusiveQty: 3, genericQty: 3, cacheQty: 5 };
+  const s = { ...DEFAULTS, exclusiveQty: 3, genericQty: 3 };
   const r = computeBiome(abyssal, priceOf, s);
   assert.deepEqual(r.poolRange, { low: 10, median: 10, high: 10 });
   near(r.exclusive.nodeValue, 900, 1e-9, "Crystal Spire");
   near(r.genericNode, 30, 1e-9, "generic node");
-  near(r.cacheNode, 50, 1e-9, "cache");
   near(r.headline, 900, 1e-9, "headline");
   assert.equal(r.headlineLabel, "Crystal Spire");
 });
 
 test("community Depth EV blends special and generic fossil nodes", () => {
   const abyssal = BIOMES.find((b) => b.id === "abyssal");
-  const s = { ...DEFAULTS, depth: 600, exclusiveQty: 3, genericQty: 2, cacheQty: 5 };
+  const s = { ...DEFAULTS, depth: 600, exclusiveQty: 3, genericQty: 2 };
   const r = computeBiome(abyssal, priceOf, s);
   const chance = communitySpecialChance(600, abyssal.exclusive.minDepth);
   near(r.specialChance, chance, 1e-9, "special replacement chance");
@@ -291,11 +292,42 @@ test("turning off fractured walls drops the wall-locked fossils from the pool", 
   near(without.exclusive.nodeValue, withWalls.exclusive.nodeValue, 1e-9, "walls must not move the target");
 });
 
+test("a Smuggler's Stash prices the generic pool for the whole mine, not one biome", () => {
+  const stash = computeStash(priceOf, DEFAULTS);
+  for (const f of FOSSILS.filter((x) => x.exclusive)) {
+    assert.ok(!stash.poolNames.includes(f.name), `${f.name} is a biome target, not stash loot`);
+  }
+  assert.equal(stash.poolNames.length, FOSSILS.filter((f) => !f.exclusive).length);
+  assert.equal(stash.qtyLow, GUIDE_SAMPLE.stashQtyLow);
+  assert.equal(stash.qtyHigh, GUIDE_SAMPLE.stashQtyHigh);
+  // Every priced non-exclusive fossil is 10c in this fixture, so the spread is
+  // the cluster size alone: 4 at the cheapest, 7 (the mean cluster) at the
+  // median, 10 at the dearest.
+  near(stash.range.low, 40, 1e-9, "smallest cluster");
+  near(stash.range.median, 70, 1e-9, "mean cluster at the median outcome");
+  near(stash.range.high, 100, 1e-9, "largest cluster");
+  assert.equal(stash.found, true);
+});
+
+test("the stash pool follows the wall setting and survives an inverted range", () => {
+  const closed = computeStash(priceOf, { ...DEFAULTS, openWalls: false });
+  assert.ok(!closed.poolNames.includes("Gilded Fossil"), "wall-locked fossils drop out with walls closed");
+  const inverted = computeStash(priceOf, { ...DEFAULTS, stashQtyLow: 10, stashQtyHigh: 4 });
+  assert.equal(inverted.qtyLow, 4, "a reversed range is read the right way round");
+  assert.equal(inverted.qtyHigh, 10);
+});
+
+test("the stash is one figure for the mine, so every biome shares it", () => {
+  const all = computeBiomes(priceOf, { ...DEFAULTS, depth: 600 });
+  assert.ok(all.stash, "computeBiomes exposes the stash beside the biome rows");
+  assert.ok(all.rows.every((r) => !("cacheRange" in r)), "no per-biome cache range survives");
+});
+
 test("the exclusive node is worth far more than an ordinary one, which is the point of the tab", () => {
   const abyssal = BIOMES.find((b) => b.id === "abyssal");
   const r = computeBiome(abyssal, priceOf, DEFAULTS);
-  assert.ok(r.exclusive.nodeValue > r.genericNode + r.cacheNode,
-    "with a 300c exclusive fossil the biome node should dominate the pool nodes");
+  assert.ok(r.exclusive.nodeValue > r.genericNode * 3,
+    "with a 300c exclusive fossil the biome node should dominate an ordinary one");
 });
 
 test("an unpriced fossil is excluded from the range, not counted as zero", () => {
@@ -556,10 +588,11 @@ test("custom observations replace guide quantities and produce a finite personal
     },
   });
   const metrics = sampleMetrics(profile);
-  assert.deepEqual(metrics.quantities, { exclusiveQty: 4, genericQty: 3, cacheQty: 8 });
+  assert.deepEqual(metrics.quantities, { exclusiveQty: 4, genericQty: 3, stashQtyLow: 8, stashQtyHigh: 8 },
+    "a measured stash average replaces both ends of the guide range");
   near(metrics.exclusivePerHour, 2, 1e-9, "exclusive encounters/hour");
   near(metrics.genericPerHour, 1, 1e-9, "generic encounters/hour");
-  near(metrics.cachePerHour, 0.5, 1e-9, "cache encounters/hour");
+  near(metrics.stashPerHour, 0.5, 1e-9, "stash encounters/hour");
   near(metrics.exclusiveShare, 4 / 7, 1e-9, "exclusive share of recorded fossil encounters");
 
   const all = computeBiomes(priceOf, { ...DEFAULTS, depth: 600, ...metrics.quantities }, metrics);
@@ -574,7 +607,8 @@ test("zero-count categories fall back independently and zero-fossil nodes are va
   }));
   assert.equal(fallback.quantities.exclusiveQty, GUIDE_SAMPLE.exclusiveQty);
   assert.equal(fallback.quantities.genericQty, 0);
-  assert.equal(fallback.quantities.cacheQty, GUIDE_SAMPLE.cacheQty);
+  assert.equal(fallback.quantities.stashQtyLow, GUIDE_SAMPLE.stashQtyLow);
+  assert.equal(fallback.quantities.stashQtyHigh, GUIDE_SAMPLE.stashQtyHigh);
   assert.equal(fallback.warnings.length, 1);
   assert.equal(fallback.hasTimedSample, false);
 });

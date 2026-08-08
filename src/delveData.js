@@ -169,14 +169,14 @@ export const UNPLACED_NOTE = "not in any biome pool on the wiki's Delve page";
 /* ---------------- nodes ----------------
 
    The six exclusive entries map a named encounter to its biome-only fossil.
-   Generic nodes and caches are priced from low/median/high outcomes in the
+   Generic nodes and stashes are priced from low/median/high outcomes in the
    active biome's priced pool. Their quantities come from the active sample
    profile, falling back to GUIDE_SAMPLE category by category. */
 
 export const NODE_KINDS = {
   exclusive: { label: "Biome fossil node", tone: "#c9a24b" },
   generic: { label: "Generic fossil node", tone: "#8fb46a" },
-  cache: { label: "Smuggler's cache", tone: "#6fb4c9" },
+  stash: { label: "Smuggler's Stash", tone: "#6fb4c9" },
   chamber: { label: "City chamber", tone: "#b06ad4" },
 };
 
@@ -189,8 +189,8 @@ export const NODES = [
   { id: "haunted-tomb", name: "Haunted Tomb", kind: "exclusive", biome: "fungal", fossil: "Tangled Fossil" },
   { id: "fossil-node", name: "Fossil node (generic)", kind: "generic", biome: null,
     note: "The unnamed “Contains Fossils” nodes — priced against whichever biome you are standing in." },
-  { id: "smugglers-cache", name: "Smuggler's cache", kind: "cache", biome: null,
-    note: "Drops a cluster rather than a single fossil, which is what makes it worth the detour." },
+  { id: "smugglers-stash", name: "Smuggler's Stash", kind: "stash", biome: null,
+    note: "Drops a cluster from the generic fossil pool rather than a single fossil, which is what makes it worth the detour." },
 ];
 
 /* ---------------- sample defaults ----------------
@@ -219,7 +219,9 @@ export const COMMUNITY_DEPTH_GUIDE = {
 export const GUIDE_SAMPLE = {
   exclusiveQty: 1,
   genericQty: 1,
-  cacheQty: 4,
+  // A stash is a cluster, so it carries a count range rather than one number.
+  stashQtyLow: 4,
+  stashQtyHigh: 10,
 };
 
 /* Where each assumption comes from, badged in the UI so a number with a
@@ -244,9 +246,12 @@ export const TUNABLES = [
   { key: "genericQty", label: "Fossils per generic fossil node", group: "Per node", step: 0.5,
     source: "placeholder",
     help: "No published count. One is the conservative fallback until the active profile has observations." },
-  { key: "cacheQty", label: "Fossils per smuggler's cache", group: "Per node", step: 0.5,
+  { key: "stashQtyLow", label: "Fewest fossils per Smuggler's Stash", group: "Per node", step: 1,
     source: "observed",
-    help: "About four fossils per cache, counted in current play. One person counting — treat it as a data point, not a rate." },
+    help: "A stash drops a cluster, not a single fossil. Four is the low end counted in current play." },
+  { key: "stashQtyHigh", label: "Most fossils per Smuggler's Stash", group: "Per node", step: 1,
+    source: "observed",
+    help: "Ten is the high end counted in current play. The stash spans this range instead of quoting one number. One person counting — treat it as a data point, not a rate." },
 ];
 
 /* ---------------- resonators ---------------- */
