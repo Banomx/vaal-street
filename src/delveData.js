@@ -213,10 +213,13 @@ export const COMMUNITY_DEPTH_GUIDE = {
   bossInCity: { capDepth: 600, capChance: 0.15 },
 };
 
+/* Working per-node fossil counts, used until the active sample profile has
+   enough logged observations to replace them category by category. These are
+   current in-play counts rather than figures lifted from a guide. */
 export const GUIDE_SAMPLE = {
-  exclusiveQty: 3,
-  genericQty: 2,
-  cacheQty: 5,
+  exclusiveQty: 1,
+  genericQty: 1,
+  cacheQty: 4,
 };
 
 /* Where each assumption comes from, badged in the UI so a number with a
@@ -237,13 +240,13 @@ export const SOURCES = {
 export const TUNABLES = [
   { key: "exclusiveQty", label: "Special fossils per biome node", group: "Per node", step: 0.5,
     source: "observed",
-    help: "Jorgen's 3.28 guide puts targeted fossil nodes at about three fossils on average." },
+    help: "One special fossil per targeted node, counted in current play. Older guide write-ups quote more; a logged sample profile replaces this either way." },
   { key: "genericQty", label: "Fossils per generic fossil node", group: "Per node", step: 0.5,
     source: "placeholder",
-    help: "No published count. Two is a conservative fallback until the active profile has observations." },
+    help: "No published count. One is the conservative fallback until the active profile has observations." },
   { key: "cacheQty", label: "Fossils per smuggler's cache", group: "Per node", step: 0.5,
     source: "observed",
-    help: "A delve guide counted a cache out on camera at roughly five fossils for about 100 chaos. One node, one run — treat it as a data point, not a rate." },
+    help: "About four fossils per cache, counted in current play. One person counting — treat it as a data point, not a rate." },
 ];
 
 /* ---------------- resonators ---------------- */

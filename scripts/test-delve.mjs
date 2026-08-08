@@ -86,6 +86,9 @@ test("the guide baseline has no hidden extra fossil or boss-frequency knob", () 
   assert.ok(!("bossPerCity" in DEFAULTS));
   assert.ok(GUIDE_SAMPLE.genericQty < GUIDE_SAMPLE.cacheQty,
     "a generic node should not be assumed richer than an observed cache");
+  // Pinned so a stray edit to the baseline shows up as a failing test rather
+  // than as quietly different EV on every biome card.
+  assert.deepEqual(GUIDE_SAMPLE, { exclusiveQty: 1, genericQty: 1, cacheQty: 4 });
 });
 
 test("all six exclusive encounters carry the data-mined tier, weight and minimum depth", () => {
