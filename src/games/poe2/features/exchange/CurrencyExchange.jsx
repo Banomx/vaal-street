@@ -238,10 +238,10 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
                 {divineAdjusted && <YAxis yAxisId="divine" orientation="right" stroke="#8f7eaf" fontSize={11} width={58} domain={["auto", "auto"]} tickFormatter={(value) => number(value, 0)} />}
                 <Tooltip contentStyle={{ background: "#160e0b", border: "1px solid #63351f", color: "#ead8cf" }} labelFormatter={(value) => new Date(value).toLocaleString()}
                   formatter={(value, name) => name === "Divine rate" ? [`${number(value)} ex / div`, name] : [`${number(value)} ${unit === "Divine" ? "div" : unit === "Chaos" ? "chaos" : "ex"}`, name]} />
-                <Line dataKey="shownLow" name="Traded low" stroke="#76513f" strokeWidth={1} dot={false} />
-                <Line dataKey="shownHigh" name="Traded high" stroke="#76513f" strokeWidth={1} dot={false} />
-                <Line dataKey="shownPrice" name="Completed mean" stroke="#e36f3f" strokeWidth={2.2} dot={chartPoints.length < 30} />
-                {divineAdjusted && <Line yAxisId="divine" dataKey="divineExalted" name="Divine rate" stroke="#8f7eaf" strokeDasharray="5 4" strokeWidth={1.5} dot={false} />}
+                <Line dataKey="shownLow" name="Traded low" stroke="#76513f" strokeWidth={1} dot={false} animationDuration={1000} />
+                <Line dataKey="shownHigh" name="Traded high" stroke="#76513f" strokeWidth={1} dot={false} animationDuration={1000} />
+                <Line dataKey="shownPrice" name="Completed mean" stroke="#e36f3f" strokeWidth={2.2} dot={chartPoints.length < 30} animationDuration={1000} />
+                {divineAdjusted && <Line yAxisId="divine" dataKey="divineExalted" name="Divine rate" stroke="#8f7eaf" strokeDasharray="5 4" strokeWidth={1.5} dot={false} animationDuration={1000} />}
               </LineChart>
             </ResponsiveContainer> : <div className="p2ex-chart-empty">This market’s history starts with its first stored official hour.</div>}
           </div>

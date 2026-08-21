@@ -1279,7 +1279,7 @@ async function getGemVariants(lgParams) {
    old enough; otherwise sparkline-derived values (24h/48h only) stay. The
    15-min tolerance forgives GitHub's cron starting a few minutes late. */
 const CHANGE_WINDOWS = [[1, "change1"], [2, "change2"], [4, "change4"], [8, "change8"], [12, "change12"], [24, "change24"], [48, "change48"]];
-function applySelfChanges(items, self) {
+export function applySelfChanges(items, self) {
   const pts = (self.points || []).map(normalizePoint);
   if (pts.length < 2) return;
   const last = pts[pts.length - 1];
@@ -1301,13 +1301,14 @@ function applySelfChanges(items, self) {
     if (!ref) continue;
     for (const it of items) {
       const v = ref.values[it.name];
-      if (v > 0) it[key] = (it.chaosValue / v - 1) * 100;
+      const latest = last.values[it.name];
+      if (v > 0 && latest > 0) it[key] = (latest / v - 1) * 100;
       /* Same window, priced in divine instead of chaos: this is the move the
          item made against the rest of the economy rather than against a chaos
          orb that is itself drifting. Only computable once both ends of the
          window know their rate. */
-      if (v > 0 && rateSane(ref.rate) && rateSane(last.rate)) {
-        it[`${key}R`] = ((it.chaosValue / last.rate) / (v / ref.rate) - 1) * 100;
+      if (v > 0 && latest > 0 && rateSane(ref.rate) && rateSane(last.rate)) {
+        it[`${key}R`] = ((latest / last.rate) / (v / ref.rate) - 1) * 100;
       }
     }
   }
@@ -1413,7 +1414,7 @@ async function buildFamilyHistory({ slug, key, league, items, divineRate, rename
   const self = league.group === "current"
     ? await updateSelfHistory(slug, key, items, divineRate, renames)
     : await loadSelfHistory(slug, key);
-  if (league.group === "current") applySelfChanges(items, self);
+  applySelfChanges(items, self);
   return { backfillFile: stored, backfill, self };
 }
 

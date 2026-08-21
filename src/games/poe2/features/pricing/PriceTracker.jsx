@@ -100,8 +100,8 @@ export default function PriceTracker({ league, priceData, history, currency, rat
                 <Tooltip contentStyle={{ background: "#160e0b", border: "1px solid #63351f", color: "#ead8cf" }}
                   labelFormatter={(value) => new Date(value).toLocaleString()}
                   formatter={(value, name) => name === "Divine rate" ? [`${number(value)} Exalted / Divine`, name] : [`${number(value)} ${timeline.unit}`, item]} />
-                <Line type="monotone" dataKey="value" stroke="#e36f3f" strokeWidth={2} dot={timeline.points.length < 40} activeDot={{ r: 4 }} connectNulls={false} />
-                {divineAdjusted && <Line yAxisId="rate" type="monotone" dataKey="rate" name="Divine rate" stroke="#8f7eaf" strokeWidth={1.5} strokeDasharray="5 4" dot={false} connectNulls={false} />}
+                <Line type="monotone" dataKey="value" stroke="#e36f3f" strokeWidth={2} dot={timeline.points.length < 40} activeDot={{ r: 4 }} connectNulls={false} animationDuration={1000} />
+                {divineAdjusted && <Line yAxisId="rate" type="monotone" dataKey="rate" name="Divine rate" stroke="#8f7eaf" strokeWidth={1.5} strokeDasharray="5 4" dot={false} connectNulls={false} animationDuration={1000} />}
               </LineChart>
             </ResponsiveContainer>
           ) : <div className="p2pt-empty">{history ? "This item has no stored points in the selected range." : "Price history starts with the next market snapshot."}</div>}

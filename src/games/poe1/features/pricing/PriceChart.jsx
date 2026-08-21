@@ -193,14 +193,14 @@ export function PriceChart({
                 fill="#ef4f19" fillOpacity={0.13} stroke="#ef4f19" strokeOpacity={0.4} />
             )}
             <Area type="monotone" dataKey="value" name="value" stroke="#ff6a24" strokeWidth={2}
-              fill={`url(#${gradId})`} isAnimationActive={false} />
+              fill={`url(#${gradId})`} animationDuration={1000} />
             {overlayName && (
               <Line type="monotone" dataKey="overlay" name="overlay" stroke={overlayTone} strokeWidth={1.8}
-                dot={false} connectNulls isAnimationActive={false} />
+                dot={false} connectNulls animationDuration={1000} />
             )}
             {showRate && (
               <Line yAxisId="rate" type="monotone" dataKey="rate" name="rate" stroke="#6f97b3" strokeWidth={1.5}
-                strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} />
+                strokeDasharray="5 4" dot={false} connectNulls animationDuration={1000} />
             )}
             {extremes && <ReferenceDot x={extremes.hi.day} y={extremes.hi.value} r={4} fill="#8fd47f" stroke="#1b150c"
               label={{ value: `High ${f(extremes.hi.value)}${unit} · d${fmtDay(extremes.hi.day)}`, fill: "#8fd47f", fontSize: 11, position: "top" }} />}

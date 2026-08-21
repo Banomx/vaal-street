@@ -140,7 +140,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
                 <XAxis dataKey="at" type="number" scale="time" domain={["dataMin", "dataMax"]} stroke="#6f5d55" fontSize={10} minTickGap={28} tickFormatter={(value) => tick(value, rangeHours)} />
                 <YAxis stroke="#6f5d55" fontSize={10} width={45} domain={["auto", "auto"]} tickFormatter={(value) => number(value, value < 10 ? 2 : 0)} />
                 <Tooltip contentStyle={{ background: "#160e0b", border: "1px solid #63351f", color: "#ead8cf" }} labelFormatter={(value) => new Date(value).toLocaleString()} formatter={(value) => [`${number(value)} ${row.timeline.unit}`, row.baselineName]} />
-                <Line type="monotone" dataKey="value" stroke={TONES[row.id] || "#bd6846"} strokeWidth={2} dot={row.timeline.points.length < 12} connectNulls={false} />
+                <Line type="monotone" dataKey="value" stroke={TONES[row.id] || "#bd6846"} strokeWidth={2} dot={row.timeline.points.length < 12} connectNulls={false} animationDuration={1000} />
               </LineChart>
             </ResponsiveContainer> : <div className="p2pf-chart-empty">The baseline graph starts when {row.baselineName} receives stored prices.</div>}
           </div>

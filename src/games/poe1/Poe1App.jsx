@@ -1245,7 +1245,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
                     labelStyle={{ color: "#c9bfa8" }} itemStyle={{ color: "#e7dcd6" }}
                     formatter={(v) => [`${fmtRate(v)}c`, "1 divine"]}
                     labelFormatter={(d) => `Day ${fmtDay(d)}`} />
-                  <Line type="monotone" dataKey="rate" stroke="#6f97b3" strokeWidth={1.8} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="rate" stroke="#6f97b3" strokeWidth={1.8} dot={false} animationDuration={1000} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>

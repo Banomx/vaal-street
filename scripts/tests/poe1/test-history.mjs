@@ -224,6 +224,16 @@ ok(near(item?.change48, 20, 0.05), `change48 ${item?.change48} != 20`);
 // dressed up as a 4h move.
 ok(item?.change4 == null, `a 24h-old point must not answer the 4h window (got ${item?.change4})`);
 
+/* A finished league does not append snapshots, but its final stored window is
+   still measurable. Feed placeholders and a later fetch must not flatten it. */
+const frozen = [{ name: SCARAB, chaosValue: 999, change24: 0 }];
+mod.applySelfChanges(frozen, { points: [
+  { t: ago(24), values: { [SCARAB]: 80 }, rate: 100 },
+  { t: ago(0), values: { [SCARAB]: 100 }, rate: 110 },
+] });
+ok(near(frozen[0].change24, 25), `finished-league change uses the final stored price: ${frozen[0].change24}`);
+ok(near(frozen[0].change24R, 13.636, 0.01), `finished-league divine change uses the final stored rate: ${frozen[0].change24R}`);
+
 /* 7) the pure pieces, directly */
 const thinned = mod.thinPoints([
   { t: new Date(NOW - 500 * 86400e3).toISOString(), values: {} },
