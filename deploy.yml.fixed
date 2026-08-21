@@ -1,0 +1,76 @@
+name: Build & deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # GGG publishes one digest per completed hour and the fetcher asks for the
+    # last completed one, so hourly is what actually captures the feed — every
+    # skipped hour is a price that cannot be recovered later. :07 rather than
+    # :00 because the digest needs a moment to reach the CDN, and because the
+    # top of the hour is when every Actions cron in the world fires.
+    - cron: "7 * * * *"
+  workflow_dispatch:          # manual "Run workflow" button
+    inputs:
+      reset_history:
+        description: "Wipe accumulated price history and start clean"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, but never kill one that is already running.
+# With cancel-in-progress: true, a second run entering this group (a quick
+# follow-up push, or the 4-hourly cron landing on top of a push) cancels the
+# first — and because the group covers the deploy job too, that surfaces as
+# "Error: Deployment cancelled" from actions/deploy-pages after the build has
+# already succeeded. false makes the newer run queue instead; GitHub still
+# drops any run that gets superseded while it is only pending, so the latest
+# commit is what ends up live either way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Snapshot poe.ninja data
+        run: npm run data:poe1
+        env:
+          # push = code deploy only (reuse deployed data, no new snapshot);
+          # schedule + manual dispatch = fetch fresh data
+          DATA_MODE: ${{ github.event_name == 'push' && 'reuse' || 'fetch' }}
+          RESET_HISTORY: ${{ inputs.reset_history }}
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          # The action's default is 10 minutes, and when it gives up it does not
+          # just fail — it CANCELS the deployment it was waiting on. GitHub's
+          # Pages backend intermittently sits in deployment_queued / syncing_files
+          # for longer than that (actions/deploy-pages#406, open and upstream),
+          # which turns a deployment that would have landed into a failed run.
+          # Waiting half an hour costs nothing; the job is idle polling.
+          timeout: 1800000

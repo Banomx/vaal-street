@@ -1,0 +1,27 @@
+{
+  "name": "scarab-ledger",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "data": "npm run data:poe1 && npm run data:poe2",
+    "data:poe1": "node scripts/poe1/fetch-data.mjs",
+    "data:poe2": "node scripts/poe2/fetch-data.mjs",
+    "test": "npm run test:poe1 && npm run test:poe2",
+    "test:poe1": "node scripts/tests/poe1/test-money.mjs && node scripts/tests/poe1/test-boss.mjs && node scripts/tests/poe1/test-delve.mjs && node scripts/tests/poe1/test-gems.mjs && node scripts/tests/poe1/test-farm-strategy.mjs && node scripts/tests/poe1/test-overview-trends.mjs && node scripts/tests/poe1/test-catalogue.mjs && node scripts/tests/poe1/test-price-check.mjs && node scripts/tests/poe1/test-ggg-exchange.mjs && node scripts/tests/poe1/test-poewatch.mjs && node scripts/tests/poe1/test-fetch-shapes.mjs && node scripts/tests/poe1/test-history.mjs && node scripts/tests/poe1/test-rate.mjs",
+    "test:poe2": "node scripts/tests/poe2/test-boss.mjs && node scripts/tests/poe2/test-prices.mjs && node scripts/tests/poe2/test-exchange.mjs && node scripts/tests/poe2/test-history.mjs",
+    "audit-drops:poe1": "node scripts/poe1/tools/audit-drops.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}

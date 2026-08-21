@@ -1,0 +1,186 @@
+:root {
+  --ui-page-gutter: clamp(12px, 4vw, 44px);
+  --ui-header-min-height: 104px;
+  --ui-header-padding: 20px;
+  --ui-header-gap: 20px;
+  --ui-title-size: clamp(23px, 4vw, 31px);
+  --ui-subtitle-size: 12px;
+  --ui-label-size: 11px;
+  --ui-control-size: 13px;
+  --ui-tab-size: 15px;
+  --ui-source-size: 13px;
+  --ui-control-padding: 7px 12px;
+  --ui-border: #35231b;
+  --ui-control-border: #65351f;
+  --ui-control-bg: #17100d;
+  --ui-accent: #ef4f19;
+}
+
+.app-shell-page {
+  min-height: 100vh;
+  padding: 22px var(--ui-page-gutter) 40px;
+  color: #e7d9d2;
+  font-family: "Kei", Georgia, "Palatino Linotype", "Times New Roman", serif;
+}
+
+/* The shell is explicitly content-box so it has the same visual height in
+   both games even when a feature workspace uses border-box internally. */
+.app-header {
+  box-sizing: content-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-header-gap);
+  min-height: var(--ui-header-min-height);
+  padding: var(--ui-header-padding);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px 6px 0 0;
+}
+
+.app-brand {
+  padding-left: 13px;
+  border-left: 3px solid var(--ui-accent);
+}
+
+.app-brand h1 {
+  margin: 0;
+  color: #f1e4dc;
+  font-size: var(--ui-title-size);
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 #000, 0 0 24px rgba(239, 79, 25, .24);
+}
+
+.app-brand h1 span { color: #ff5b1f; }
+.app-brand-subtitle {
+  margin: 3px 0 0;
+  color: #c0a196;
+  font-size: var(--ui-subtitle-size);
+  letter-spacing: .055em;
+}
+
+.app-header-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.app-control,
+.game-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: var(--ui-label-size);
+}
+
+.app-control > span,
+.game-switcher > span {
+  color: #9c877e;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.app-control select {
+  min-width: 180px;
+  padding: 7px 10px;
+  border: 1px solid var(--ui-control-border);
+  border-radius: 5px;
+  background: var(--ui-control-bg);
+  color: #e1cec3;
+  font: inherit;
+  font-size: var(--ui-control-size);
+}
+
+.app-segmented,
+.game-switcher-buttons {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--ui-control-border);
+  border-radius: 5px;
+}
+
+.app-segmented button,
+.game-switcher button {
+  padding: var(--ui-control-padding);
+  border: 0;
+  border-right: 1px solid #3e281e;
+  background: var(--ui-control-bg);
+  color: #a98d82;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--ui-control-size);
+}
+
+.app-segmented button:last-child,
+.game-switcher button:last-child { border-right: 0; }
+.app-segmented button.on,
+.game-switcher button.on { background: #7a2a13; color: #fff0e6; }
+
+.app-segmented button:focus-visible,
+.app-control select:focus-visible,
+.game-switcher button:focus-visible {
+  outline: 2px solid #ff6a24;
+  outline-offset: -2px;
+}
+
+.app-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 12px;
+  padding: 0 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--ui-border);
+  border-top: 0;
+  border-bottom-color: #3b2419;
+  background: #100a08;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-tabs::-webkit-scrollbar { display: none; }
+.app-tabs button {
+  flex: 0 0 auto;
+  padding: 13px 12px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #a48e84;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--ui-tab-size);
+  font-weight: 500;
+  letter-spacing: .045em;
+  white-space: nowrap;
+}
+
+.app-tabs button.on { color: #ff6828; border-bottom-color: var(--ui-accent); }
+.app-tabs button:hover { color: #c6aaa0; }
+.app-tabs button:focus-visible { outline: 2px solid #ff6a24; outline-offset: -2px; }
+
+.app-source-strip {
+  box-sizing: border-box;
+  padding: 9px 14px;
+  border: 1px solid #3e281e;
+  border-radius: 6px;
+  color: #9c877e;
+  font-size: var(--ui-source-size);
+  line-height: 1.45;
+}
+
+.app-source-strip--quiet { background: #1d1912; }
+.app-source-strip--alert { border-color: #7a361b; background: #2a130b; color: #e6a078; }
+.app-source-strip--spaced { margin: 6px 0 16px; }
+
+@media (max-width: 720px) {
+  .app-header { align-items: flex-start; flex-direction: column; }
+  .app-header-controls { width: 100%; justify-content: space-between; }
+}
+
+@media (max-width: 480px) {
+  .app-header-controls { align-items: stretch; flex-direction: column; }
+  .app-control select { width: 100%; }
+}

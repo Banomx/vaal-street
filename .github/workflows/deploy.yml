@@ -1,0 +1,57 @@
+name: Build & deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # GGG publishes completed hourly digests. Ten minutes after the boundary
+    # gives the CDN time to expose the previous hour.
+    - cron: "10 * * * *"
+  workflow_dispatch:          # manual "Run workflow" button
+    inputs:
+      reset_history:
+        description: "Wipe accumulated price history and start clean"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Snapshot market data
+        run: npm run data
+        env:
+          # push = code deploy only (reuse deployed data, no new snapshot);
+          # schedule + manual dispatch = fetch fresh data
+          DATA_MODE: ${{ github.event_name == 'push' && 'reuse' || 'fetch' }}
+          RESET_HISTORY: ${{ inputs.reset_history }}
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
