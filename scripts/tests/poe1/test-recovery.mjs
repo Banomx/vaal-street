@@ -117,7 +117,11 @@ await writeFile(path.join(OUT_DIR, "Hardcore", "scarabs-selfhistory.json"), JSON
    state the broken build left behind. */
 const DEPLOYED_POINTS = [
   { t: ago(96), values: { [SCARAB]: 196 }, rate: 296 },   // overlaps the seed
-  { t: ago(1), values: { [SCARAB]: 300 }, rate: 400 },    // newer than the seed
+  /* A zero the old generator wrote when two-decimal rounding met an item worth
+     a thousandth of a chaos. It is on the live site, reuse can only carry it,
+     and the gates reject it — so unless it is cleaned on the way in, every
+     future code deploy fails and the deployment freezes for good. */
+  { t: ago(1), values: { [SCARAB]: 300, "Rogue's Marker": 0 }, rate: 400 },
 ];
 
 globalThis.fetch = async (url) => {
@@ -129,7 +133,9 @@ globalThis.fetch = async (url) => {
   if (file === "Allflame/scarabs.json") {
     return J({ generatedAt: ago(1), historyAxis: "days since first snapshot", rateHistory: [{ day: 0, rate: 400 }], items: [{ name: SCARAB, chaosValue: 300 }] });
   }
-  if (file === "Allflame/prices.json") return J({ generatedAt: ago(1), prices: { [SCARAB]: { c: 300 } } });
+  if (file === "Allflame/prices.json") {
+    return J({ generatedAt: ago(1), prices: { [SCARAB]: { c: 300 }, "Rogue's Marker": { c: 0, n: 1 }, "Chaos Orb": { c: 1 } } });
+  }
   return NOPE();
 };
 
@@ -178,6 +184,20 @@ ok(index.leagues.find((l) => l.slug === "Allflame")?.stale === undefined,
   "a league the deployment does serve is not flagged");
 ok((await read("Hardcore", "prices.json")).prices[SCARAB].c === 55,
   "the undeployed league keeps its checked-in snapshot");
+
+/* Carried-forward data is cleaned rather than published or refused. The run
+   above had to reach this point at all: a zero price fails a publication gate,
+   and reuse mode cannot produce a better number, only carry the one it was
+   given. */
+const carriedPrices = (await read("Allflame", "prices.json")).prices;
+ok(carriedPrices[SCARAB].c === 300, "a real carried price is untouched");
+ok(carriedPrices["Chaos Orb"].c === 1, "and so is everything else in the file");
+ok(carriedPrices["Rogue's Marker"] === undefined,
+  "a zero carried from the deployment is dropped: absent is unknown, zero is a claim that it is free");
+const cleanedPoint = self.points.find((p) => p.t === ago(1));
+ok(cleanedPoint?.values[SCARAB] === 300, "the point itself survives the cleaning");
+ok(cleanedPoint?.values["Rogue's Marker"] === undefined,
+  "only the false value is dropped, not the observation that the hour existed");
 
 if (fails) { console.log(`${fails} FAILURES`); process.exit(1); }
 console.log("PoE 1 history recovery passed.");

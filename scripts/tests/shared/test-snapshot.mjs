@@ -5,6 +5,7 @@ import {
   loadDocument, qualityNotes, readJson, summarize, worstLevel, worstState,
 } from "../../../src/shared/data/snapshot.js";
 import { allowsDemo, allowsLiveApi, resolveDataMode } from "../../../src/shared/data/dataMode.js";
+import { QualityReport } from "../../shared/dataset.mjs";
 
 /* A stand-in for the browser's fetch: every route is one of the failure modes
    the reader has to be able to tell apart. */
@@ -95,17 +96,25 @@ assert.equal(worstState([READY, MISSING, INCOMPATIBLE, OFFLINE]), INCOMPATIBLE);
 assert.equal(worstState([READY, READY]), READY);
 assert.equal(worstLevel(["ok", "notice", "warning"]), "warning");
 
-/* ---- quality report passthrough ---- */
-const notes = qualityNotes({
-  checks: [
-    { id: "price-collapse", state: "failure", message: "priced names fell from 900 to 4" },
-    { id: "stale-leagues", state: "degraded", message: "1 of 3 league(s) are stale" },
-    { id: "thin-history", state: "warning", message: "fine" },
-  ],
-});
+/* ---- quality report passthrough ----
+   Built from a real QualityReport, not a hand-written object: the browser
+   reading a field the generator does not write fails silently — the banner
+   just never mentions a degraded run — and that is exactly what happened
+   before this test existed. */
+const report = new QualityReport({ game: "poe1" });
+report.pass("curated-coverage", "40/40 curated names priced");
+report.fail("price-collapse", "priced names fell from 900 to 4");
+report.degrade("stale-leagues", "1 of 3 league(s) are stale");
+report.warn("thin-history", "fine");
+const published = JSON.parse(JSON.stringify(report.toJSON()));
+assert.equal(published.state, "failure");
+assert.equal(published.counts.failure, 1);
+const notes = qualityNotes(published);
 assert.equal(notes.length, 2, "only degradations and failures are worth a banner");
 assert.equal(notes[0].level, "error");
+assert.ok(/price-collapse/.test(notes[0].text), "the check code reaches the reader");
 assert.equal(notes[1].level, "warning");
+assert.ok(/stale-leagues/.test(notes[1].text));
 assert.deepEqual(qualityNotes(null), []);
 
 /* ---- the whole verdict ---- */

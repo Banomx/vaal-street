@@ -82,7 +82,13 @@ globalThis.fetch = async (url) => {
   const file = u.pathname.replace("/base/data/poe2/", "");
   if (file === "index.json") return J({ schemaVersion: 1, generatedAt: ago(1), leagues: [{ name: "Runes of Aldur", slug: "runes-of-aldur", group: "current" }] });
   if (file === "runes-of-aldur/prices.json") {
-    return J({ schemaVersion: 1, generatedAt: ago(1), league: "Runes of Aldur", divineExalted: 500, prices: { "Chaos Orb": { exalted: 25 } } });
+    /* What the live site actually holds: rows written by an older generator
+       that the current gates reject. Reuse can only carry them, so unless they
+       are cleaned on the way in the run can never publish again. */
+    return J({
+      schemaVersion: 1, generatedAt: ago(1), league: "Runes of Aldur", divineExalted: 500,
+      prices: { "Chaos Orb": { exalted: 25 }, INCOMPLETE: { exalted: 4 }, "Ghosted Rune": { exalted: 0 } },
+    });
   }
   if (file === "runes-of-aldur/price-history.json") return J(deployedHistory);
   return NOPE();
@@ -118,6 +124,12 @@ ok(history.timestamps.every((t, i) => i === 0 || Date.parse(t) >= Date.parse(his
 ok(history.series["Chaos Orb"].length === history.timestamps.length,
   "every series stays aligned with the timestamp axis after merging");
 ok(history.series["Chaos Orb"].at(-1) === 25, "the newest deployed value survives the merge");
+
+/* The carried price file is cleaned, not published and not refused. */
+const reusedPrices = (await read("runes-of-aldur", "prices.json")).prices;
+ok(reusedPrices["Chaos Orb"].exalted === 25, "a real carried price is untouched");
+ok(reusedPrices.INCOMPLETE === undefined, "a placeholder row carried from the deployment is dropped");
+ok(reusedPrices["Ghosted Rune"] === undefined, "and so is a row quoted at zero — absent is unknown, zero is free");
 
 ok((await read("runes-of-aldur", "prices.json")).prices["Chaos Orb"].exalted === 25,
   "current prices come from the deployment, which is newer than the seed");

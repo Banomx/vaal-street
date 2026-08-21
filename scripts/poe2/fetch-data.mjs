@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describePriceSources, enrichPriceMetadata, exchangeToPrices, mergePrices, scoutToPrices, selectTrackedLeagues, slugifyLeague, stashToPrices } from "./prices.mjs";
+import { describePriceSources, enrichPriceMetadata, exchangeToPrices, mergePrices, sanitizeCarriedPrices, scoutToPrices, selectTrackedLeagues, slugifyLeague, stashToPrices } from "./prices.mjs";
 import { fetchGggPoe2 } from "./ggg-exchange.mjs";
 import { appendPriceSnapshot, mergePriceHistories } from "./history.mjs";
 import { appendExchangeSnapshot, mergeExchangeHistories } from "./exchange-history.mjs";
@@ -101,11 +101,13 @@ async function reuseDeployment() {
   for (const slug of slugs) {
     const url = (file) => `${base}/data/poe2/${encodeURIComponent(slug)}/${file}`;
     const localPrices = await readJsonFile(join(OUT, slug, LEAGUE_FILES.prices));
-    const prices = await tryGetJson(url(LEAGUE_FILES.prices)) ?? localPrices;
-    if (!prices?.prices) {
+    const carried = await tryGetJson(url(LEAGUE_FILES.prices)) ?? localPrices;
+    if (!carried?.prices) {
       console.warn(`${slug}: no deployed or local price snapshot — league not reused`);
       continue;
     }
+    const { doc: prices, dropped } = sanitizeCarriedPrices(carried);
+    if (dropped.length) console.log(`${slug}: cleaned carried prices — ${dropped.join(", ")}`);
 
     const localHistory = await readJsonFile(join(OUT, slug, LEAGUE_FILES.priceHistory));
     const deployedHistory = await tryGetJson(url(LEAGUE_FILES.priceHistory));

@@ -257,7 +257,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
   const args = process.argv.slice(2);
   const previousIndex = args.indexOf("--previous");
   const previousDir = previousIndex >= 0 ? args[previousIndex + 1] : null;
-  const target = args.find((arg, index) => !arg.startsWith("--") && index !== previousIndex + 1)
+  /* Only the value that follows `--previous` is not the target. With no
+     `--previous` at all, indexOf returns -1 and `previousIndex + 1` is 0 —
+     which silently swallowed the first positional argument, so passing a
+     directory validated the default tree instead and reported it as clean. */
+  const consumed = previousIndex >= 0 ? previousIndex + 1 : -1;
+  const target = args.find((arg, index) => !arg.startsWith("--") && index !== consumed)
     || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "public", "data", "poe2");
   const report = await validatePoe2(target, { previousDir });
   report.print();

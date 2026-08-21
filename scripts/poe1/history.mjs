@@ -121,6 +121,69 @@ export function derivedHistoryPointCount(history) {
   return Object.values(history || {}).reduce((count, points) => count + (Array.isArray(points) ? points.length : 0), 0);
 }
 
+/* ---------- carried-forward data is not trusted data ----------
+
+   Reuse mode and the per-family fallback both copy files from the previous
+   deployment. That deployment was written by whatever code was live at the
+   time, so it can hold values the current rules reject — the sub-0.005c
+   prices that two-decimal rounding turned into `0` are the case that actually
+   happened, and they sat in every league's prices.json.
+
+   Carrying them forward unchanged makes the publication gates unsatisfiable:
+   the gate is right that a zero price must not reach the site, and a reuse run
+   has no way to produce a better number, so the run would fail forever and
+   the deployment would freeze. Cleaning on the way in is the only move that
+   converges — and it is the same rule the recovery tool applies, because zero
+   is not a cheap price, it is an unknown one.
+
+   Dropping a value is not the same as dropping the point or the item: the
+   observation that the market existed at that hour survives, only the false
+   number goes. Returns the cleaned document and a list of what was dropped, so
+   a run says it rather than quietly rewriting history. */
+export function sanitizeCarried(file, doc, { key = null } = {}) {
+  const dropped = [];
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) return { doc, dropped };
+
+  if (file === "prices.json" && doc.prices) {
+    const prices = {};
+    let count = 0;
+    for (const [name, entry] of Object.entries(doc.prices)) {
+      /* Absent is unknown and legal; present-and-zero is the bug. */
+      if (entry?.c === undefined || (Number.isFinite(entry.c) && entry.c > 0)) prices[name] = entry;
+      else count += 1;
+    }
+    if (count) dropped.push(`${count} price(s) quoted at zero or worse`);
+    return { doc: { ...doc, prices }, dropped };
+  }
+
+  if (file.endsWith("selfhistory.json")) {
+    /* Gem history stores signed levelling profit, so a negative value is an
+       observation rather than a fault. */
+    const family = key || file.replace(/-?selfhistory\.json$/, "");
+    if (SIGNED_HISTORY_KEYS.has(family)) return { doc, dropped };
+    const points = Array.isArray(doc.points) ? doc.points : [];
+    let count = 0;
+    const cleaned = points.map((point) => {
+      const values = {};
+      for (const [name, value] of Object.entries(point?.values || {})) {
+        if (typeof value === "number" && Number.isFinite(value) && value > 0) values[name] = value;
+        else count += 1;
+      }
+      return { ...point, values };
+    });
+    if (count) dropped.push(`${count} stored value(s) at zero or worse`);
+    return { doc: { ...doc, points: cleaned }, dropped };
+  }
+
+  if (Array.isArray(doc.items)) {
+    const items = doc.items.filter((item) => Number.isFinite(item?.chaosValue) && item.chaosValue > 0);
+    if (items.length !== doc.items.length) dropped.push(`${doc.items.length - items.length} unpriced item(s)`);
+    return { doc: { ...doc, items }, dropped };
+  }
+
+  return { doc, dropped };
+}
+
 export function mergeHistorySeedDocument(file, seed, deployed) {
   if (!deployed) return seed;
   if (file.endsWith("selfhistory.json")) return mergeSelfHistory(seed, deployed);

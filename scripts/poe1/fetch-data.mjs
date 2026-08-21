@@ -30,7 +30,7 @@ import {
   GEM_HISTORY_CAP, GEM_HISTORY_HOURLY_HOURS, HOUR_MS, RATE_HISTORY_CAP, SELF_HISTORY_CAP,
   applySelfChanges, buildRateHistory, historyOrigin, historySourceOf, mergeBackfill,
   SIGNED_HISTORY_KEYS, mergeHistorySeedDocument, mergeSelfHistory, normalizePoint, ratePointsFrom,
-  rateSane, rebuildDerivedHistory, stitchHistory, thinPoints,
+  rateSane, rebuildDerivedHistory, sanitizeCarried, stitchHistory, thinPoints,
 } from "./history.mjs";
 import { CATEGORIES, CATEGORY_BY_KEY, FETCHED_CATEGORIES } from "../../src/games/poe1/catalogue/categories.js";
 import {
@@ -1291,10 +1291,27 @@ async function carryForward(slug, files) {
   const dir = path.join(OUT, slug);
   await mkdir(dir, { recursive: true });
   let copied = 0;
+  const cleaned = [];
   for (const f of files) {
     const body = await tryText(`${base}/data/poe1/${slug}/${f}`)
       ?? await tryText(`${base}/data/${slug}/${f}`); // migration from the old unscoped layout
-    if (body != null) { await writeFile(path.join(dir, f), body); copied++; }
+    if (body == null) continue;
+    /* What is on the site was written by whatever code was live at the time,
+       so it can hold values the current gates reject. Clean on the way in: the
+       gates are right that a zero price must not be published, and a reuse run
+       cannot produce a better number, so carrying one forward unchanged would
+       make the run unpublishable for good. */
+    let text = body;
+    try {
+      const { doc, dropped } = sanitizeCarried(f, JSON.parse(body));
+      if (dropped.length) { text = JSON.stringify(doc); cleaned.push(`${f}: ${dropped.join(", ")}`); }
+    } catch { /* not JSON we know how to clean — copy it verbatim */ }
+    await writeFile(path.join(dir, f), text);
+    copied++;
+  }
+  if (cleaned.length) {
+    console.log(`  ${slug}: cleaned carried-forward data — ${cleaned.slice(0, 6).join("; ")}`
+      + `${cleaned.length > 6 ? `, +${cleaned.length - 6} more` : ""}`);
   }
   return copied;
 }

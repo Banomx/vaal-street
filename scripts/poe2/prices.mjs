@@ -363,6 +363,30 @@ export function describePriceSources(prices) {
   return labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")}, then ${labels.at(-1)}`;
 }
 
+/* What the previous deployment holds was written by whatever code was live at
+   the time, so it can carry rows the current gates reject — the `INCOMPLETE`
+   placeholder and zero-quoted entries both shipped before this. Reuse mode
+   cannot produce better numbers, only carry them, so carrying them unchanged
+   would leave the run permanently unpublishable. Clean on the way in, and say
+   what was dropped: an absent price is unknown, which is honest; a zero is a
+   claim that something is free. */
+export function sanitizeCarriedPrices(doc) {
+  const dropped = [];
+  if (!doc?.prices) return { doc, dropped };
+  const prices = {};
+  let placeholders = 0;
+  let unpriced = 0;
+  for (const [name, entry] of Object.entries(doc.prices)) {
+    if (isPlaceholderName(name)) { placeholders += 1; continue; }
+    const quote = entry?.exalted;
+    if (quote === undefined || (Number.isFinite(quote) && quote > 0)) prices[name] = entry;
+    else unpriced += 1;
+  }
+  if (placeholders) dropped.push(`${placeholders} placeholder item name(s)`);
+  if (unpriced) dropped.push(`${unpriced} entry/entries quoted at zero or worse`);
+  return { doc: dropped.length ? { ...doc, prices } : doc, dropped };
+}
+
 export function slugifyLeague(name) {
   return String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }

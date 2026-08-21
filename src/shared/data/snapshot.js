@@ -206,14 +206,19 @@ export function worstLevel(levels) {
 export function qualityNotes(quality, { game } = {}) {
   if (!quality || typeof quality !== "object") return [];
   const notes = [];
+  /* Field names come from `QualityReport.toJSON()` in
+     scripts/shared/dataset.mjs: each check is `{ level, code, message }`.
+     scripts/tests/shared/test-snapshot.mjs builds its fixture from a real
+     report rather than a hand-written object, because reading the wrong field
+     here fails silently — the banner simply never mentions a degraded run. */
   const checks = Array.isArray(quality.checks) ? quality.checks : [];
   const label = game ? `${game} ` : "";
   for (const check of checks) {
-    if (check?.state === "failure") notes.push({ level: "error", text: `${label}${check.id}: ${check.message}` });
-    else if (check?.state === "degraded") notes.push({ level: "warning", text: `${label}${check.id}: ${check.message}` });
+    if (check?.level === "failure") notes.push({ level: "error", text: `${label}${check.code}: ${check.message}` });
+    else if (check?.level === "degraded") notes.push({ level: "warning", text: `${label}${check.code}: ${check.message}` });
   }
-  const degraded = checks.filter((check) => check?.state === "degraded").length;
-  const warnings = checks.filter((check) => check?.state === "warning").length;
+  const degraded = checks.filter((check) => check?.level === "degraded").length;
+  const warnings = checks.filter((check) => check?.level === "warning").length;
   if (!notes.length && warnings) {
     notes.push({ level: "notice", text: `${warnings} data quality warning${warnings > 1 ? "s" : ""} in the last run.` });
   }

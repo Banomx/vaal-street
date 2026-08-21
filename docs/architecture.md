@@ -91,6 +91,27 @@ something" is "it is much worse than the last one": `collapsed()` fails a run
 whose priced-name count, league count or history depth drops sharply. The
 report is written to `public/data/<game>/quality.json` and read by the browser.
 
+### Carried-forward data is cleaned on the way in
+
+Reuse mode and the per-family fallback both copy files from the live
+deployment, which was written by whatever code was running at the time. It can
+therefore hold values the current gates reject — the sub-0.005c prices that
+two-decimal rounding turned into `0` sat in every league's `prices.json` and in
+The Catalyst's stored history.
+
+Carrying those forward unchanged makes the gates unsatisfiable: the gate is
+right that a zero must not be published, and a reuse run cannot produce a
+better number, so the run fails every time and the deployment freezes. This
+happened on the first code deploy after the gates were added.
+
+`sanitizeCarried()` (`scripts/poe1/history.mjs`) and `sanitizeCarriedPrices()`
+(`scripts/poe2/prices.mjs`) apply the same rule the recovery tool uses: drop
+the false value, keep the observation. A zero price is removed from the map, a
+zero stored value is removed from its point while the point itself stays, and
+PoE 2 placeholder names (`INCOMPLETE` and friends) are dropped. Gem history is
+exempt because it stores signed levelling profit. Every run logs what it
+cleaned. Absent means unknown; zero would mean free.
+
 Every run also records where its numbers came from. `sourceRecord()` captures a
 feed's URL, fetch time, ETag/Last-Modified and a content hash — RePoE publishes
 no version or manifest, so a content hash is the only way to notice its
