@@ -9,6 +9,8 @@ import {
   GCP_NAME, VAAL_ORB_NAME, computeGems, loadSettings as loadGemSettings,
 } from "../gems/gems.js";
 import { CHANGE_WINDOW_OPTIONS } from "../pricing/marketWindows.js";
+import { POE1_SCHEMA_VERSIONS } from "../../config.js";
+import { isUsable, loadDocument } from "../../../../shared/data/snapshot.js";
 import { TREND_DEPTH, TREND_ROTATION_MS, pickTrend, rotateDesks, rotateTrend } from "./overviewTrends.js";
 
 const CATEGORY_FILES = [
@@ -114,15 +116,16 @@ export default function Overview({
   }, []);
 
   useEffect(() => {
+    if (!staticBase) return undefined; // no league folder yet
     let cancelled = false;
     setSnapshots(null);
+    /* Every desk on this page is a summary of a file someone else renders in
+       full, so a document that fails its schema contract is dropped rather
+       than summarised — a headline number from a file the app could not read
+       is the worst of both. */
     const read = async (file) => {
-      try {
-        const response = await fetch(`${staticBase}/${file}`, { cache: "no-cache" });
-        return response.ok ? await response.json() : null;
-      } catch {
-        return null;
-      }
+      const doc = await loadDocument(`${staticBase}/${file}`, { supported: POE1_SCHEMA_VERSIONS });
+      return isUsable(doc) ? doc.data : null;
     };
     Promise.all([
       read("prices.json"),
@@ -418,7 +421,14 @@ export default function Overview({
     ? "Loading market data"
     : mode === "demo"
       ? "Demo snapshot"
-      : dataSource === "static" ? sourceLabel(statusSource) : "Live market data";
+      : mode === "unavailable"
+        ? "No market data"
+        : dataSource === "static" ? sourceLabel(statusSource) : "Live market data";
+  /* With nothing loaded there is no league, no timestamp and no rate — and the
+     fallback rate is a constant from the demo generator. Printing it next to
+     "no market data" is exactly the kind of plausible number this page must
+     not show. */
+  const showRates = mode !== "unavailable" && mode !== "connecting";
 
   const bestBoss = pools.boss.up[0] || null;
   const bestDelve = pools.delve.up[0] || null;
@@ -473,10 +483,10 @@ export default function Overview({
     <main className="ov-main">
       <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
         <b>{status}</b>
-        {` · ${league || "League loading"}`}
-        {` · ${updatedAt ? `updated ${new Date(updatedAt).toLocaleString()}` : "updated recently"}`}
-        {` · 1 Divine ≈ ${Math.round(divineRate)} Chaos`}
-        {mirrorDivine > 0 ? ` · 1 Mirror ≈ ${Math.round(mirrorDivine).toLocaleString()} Divine` : ""}
+        {league ? ` · ${league}` : ""}
+        {updatedAt ? ` · updated ${new Date(updatedAt).toLocaleString()}` : ""}
+        {showRates ? ` · 1 Divine ≈ ${Math.round(divineRate)} Chaos` : ""}
+        {showRates && mirrorDivine > 0 ? ` · 1 Mirror ≈ ${Math.round(mirrorDivine).toLocaleString()} Divine` : ""}
       </SourceStrip>
 
       <div className="ov-head">

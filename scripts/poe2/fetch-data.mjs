@@ -1,21 +1,30 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { enrichPriceMetadata, exchangeToPrices, mergePrices, scoutToPrices, selectTrackedLeagues, slugifyLeague, stashToPrices } from "./prices.mjs";
+import { describePriceSources, enrichPriceMetadata, exchangeToPrices, mergePrices, scoutToPrices, selectTrackedLeagues, slugifyLeague, stashToPrices } from "./prices.mjs";
 import { fetchGggPoe2 } from "./ggg-exchange.mjs";
 import { appendPriceSnapshot, mergePriceHistories } from "./history.mjs";
 import { appendExchangeSnapshot, mergeExchangeHistories } from "./exchange-history.mjs";
 import { BOSSES } from "../../src/games/poe2/features/bosses/bossData.js";
 import { computeBosses, summarizePriceCoverage } from "../../src/games/poe2/features/bosses/bossProfit.js";
+import { QualityReport, USER_AGENT, clearAbandonedStages, createStage, sourceRecord } from "../shared/dataset.mjs";
+import { POE2_SCHEMA_VERSION, validatePoe2 } from "./validate.mjs";
+import { EXCHANGE_TYPES, STASH_TYPES } from "./endpoints.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const OUT = process.env.DATA_OUT || join(ROOT, "public", "data", "poe2");
+/* `OUT` is a staging directory for the length of a run and only becomes the
+   published tree once the gates pass. Generating in place would mean a bad run
+   has already destroyed the thing it should have fallen back to. */
+const FINAL_OUT = process.env.DATA_OUT || join(ROOT, "public", "data", "poe2");
+let OUT = FINAL_OUT;
 const API = "https://poe.ninja/poe2/api/economy";
 const SCOUT_API = "https://api.poe2scout.com/poe2/Leagues";
-const USER_AGENT = "scarab-ledger/0.1 (+https://github.com/; PoE2 market snapshot)";
+
 const FETCH_TIMEOUT_MS = Number(process.env.POE2_FETCH_TIMEOUT_MS || 30000);
-const EXCHANGE_TYPES = ["Currency", "Fragments", "Abyss", "LineageSupportGems", "Ritual", "Expedition", "Delirium", "Breach", "Verisium", "SoulCores"];
-const STASH_TYPES = ["UniqueWeapons", "UniqueArmours", "UniqueAccessories", "UniqueFlasks", "UniqueCharms", "UniqueJewels", "UniqueSanctumRelics", "UniqueTablets", "PrecursorTablets"];
+/* Accepted types, their consumers and the documented ones deliberately skipped
+   live in ./endpoints.mjs. UncutGems, Essences, Idols and Runes were absent from
+   this list until 2026-08-21, which left everything in them unpriced or pushed
+   onto a listing feed. */
 
 async function getJson(url) {
   const response = await fetch(url, {
@@ -43,44 +52,114 @@ function deployedBase() {
   return owner && repository ? `https://${owner}.github.io/${repository}` : "";
 }
 
+export const LEAGUE_FILES = {
+  prices: "prices.json",
+  priceHistory: "price-history.json",
+  exchangeMarkets: "exchange-markets.json",
+  exchangeHistory: "exchange-history.json",
+};
+
+async function tryGetJson(url) {
+  try { return await getJson(url); }
+  catch { return null; }
+}
+
+/* The checked-in `public/data/poe2` tree is a recovery seed, not scratch: it is
+   the only copy of a timeline that survives a repository move, because the
+   previous deployment disappears with the old Pages site. Reuse mode therefore
+   merges it with whatever is deployed rather than overwriting it. */
+async function localLeagueSlugs() {
+  try {
+    const entries = await readdir(OUT, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  } catch { return []; }
+}
+
+function historyPointCount(history) {
+  return Array.isArray(history?.timestamps) ? history.timestamps.length : 0;
+}
+
+function exchangePointCount(history) {
+  return Array.isArray(history?.snapshots) ? history.snapshots.length : 0;
+}
+
+/* Reuse runs on every code push. It used to replace each league's timeline with
+   whatever the live site happened to hold, so a recovery seed richer than the
+   deployment was destroyed by the very deploy that shipped it. Merge instead,
+   assert the result is no poorer than either input, and write the index last so
+   a half-downloaded reuse never advertises files that are not there yet. */
 async function reuseDeployment() {
   const base = deployedBase();
   if (!base) return false;
-  try {
-    const index = await getJson(`${base}/data/poe2/index.json`);
-    if (!index?.leagues?.length) return false;
-    const reusedIndex = {
-      ...index,
-      schemaVersion: 1,
-      leagues: index.leagues.map((league) => ({
-        ...league,
-        files: {
-          prices: "prices.json",
-          priceHistory: "price-history.json",
-          exchangeMarkets: "exchange-markets.json",
-          exchangeHistory: "exchange-history.json",
-        },
-      })),
-    };
-    await writeJson(join(OUT, "index.json"), reusedIndex);
-    for (const league of reusedIndex.leagues) {
-      const prices = await getJson(`${base}/data/poe2/${encodeURIComponent(league.slug)}/prices.json`);
-      await writeJson(join(OUT, league.slug, "prices.json"), prices);
-      let history;
-      try { history = await getJson(`${base}/data/poe2/${encodeURIComponent(league.slug)}/price-history.json`); }
-      catch { history = appendPriceSnapshot(null, prices); }
-      await writeJson(join(OUT, league.slug, "price-history.json"), history);
-      for (const file of ["exchange-markets.json", "exchange-history.json"]) {
-        try { await writeJson(join(OUT, league.slug, file), await getJson(`${base}/data/poe2/${encodeURIComponent(league.slug)}/${file}`)); }
-        catch { /* Exchange-pair storage starts with the next scheduled fetch. */ }
-      }
+  const index = await tryGetJson(`${base}/data/poe2/index.json`);
+  const deployedLeagues = Array.isArray(index?.leagues) ? index.leagues : [];
+  const seeded = await localLeagueSlugs();
+  const slugs = [...new Set([...deployedLeagues.map((league) => league.slug), ...seeded])].filter(Boolean);
+  if (!slugs.length) return false;
+
+  const staged = [];
+  for (const slug of slugs) {
+    const url = (file) => `${base}/data/poe2/${encodeURIComponent(slug)}/${file}`;
+    const localPrices = await readJsonFile(join(OUT, slug, LEAGUE_FILES.prices));
+    const prices = await tryGetJson(url(LEAGUE_FILES.prices)) ?? localPrices;
+    if (!prices?.prices) {
+      console.warn(`${slug}: no deployed or local price snapshot — league not reused`);
+      continue;
     }
-    console.log(`Reused ${reusedIndex.leagues.length} deployed PoE 2 price snapshots and timelines.`);
-    return true;
-  } catch (error) {
-    console.warn(`Could not reuse deployed PoE 2 data: ${error.message}`);
-    return false;
+
+    const localHistory = await readJsonFile(join(OUT, slug, LEAGUE_FILES.priceHistory));
+    const deployedHistory = await tryGetJson(url(LEAGUE_FILES.priceHistory));
+    let priceHistory = (localHistory || deployedHistory)
+      ? mergePriceHistories(localHistory, deployedHistory)
+      : appendPriceSnapshot(null, prices);
+    if (historyPointCount(priceHistory) < Math.max(historyPointCount(localHistory), historyPointCount(deployedHistory))) {
+      throw new Error(`${slug}: merged price history lost points — refusing to publish`);
+    }
+
+    const localExchange = await readJsonFile(join(OUT, slug, LEAGUE_FILES.exchangeHistory));
+    const deployedExchange = await tryGetJson(url(LEAGUE_FILES.exchangeHistory));
+    const exchangeHistory = (localExchange || deployedExchange)
+      ? mergeExchangeHistories(localExchange, deployedExchange)
+      : null;
+    if (exchangeHistory
+      && exchangePointCount(exchangeHistory) < Math.max(exchangePointCount(localExchange), exchangePointCount(deployedExchange))) {
+      throw new Error(`${slug}: merged exchange history lost snapshots — refusing to publish`);
+    }
+
+    const markets = await tryGetJson(url(LEAGUE_FILES.exchangeMarkets))
+      ?? await readJsonFile(join(OUT, slug, LEAGUE_FILES.exchangeMarkets));
+
+    const entry = deployedLeagues.find((league) => league.slug === slug);
+    staged.push({
+      league: {
+        name: entry?.name || prices.league || slug,
+        slug,
+        group: entry?.group || (prices.league === "Standard" ? "permanent" : "current"),
+        files: { ...LEAGUE_FILES },
+      },
+      files: { prices, priceHistory, exchangeHistory, markets },
+      restored: historyPointCount(priceHistory) - historyPointCount(deployedHistory),
+    });
   }
+  if (!staged.length) return false;
+
+  for (const { league, files } of staged) {
+    await writeJson(join(OUT, league.slug, LEAGUE_FILES.prices), files.prices);
+    await writeJson(join(OUT, league.slug, LEAGUE_FILES.priceHistory), files.priceHistory);
+    if (files.markets) await writeJson(join(OUT, league.slug, LEAGUE_FILES.exchangeMarkets), files.markets);
+    if (files.exchangeHistory) await writeJson(join(OUT, league.slug, LEAGUE_FILES.exchangeHistory), files.exchangeHistory);
+  }
+  await writeJson(join(OUT, "index.json"), {
+    schemaVersion: POE2_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    leagues: staged.map((entry) => entry.league),
+  });
+  for (const entry of staged) {
+    console.log(`Reused ${entry.league.name}: ${historyPointCount(entry.files.priceHistory)} price point(s)`
+      + `, ${exchangePointCount(entry.files.exchangeHistory)} exchange snapshot(s)`
+      + (entry.restored > 0 ? ` — restored ${entry.restored} point(s) the deployment had lost` : ""));
+  }
+  return true;
 }
 
 async function previousExchangeData(slug) {
@@ -114,19 +193,36 @@ async function previousPriceHistory(slug) {
 
 async function fetchLeague(name, ggg) {
   const encoded = encodeURIComponent(name);
-  const scoutPayloadPromise = getJson(`${SCOUT_API}/${encoded}/Items`)
+  const sources = [];
+  const scoutUrl = `${SCOUT_API}/${encoded}/Items`;
+  const scoutRequestedAt = new Date().toISOString();
+  const scoutPayloadPromise = getJson(scoutUrl)
     .catch((error) => { console.warn(`${name}/PoE2Scout: ${error.message}`); return null; });
-  const exchangePayloads = await Promise.all(EXCHANGE_TYPES.map(async (type) => {
-    try { return { type, payload: await getJson(`${API}/exchange/current/overview?league=${encoded}&type=${type}`) }; }
-    catch (error) { console.warn(`${name}/${type}: ${error.message}`); return null; }
-  }));
-  const stashPayloads = await Promise.all(STASH_TYPES.map(async (type) => {
-    try { return { type, payload: await getJson(`${API}/stash/current/item/overview?league=${encoded}&type=${type}`) }; }
-    catch (error) { console.warn(`${name}/${type}: ${error.message}`); return null; }
-  }));
+
+  const request = async (family, type, url) => {
+    const requestedAt = new Date().toISOString();
+    try {
+      return { type, url, requestedAt, payload: await getJson(url) };
+    } catch (error) {
+      console.warn(`${name}/${type}: ${error.message}`);
+      sources.push(sourceRecord({ id: `ninja.poe2.${family}`, endpointFamily: family, requestedType: type, url, requestedAt, ok: false, warnings: [error.message] }));
+      return null;
+    }
+  };
+  const exchangePayloads = await Promise.all(EXCHANGE_TYPES.map((type) =>
+    request("exchange", type, `${API}/exchange/current/overview?league=${encoded}&type=${type}`)));
+  const stashPayloads = await Promise.all(STASH_TYPES.map((type) =>
+    request("stashItem", type, `${API}/stash/current/item/overview?league=${encoded}&type=${type}`)));
   const scoutPayload = await scoutPayloadPromise;
 
   const scoutPrices = scoutToPrices(scoutPayload);
+  const scoutParse = scoutPrices.__parse || {};
+  sources.push(sourceRecord({
+    id: "poe2scout.items", endpointFamily: "scout", url: scoutUrl, requestedAt: scoutRequestedAt,
+    ok: !!scoutPayload, rawRows: scoutParse.rawRows ?? 0, accepted: scoutParse.accepted ?? 0,
+    rejected: scoutParse.rejected ?? 0, rejectedReasons: scoutParse.rejectedReasons,
+  }));
+
   const ninjaPrices = {};
   let divineExalted = ggg?.divineExalted || 0;
   for (const result of exchangePayloads) {
@@ -134,23 +230,38 @@ async function fetchLeague(name, ggg) {
     const parsed = exchangeToPrices(result.payload, result.type);
     if (parsed.divineExalted) divineExalted = parsed.divineExalted;
     mergePrices(ninjaPrices, parsed.prices);
+    sources.push(sourceRecord({
+      id: "ninja.poe2.exchange", endpointFamily: "exchange", requestedType: result.type, url: result.url,
+      requestedAt: result.requestedAt, ok: true, rawRows: parsed.rawRows, accepted: parsed.accepted,
+      rejected: parsed.rejected, rejectedReasons: parsed.rejectedReasons,
+    }));
   }
   for (const result of stashPayloads) {
-    if (result) mergePrices(ninjaPrices, stashToPrices(result.payload, result.type));
+    if (!result) continue;
+    const parsed = stashToPrices(result.payload, result.type);
+    mergePrices(ninjaPrices, parsed);
+    const stats = parsed.__parse || {};
+    sources.push(sourceRecord({
+      id: "ninja.poe2.stashItem", endpointFamily: "stashItem", requestedType: result.type, url: result.url,
+      requestedAt: result.requestedAt, ok: true, rawRows: stats.rawRows, accepted: stats.accepted,
+      rejected: stats.rejected, rejectedReasons: stats.rejectedReasons,
+    }));
   }
   const prices = mergePrices({}, scoutPrices);
   mergePrices(prices, ninjaPrices);
   mergePrices(prices, ggg?.prices);
-  enrichPriceMetadata(prices, ggg?.baseItems);
+  const coverage = enrichPriceMetadata(prices, ggg?.baseItems);
   enrichPriceMetadata(ninjaPrices, ggg?.baseItems);
   enrichPriceMetadata(scoutPrices, ggg?.baseItems);
 
   return {
-    schemaVersion: 1,
+    schemaVersion: POE2_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     league: name,
-    priceSource: "GGG completed trades, then poe.ninja PoE 2 economy API, then PoE2Scout gap-fill",
+    priceSource: describePriceSources(prices),
     divineExalted,
+    sources: [...(ggg?.sources || []), ...sources],
+    metadataCoverage: coverage,
     prices,
     sourcePrices: {
       poeNinja: ninjaPrices,
@@ -192,12 +303,7 @@ async function main() {
       name,
       slug,
       group: name === "Standard" ? "permanent" : "current",
-      files: {
-        prices: "prices.json",
-        priceHistory: "price-history.json",
-        exchangeMarkets: "exchange-markets.json",
-        exchangeHistory: "exchange-history.json",
-      },
+      files: { ...LEAGUE_FILES },
     });
     const coverage = summarizePriceCoverage(computeBosses(BOSSES, snapshot.prices, {}));
     console.log(`${name}: ${Object.keys(snapshot.prices).length} prices · ${history.timestamps.length} price points · ${gggLeague?.exchange?.pairs?.length || 0} completed exchange pairs · boss market coverage ${coverage.priced}/${coverage.total}`);
@@ -206,14 +312,36 @@ async function main() {
       console.warn(`${name}: ${coverage.missing.length} boss-market item(s) unpriced: ${preview}${coverage.missing.length > 20 ? `, +${coverage.missing.length - 20} more` : ""}`);
     }
   }
-  await writeJson(join(OUT, "index.json"), { schemaVersion: 1, generatedAt: new Date().toISOString(), leagues });
+  await writeJson(join(OUT, "index.json"), { schemaVersion: POE2_SCHEMA_VERSION, generatedAt: new Date().toISOString(), leagues });
 }
 
-main().catch(async (error) => {
-  console.error(error);
+/* Generate into staging, gate the result, promote only on success.
+
+   A failed snapshot must fail the workflow. GitHub Pages keeps the previous
+   successful deployment when a run fails, so exiting non-zero leaves the last
+   good site up; exiting 0 on a half-built tree replaces it with the damage. */
+async function run() {
+  const cleared = await clearAbandonedStages(FINAL_OUT);
+  if (cleared) console.log(`Cleared ${cleared} abandoned staging director(ies).`);
+  const stage = await createStage(FINAL_OUT);
+  OUT = stage.dir;
   try {
-    const prior = JSON.parse(await readFile(join(ROOT, "public", "data", "poe2", "index.json"), "utf8"));
-    if (prior?.leagues?.length) process.exit(0);
-  } catch { /* no prior snapshot */ }
+    await main();
+    const report = await validatePoe2(OUT, { previousDir: FINAL_OUT, report: new QualityReport({ game: "poe2" }) });
+    await writeJson(join(OUT, "quality.json"), report.toJSON());
+    report.print();
+    if (!report.publishable) {
+      throw new Error(`PoE 2 dataset failed ${report.failures.length} publication gate(s) — not publishing`);
+    }
+    await stage.promote();
+    console.log(`Promoted the staged PoE 2 dataset to ${FINAL_OUT}.`);
+  } catch (error) {
+    await stage.discard();
+    throw error;
+  }
+}
+
+run().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

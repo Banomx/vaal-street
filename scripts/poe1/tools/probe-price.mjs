@@ -10,8 +10,10 @@
    family x type combination directly and reports where a name actually lives,
    so a missing price becomes a fact rather than a guess. It writes nothing. */
 
+import { USER_AGENT } from "../../shared/dataset.mjs";
+
 const NINJA = "https://poe.ninja";
-const HEADERS = { "User-Agent": "scarab-ledger-probe/1.0 (github.com/Banomx/scarab-ledger)" };
+const HEADERS = { "User-Agent": USER_AGENT.replace("snapshot", "probe") };
 const DELAY_MS = 250;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");

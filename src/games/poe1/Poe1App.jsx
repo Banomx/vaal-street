@@ -10,7 +10,12 @@ import Delve from "./features/delve/Delve.jsx";
 import Gems from "./features/gems/Gems.jsx";
 import GameSwitcher from "../../shared/ui/GameSwitcher.jsx";
 import { AppHeader, AppTabs, SourceStrip } from "../../shared/ui/AppShell.jsx";
-import { POE1_API_BASES, POE1_EXCHANGE_BASES, POE1_STATIC_BASE } from "./config.js";
+import SnapshotNotice from "../../shared/ui/SnapshotNotice.jsx";
+import {
+  POE1_API_BASES, POE1_EXCHANGE_BASES, POE1_LEAGUE_FILES, POE1_SCHEMA_VERSIONS, POE1_STATIC_BASE,
+  allowsDemo, allowsLiveApi, currentDataMode,
+} from "./config.js";
+import { isUsable, leagueFileUrl, loadDocument, summarize, worstLevel } from "../../shared/data/snapshot.js";
 import { SMART_DIV_AT, fmtChaos, fmtDiv, fmtPrice, unitFor, unitForSeries } from "./features/pricing/money.js";
 import { CHANGE_KEYS, CHANGE_WINDOW_OPTIONS, nearestRateWindow, weightedChange } from "./features/pricing/marketWindows.js";
 import { TAB_CATEGORIES } from "./catalogue/categories.js";
@@ -22,15 +27,27 @@ import {
 import { combineStratHistory } from "./features/strategies/stratHistory.js";
 
 /* ================================================================
-   POE 1 SCARAB PRICE TRACKER
-   - Tries live poe.ninja data on load (works when self-hosted).
-   - Falls back to a deterministic demo snapshot inside Claude,
-     where outbound requests to poe.ninja are blocked.
-   Live endpoints used when reachable:
-     GET /poe1/api/data/index-state                   -> league list
-     GET /api/data/itemoverview?league=X&type=Scarab  -> prices
-     GET /api/data/currencyoverview?league=X&type=Currency -> divine rate
-     GET /api/data/itemhistory?league=X&type=Scarab&itemId=N -> history
+   POE 1 MARKET TOOLS
+
+   Where the numbers come from, in the order the page tries them, and what
+   each mode is for — see `resolveDataMode` in ./config.js:
+
+     static (production default)
+       The generated snapshots under public/data/poe1, written hourly by
+       scripts/poe1/fetch-data.mjs. Every file is checked against the schema
+       version this build understands before anything is drawn. If they cannot
+       be read, the page says so; it does not reach for anything else. A
+       deployed site must not point every visitor at poe.ninja's API, and it
+       must never answer a broken deployment with invented numbers — a market
+       tool showing plausible fiction is worse than one showing nothing.
+
+     live / auto (dev)
+       poe.ninja's API through the vite /ninja proxy. Reachable in development
+       or with ?data=live.
+
+     demo (?data=demo, or the last resort in dev)
+       A deterministic sample snapshot for offline UI work. Explicit: it is
+       something you ask for, and the page is labelled while it is on.
    ================================================================ */
 
 /* Proxy path first (vite dev server / nginx rewrites /ninja -> poe.ninja,
@@ -342,8 +359,36 @@ const GROUP_TONES = {
 
 /* ================================================================ */
 
+const SCHEMA = { supported: POE1_SCHEMA_VERSIONS };
+
+/* Add a note to an existing verdict without losing what is already on it —
+   files load in several passes, and the last one to fail is not the only one
+   worth mentioning. */
+function addNote(verdict, level, text) {
+  const base = verdict || { state: "ready", level: "ok", notes: [] };
+  if (base.notes.some((note) => note.text === text)) return base;
+  const notes = [...base.notes, { level, text }];
+  return { ...base, notes, level: worstLevel([base.level, level]) };
+}
+
+/* One structured verdict for what the page is currently showing. A league the
+   generator marked stale leads, because "these are last hour's prices" is the
+   thing a reader acts on differently. */
+function leagueVerdict({ documents, required, quality, generatedAt, descriptor }) {
+  const verdict = summarize({ documents, required, quality, generatedAt, game: "PoE 1" });
+  if (descriptor?.stale) {
+    verdict.notes.unshift({
+      level: "warning",
+      text: `${descriptor.name || descriptor.slug}: the last snapshot run could not refresh this league, so these are an earlier run's numbers.`,
+    });
+    verdict.level = worstLevel([verdict.level, "warning"]);
+  }
+  return verdict;
+}
+
 export default function Poe1App({ activeGame, onGameChange }) {
-  const [mode, setMode] = useState("connecting");        // connecting | live | demo
+  const [dataMode] = useState(() => currentDataMode());
+  const [mode, setMode] = useState("connecting");        // connecting | live | demo | unavailable
   const [leagues, setLeagues] = useState([]);
   const [league, setLeague] = useState("");
   const [items, setItems] = useState([]);                 // {id,name,group,chaosValue,divineValue}
@@ -361,7 +406,11 @@ export default function Poe1App({ activeGame, onGameChange }) {
   const [histories, setHistories] = useState({});         // name -> [{day,value}]
   const [histLoading, setHistLoading] = useState(false);
   const [dataSource, setDataSource] = useState(null);     // "static" | "api" | null
+  const [verdict, setVerdict] = useState(null);           // structured snapshot state, see summarize()
+  const [quality, setQuality] = useState(null);           // quality.json from the last generator run
+  const qualityRef = useRef(null);                        // same, readable from callbacks without re-creating them
   const staticSlugsRef = useRef({});                      // league name -> folder slug
+  const staticLeagueRef = useRef({});                     // league name -> index entry (slug, files, stale)
   const [staticInfo, setStaticInfo] = useState(null);     // { generatedAt }
   const staticHistFetched = useRef(new Set());            // leagues whose history.json was loaded
   const [catData, setCatData] = useState({});             // tab key -> {items, divineRate, generatedAt} | "missing"
@@ -381,25 +430,37 @@ export default function Poe1App({ activeGame, onGameChange }) {
   const [watchFocus, setWatchFocus] = useState(null);     // one of its items, overlaid on that graph
   const savedStrategyNeedsAstrolabes = farmStrategies.some((strategy) => !!strategy.astrolabe);
 
-  /* ---- static snapshots (GitHub Pages etc.) ---- */
-  const loadStaticLeague = useCallback(async (name, slugsArg) => {
-    const slugs = slugsArg || staticSlugsRef.current;
-    const slug = slugs[name];
-    if (!slug) throw new Error("unknown league in snapshot index");
-    const [res, pricesRes] = await Promise.all([
-      fetch(`${STATIC_BASE}/${slug}/scarabs.json`, { cache: "no-cache" }),
-      fetch(`${STATIC_BASE}/${slug}/prices.json`, { cache: "no-cache" }).catch(() => null),
+  /* ---- static snapshots (GitHub Pages etc.) ----
+     Every file is fetched by the name the index gives it and checked against
+     the schema this build reads. A file that fails its contract is not
+     rendered and not silently treated as "no data": the verdict says which one
+     failed and why, and the page keeps whatever it could verify. */
+  const loadStaticLeague = useCallback(async (name, entriesArg, qualityArg) => {
+    const entries = entriesArg || staticLeagueRef.current;
+    const descriptor = entries[name];
+    if (!descriptor?.slug) throw new Error("unknown league in snapshot index");
+    const url = (key) => leagueFileUrl(STATIC_BASE, descriptor, key, POE1_LEAGUE_FILES);
+    const [scarabs, broad] = await Promise.all([
+      loadDocument(url("scarabs"), { ...SCHEMA, required: ["items", "generatedAt"] }),
+      loadDocument(url("prices"), { ...SCHEMA, required: ["prices"] }),
     ]);
-    if (!res.ok) throw new Error("snapshot missing");
-    const j = await res.json();
-    let broadPrices = null;
-    if (pricesRes?.ok) { try { broadPrices = await pricesRes.json(); } catch { /* optional rate detail */ } }
+    const report = leagueVerdict({
+      documents: { "The scarab snapshot": scarabs, "The broad price list": broad },
+      required: ["The scarab snapshot"],
+      quality: qualityArg !== undefined ? qualityArg : qualityRef.current,
+      generatedAt: isUsable(scarabs) ? scarabs.data.generatedAt : null,
+      descriptor,
+    });
+    setVerdict(report);
+    if (!isUsable(scarabs)) throw new Error(`scarab snapshot unusable (${scarabs.state})`);
+    const j = scarabs.data;
+    const broadPrices = isUsable(broad) ? broad.data : null;
     const rate = broadPrices?.divineRate || j.divineRate || DEMO_DIVINE_RATE;
     const mirrorChaos = broadPrices?.prices?.["Mirror of Kalandra"]?.c;
     setItems((j.items || []).map((it) => ({ ...it, group: groupForName(it.name) })));
     setDivineRate(rate);
     setMirrorDivine(Number.isFinite(mirrorChaos) && rate > 0 ? mirrorChaos / rate : null);
-    setStaticInfo({ generatedAt: j.generatedAt, historySource: j.historySource, historyAxis: j.historyAxis, priceSource: j.priceSource });
+    setStaticInfo({ generatedAt: j.generatedAt, historySource: j.historySource, historyAxis: j.historyAxis, priceSource: j.priceSource, stale: !!descriptor.stale });
     setRateHistory(Array.isArray(j.rateHistory) ? j.rateHistory : []);
     setMode("live"); setDataSource("static");
     staticHistFetched.current.delete(name);
@@ -451,40 +512,67 @@ export default function Poe1App({ activeGame, onGameChange }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let indexDoc = null;
+
       // 1) pre-built snapshots (GitHub Pages / any static host)
-      try {
-        const res = await fetch(`${STATIC_BASE}/index.json`, { cache: "no-cache" });
-        if (res.ok) {
-          const idx = await res.json();
-          const lgs = idx.leagues || [];
-          if (lgs.length) {
-            if (cancelled) return;
-            const slugs = {};
-            for (const l of lgs) slugs[l.name] = l.slug;
-            staticSlugsRef.current = slugs;
-            setLeagues(lgs.map((l) => ({ name: l.name, group: l.group || "current" })));
-            setLeague(lgs[0].name);
-            await loadStaticLeague(lgs[0].name, slugs);
+      if (dataMode !== "demo") {
+        const [index, report] = await Promise.all([
+          loadDocument(`${STATIC_BASE}/index.json`, { ...SCHEMA, required: ["leagues"] }),
+          loadDocument(`${STATIC_BASE}/quality.json`, SCHEMA),
+        ]);
+        if (cancelled) return;
+        indexDoc = index;
+        const qualityDoc = isUsable(report) ? report.data : null;
+        qualityRef.current = qualityDoc;
+        setQuality(qualityDoc);
+        const listed = isUsable(index) && Array.isArray(index.data.leagues)
+          ? index.data.leagues.filter((entry) => entry?.name && entry?.slug)
+          : [];
+        if (listed.length) {
+          const slugs = {};
+          const entries = {};
+          for (const entry of listed) { slugs[entry.name] = entry.slug; entries[entry.name] = entry; }
+          staticSlugsRef.current = slugs;
+          staticLeagueRef.current = entries;
+          setLeagues(listed.map((entry) => ({ name: entry.name, group: entry.group || "current", stale: !!entry.stale })));
+          setLeague(listed[0].name);
+          try {
+            await loadStaticLeague(listed[0].name, entries, qualityDoc);
             return;
+          } catch {
+            /* loadStaticLeague already published the verdict explaining which
+               file failed; only the fallback decision is left. */
+            if (cancelled) return;
           }
         }
-      } catch { /* fall through to live API */ }
-      // 2) live poe.ninja API (dev proxy or direct)
-      try {
-        let res;
-        try { res = await ninjaFetch(`/index-state`); }
-        catch { res = await ninjaFetch(`/getindexstate`); }
-        const idx = await res.json();
-        const cur = (idx.economyLeagues || []).map((l) => ({ name: l.name, group: "current" }));
-        const prev = (idx.oldEconomyLeagues || []).map((l) => ({ name: l.name, group: "previous" }));
-        const lgs = [...cur, ...prev];
+      }
+
+      // 2) live poe.ninja API — development and ?data=live only. A published
+      //    site does not send its visitors at somebody else's API.
+      if (allowsLiveApi(dataMode)) {
+        try {
+          let res;
+          try { res = await ninjaFetch(`/index-state`); }
+          catch { res = await ninjaFetch(`/getindexstate`); }
+          const idx = await res.json();
+          const cur = (idx.economyLeagues || []).map((l) => ({ name: l.name, group: "current" }));
+          const prev = (idx.oldEconomyLeagues || []).map((l) => ({ name: l.name, group: "previous" }));
+          const lgs = [...cur, ...prev];
+          if (cancelled) return;
+          const first = cur[0]?.name || "Standard";
+          setLeagues(lgs.length ? lgs : [{ name: "Standard", group: "current" }]);
+          setLeague(first);
+          await loadLeague(first);
+          setVerdict(null);
+          return;
+        } catch { /* fall through */ }
         if (cancelled) return;
-        const first = cur[0]?.name || "Standard";
-        setLeagues(lgs.length ? lgs : [{ name: "Standard", group: "current" }]);
-        setLeague(first);
-        await loadLeague(first);
-      } catch {
-        if (cancelled) return;
+      }
+
+      // 3) demo, only where it was asked for. Never as a quiet substitute for
+      //    production data that failed to load: sample prices rendered as real
+      //    ones are the one failure this app must not have.
+      if (allowsDemo(dataMode)) {
         const demo = buildDemoData();
         setItems(demo.items);
         setRateHistory(demo.rateHistory);
@@ -492,10 +580,19 @@ export default function Poe1App({ activeGame, onGameChange }) {
         setLeagues([{ name: "Demo snapshot", group: "current" }]);
         setLeague("Demo snapshot");
         setMode("demo");
+        return;
       }
+
+      setMode("unavailable");
+      setVerdict((current) => current || summarize({
+        documents: { "The PoE 1 snapshot index": indexDoc || { state: "offline", error: "not loaded" } },
+        required: ["The PoE 1 snapshot index"],
+        quality: qualityRef.current,
+        game: "PoE 1",
+      }));
     })();
     return () => { cancelled = true; };
-  }, [loadLeague, loadStaticLeague]);
+  }, [dataMode, loadLeague, loadStaticLeague]);
 
   /* ---- histories, lazily, for whatever is on screen ----
      Two callers want them: the open mechanic panel (a whole group) and the
@@ -524,20 +621,27 @@ export default function Poe1App({ activeGame, onGameChange }) {
       let cancelled = false;
       setHistLoading(true);
       (async () => {
-        const slug = staticSlugsRef.current[league];
-        // `history.json` is the pre-game-split scarab filename. Keep it as a
-        // read fallback so an older deployed or checked-in dataset still
-        // renders while the snapshot job migrates it to the prefixed name.
-        for (const file of ["scarabs-history.json", "history.json"]) {
-          try {
-            const res = await fetch(`${STATIC_BASE}/${slug}/${file}`, { cache: "no-cache" });
-            if (!res.ok) continue;
-            const all = await res.json();
-            if (!cancelled) setHistories((h) => ({ ...all, ...h }));
+        const descriptor = staticLeagueRef.current[league];
+        /* `history` is the pre-game-split scarab filename. Kept as a read
+           fallback so an older deployed or checked-in dataset still renders
+           while the snapshot job migrates it to the prefixed name. Derived
+           history files are bare `{ name: points }` maps with no envelope to
+           version, so they are checked for shape only. */
+        let loaded = null;
+        for (const key of ["scarabsHistory", "history"]) {
+          const url = leagueFileUrl(STATIC_BASE, descriptor, key, POE1_LEAGUE_FILES);
+          if (!url) continue;
+          const doc = await loadDocument(url, { versioned: false });
+          if (isUsable(doc)) { loaded = doc; break; }
+          if (doc.state === "corrupt") {
+            setVerdict((current) => addNote(current, "error", `The stored scarab history is unreadable and was not used (${doc.reason || doc.error}).`));
             break;
-          } catch { /* try the migration fallback, then show "no history" */ }
+          }
         }
-        if (!cancelled) setHistLoading(false);
+        if (!cancelled) {
+          if (loaded) setHistories((h) => ({ ...loaded.data, ...h }));
+          setHistLoading(false);
+        }
       })();
       return () => { cancelled = true; };
     }
@@ -573,26 +677,29 @@ export default function Poe1App({ activeGame, onGameChange }) {
     let cancelled = false;
     (async () => {
       if (dataSource === "static") {
-        try {
-          const slug = staticSlugsRef.current[league];
-          // Fetch data + history together, commit together: setting catData
-          // first re-runs this effect and cancels the in-flight history fetch.
-          const [res, hres] = await Promise.all([
-            fetch(`${STATIC_BASE}/${slug}/${categoryKey}.json`, { cache: "no-cache" }),
-            fetch(`${STATIC_BASE}/${slug}/${categoryKey}-history.json`, { cache: "no-cache" }).catch(() => null),
-          ]);
-          if (res.ok) {
-            const j = await res.json();
-            let h = null;
-            if (hres && hres.ok) { try { h = await hres.json(); } catch { /* no history yet */ } }
-            if (cancelled) return;
-            if (h) setCatHist((d) => ({ ...d, [categoryKey]: h }));
-            setCatData((d) => ({ ...d, [categoryKey]: j }));
-            return;
-          }
-        } catch { /* fall through */ }
+        const descriptor = staticLeagueRef.current[league];
+        // Fetch data + history together, commit together: setting catData
+        // first re-runs this effect and cancels the in-flight history fetch.
+        const [snapshot, history] = await Promise.all([
+          loadDocument(leagueFileUrl(STATIC_BASE, descriptor, categoryKey, POE1_LEAGUE_FILES), { ...SCHEMA, required: ["items"] }),
+          loadDocument(leagueFileUrl(STATIC_BASE, descriptor, `${categoryKey}History`, POE1_LEAGUE_FILES),
+            { versioned: false }),
+        ]);
+        if (cancelled) return;
+        if (isUsable(snapshot)) {
+          if (isUsable(history)) setCatHist((d) => ({ ...d, [categoryKey]: history.data }));
+          setCatData((d) => ({ ...d, [categoryKey]: snapshot.data }));
+          return;
+        }
+        /* A family with no file is ordinary — not every league prices every
+           one. A file that failed its contract is not, and saying "missing"
+           for both is how an unreadable snapshot goes unnoticed. */
+        if (snapshot.state !== "missing") {
+          setVerdict((current) => addNote(current, "error",
+            `The ${cat.label || categoryKey} snapshot could not be used (${snapshot.reason || snapshot.error || snapshot.state}).`));
+        }
       }
-      if (mode === "live" || mode === "connecting") {
+      if (allowsLiveApi(dataMode) && (mode === "live" || mode === "connecting")) {
         try {
           const res = await exchangeFetch(`/exchange/current/overview?league=${encodeURIComponent(league)}&type=${encodeURIComponent(cat.type)}`);
           const adapted = adaptExchangeLite(await res.json(), cat.re);
@@ -605,9 +712,17 @@ export default function Poe1App({ activeGame, onGameChange }) {
       if (!cancelled) setCatData((d) => ({ ...d, [categoryKey]: "missing" }));
     })();
     return () => { cancelled = true; };
-  }, [tab, league, dataSource, mode, catData, showFarmEditor, savedStrategyNeedsAstrolabes]);
+  }, [tab, league, dataSource, dataMode, mode, catData, showFarmEditor, savedStrategyNeedsAstrolabes]);
 
   /* ---- derived ---- */
+  /* The folder this league's files live in, or null until the index says.
+     Panels that fetch their own files take this as a prop and wait: asking for
+     `data/poe1/prices.json` with no league in the path only ever produced a
+     404, and a 404 in the network log is indistinguishable from a real one. */
+  const leagueBase = staticSlugsRef.current[league]
+    ? `${STATIC_BASE}/${encodeURIComponent(staticSlugsRef.current[league])}`
+    : null;
+
   /* The feeds price every scarab that still trades, which in a permanent
      league means the retired sets too — the old Breach four sit right next to
      the five that replaced them. Browsing and ranking use the current
@@ -872,14 +987,23 @@ export default function Poe1App({ activeGame, onGameChange }) {
         </button>
       </AppTabs>
 
+      <SnapshotNotice verdict={verdict} className="st-banner" />
+
       {mode === "demo" && (
         <SourceStrip className="app-source-strip--spaced st-banner" tone="alert">
-          Demo snapshot — poe.ninja isn't reachable right now, so prices and history are generated
-          sample data. Check your connection or the /ninja proxy config; the page switches to live
-          data automatically once poe.ninja responds (reload to retry).
+          Demo mode — every price, history curve and percentage on this page is generated sample
+          data, not a market. It is here for offline interface work. Drop the <code>?data=demo</code>
+          {" "}parameter (or reload without it) to go back to the published snapshots.
         </SourceStrip>
       )}
-      {mode === "connecting" && !OWN_BAR[tab] && <SourceStrip className="app-source-strip--spaced st-banner st-quiet">Connecting to poe.ninja…</SourceStrip>}
+      {mode === "unavailable" && (
+        <SourceStrip className="app-source-strip--spaced st-banner" tone="error">
+          <strong>No usable market data.</strong> The published snapshot could not be read, and this
+          build will not invent numbers to fill the gap — everything below is empty on purpose. The
+          hourly job may be mid-deployment; reloading in a few minutes is the usual fix.
+        </SourceStrip>
+      )}
+      {mode === "connecting" && !OWN_BAR[tab] && <SourceStrip className="app-source-strip--spaced st-banner st-quiet">Loading the latest snapshot…</SourceStrip>}
       {mode === "live" && !OWN_BAR[tab] && (
         <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
           {dataSource === "static"
@@ -992,7 +1116,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       {tab === "overview" && (
         <Overview
           league={league}
-          staticBase={staticSlugsRef.current[league] ? `${STATIC_BASE}/${staticSlugsRef.current[league]}` : STATIC_BASE}
+          staticBase={leagueBase}
           currency={currency}
           divineRate={divineRate}
           mirrorDivine={mirrorDivine}
@@ -1129,7 +1253,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       {tab === "gems" && (
         <Gems
           league={league}
-          staticBase={staticSlugsRef.current[league] ? `${STATIC_BASE}/${staticSlugsRef.current[league]}` : STATIC_BASE}
+          staticBase={leagueBase}
           currency={currency}
           divineRate={divineRate}
           fmtPrice={fmtPrice}
@@ -1145,7 +1269,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       {tab === "delve" && (
         <Delve
           league={league}
-          staticBase={staticSlugsRef.current[league] ? `${STATIC_BASE}/${staticSlugsRef.current[league]}` : STATIC_BASE}
+          staticBase={leagueBase}
           currency={currency}
           divineRate={divineRate}
           mirrorDivine={mirrorDivine}
@@ -1159,7 +1283,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       {tab === "bosses" && (
         <BossProfit
           league={league}
-          staticBase={staticSlugsRef.current[league] ? `${STATIC_BASE}/${staticSlugsRef.current[league]}` : STATIC_BASE}
+          staticBase={leagueBase}
           currency={currency}
           divineRate={divineRate}
           mirrorDivine={mirrorDivine}

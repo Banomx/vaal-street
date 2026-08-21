@@ -13,12 +13,15 @@
    names from recent completed hours; it is deliberately not a full-history
    download. */
 
+import { JSON_HEADERS, sourceRecord } from "../../shared/dataset.mjs";
+import { fetchBaseItems } from "../../shared/repoe.mjs";
+
 const GGG_BASE = process.env.GGG_EXCHANGE_BASE || "https://web.poecdn.com/api/currency-exchange";
 const REPOE_URL = process.env.REPOE_BASE_ITEMS_URL || "https://repoe-fork.github.io/base_items.min.json";
-const HEADERS = {
-  "User-Agent": "scarab-ledger-snapshot/0.4 (contact: github.com/Banomx/scarab-ledger)",
-  Accept: "application/json",
-};
+const HEADERS = { ...JSON_HEADERS };
+/* Every other external read in this project is bounded. This one was not, so a
+   stalled CDN connection could hold the hourly job open indefinitely. */
+const FETCH_TIMEOUT_MS = Math.max(5_000, Number(process.env.FETCH_TIMEOUT_MS) || 30_000);
 
 export const CHAOS_ID = "Metadata/Items/Currency/CurrencyRerollRare";
 export const DIVINE_ID = "Metadata/Items/Currency/CurrencyModValues";
@@ -31,7 +34,7 @@ const rounded = (v) => {
 };
 
 async function getJson(url) {
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();
 }
@@ -52,6 +55,16 @@ export function tradedRate(market, item, quote) {
   const itemVolume = amount(market, "volume_traded", item);
   const quoteVolume = amount(market, "volume_traded", quote);
   return itemVolume && quoteVolume ? quoteVolume / itemVolume : 0;
+}
+
+/* GGG publishes the inventory behind a market as well as the trades. A mean
+   without stock says what cleared; with it you can tell a deep market from one
+   hour's coincidence, which is exactly the distinction a boss EV needs. */
+function stockBounds(market, id) {
+  const low = amount(market, "lowest_stock", id);
+  const high = amount(market, "highest_stock", id);
+  if (!low && !high) return null;
+  return { ...(low ? { lowStock: low } : {}), ...(high ? { highStock: high } : {}) };
 }
 
 function ratioBounds(market, item, quote) {
@@ -93,12 +106,14 @@ export function buildGggLeagueSnapshot(markets, baseItems, league, { hour = null
     let bounds = id === CHAOS_ID ? { lo: 1, hi: 1 } : null;
     let volume1H = 0;
     let method = "unit";
+    let stockMarket = null;
     const chaosMarket = id === CHAOS_ID ? null : findPair(id, CHAOS_ID);
     if (chaosMarket) {
       chaos = tradedRate(chaosMarket, id, CHAOS_ID);
       bounds = ratioBounds(chaosMarket, id, CHAOS_ID);
       volume1H = amount(chaosMarket, "volume_traded", id);
       method = "direct-chaos";
+      stockMarket = chaosMarket;
       directChaos++;
     } else if (id !== DIVINE_ID && divineRate > 0) {
       const market = findPair(id, DIVINE_ID);
@@ -108,6 +123,7 @@ export function buildGggLeagueSnapshot(markets, baseItems, league, { hour = null
         bounds = rawBounds && { lo: rawBounds.lo * divineRate, hi: rawBounds.hi * divineRate };
         volume1H = amount(market, "volume_traded", id);
         method = "via-divine";
+        stockMarket = market;
         viaDivine++;
       }
     } else if (id === DIVINE_ID && divineRate > 0) {
@@ -115,6 +131,7 @@ export function buildGggLeagueSnapshot(markets, baseItems, league, { hour = null
       bounds = ratioBounds(divineMarket, DIVINE_ID, CHAOS_ID);
       volume1H = amount(divineMarket, "volume_traded", DIVINE_ID);
       method = "direct-chaos";
+      stockMarket = divineMarket;
       directChaos++;
     }
     if (!(chaos > 0)) continue;
@@ -129,6 +146,7 @@ export function buildGggLeagueSnapshot(markets, baseItems, league, { hour = null
       volume1H,
       gggId: id,
       method,
+      ...(stockMarket ? stockBounds(stockMarket, id) : {}),
       ...(hour ? { marketHour: new Date(hour * 1000).toISOString() } : {}),
     };
     // Different Metadata entries can share a display name. Prefer the one
@@ -184,7 +202,9 @@ export async function fetchGggExchange({ now = Date.now() } = {}) {
   }
   if (!payload) throw lastError || new Error("GGG returned no completed hourly market digest");
 
-  const baseItems = await getJson(REPOE_URL);
+  const { baseItems, provenance: repoe } = await fetchBaseItems(REPOE_URL, {
+    id: "repoe.poe1.baseItems", headers: HEADERS, timeoutMs: FETCH_TIMEOUT_MS,
+  });
   const leagues = [...new Set(payload.markets.map((market) => market.league).filter(Boolean))];
   const byLeague = {};
   for (const league of leagues) {
@@ -196,6 +216,23 @@ export async function fetchGggExchange({ now = Date.now() } = {}) {
     nextChangeId: payload.next_change_id,
     marketCount: payload.markets.length,
     baseItemCount: Object.keys(baseItems || {}).length,
+    /* The digest identifies itself by the hour it covers and by
+       `next_change_id`; both travel with the snapshot so a published file can
+       be traced back to the exact digest it came from. */
+    sources: [
+      sourceRecord({
+        id: "ggg.poe1.currencyExchange",
+        endpointFamily: "ggg",
+        url: `${GGG_BASE}/${hour}`,
+        requestedAt: new Date().toISOString(),
+        observedAt: new Date(hour * 1000).toISOString(),
+        ok: true,
+        rawRows: payload.markets.length,
+        version: payload.next_change_id != null ? String(payload.next_change_id) : null,
+      }),
+      repoe,
+    ],
+    baseItems,
     byLeague,
     // Kept in memory for the targeted thin-market lookup below. These are not
     // written to public/data; only the selected named prices are emitted.

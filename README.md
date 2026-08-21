@@ -63,18 +63,38 @@ is unavailable or has no usable pair.
 Requires Node.js 18+ (you have a matching setup if `node --version` prints v18 or higher).
 
 ```bash
-cd scarab-ledger
+cd vaal-street
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173 — done. The dev server proxies `/ninja/*` to
-`https://poe.ninja/*`, so the browser never makes a cross-origin request
-and CORS is a non-issue.
+Open http://localhost:5173 — done.
+
+The app reads the generated snapshots under `public/data/<game>/` first, and a
+production build reads **only** those. In development it falls back to the live
+poe.ninja API and then to a sample dataset if the snapshots are absent. The dev
+server proxies `/ninja/*` to `https://poe.ninja/*`, so that fallback never makes
+a cross-origin request.
+
+`?data=` picks a source explicitly, in any build:
+
+| value | source |
+|---|---|
+| `?data=static` | generated snapshots only (production default) |
+| `?data=live` | the poe.ninja API (needs the `/ninja` proxy) |
+| `?data=demo` | the deterministic sample dataset, banner-labelled |
+
+Other useful commands:
+
+```bash
+npm test        # unit tests; data-generation tests run against fixtures
+npm run build   # static output in dist/
+npm run validate # publication gates against the checked-in public/data
+```
 
 ## VS Code
 
-Open the folder (`File > Open Folder...` or `code scarab-ledger`), then run
+Open the folder (`File > Open Folder...` or `code vaal-street`), then run
 `npm run dev` in the integrated terminal (Ctrl+`). Vite hot-reloads on every
 save under `src/`.
 
@@ -102,18 +122,18 @@ those files first, so no browser-side proxy or API credential is needed.
 One-time setup:
 
 ```bash
-cd scarab-ledger
+cd vaal-street
 git init -b main
 git add -A
 git commit -m "Vaal Street"
-git remote add origin git@github.com:YOUR_USER/scarab-ledger.git
+git remote add origin git@github.com:Banomx/vaal-street.git
 git push -u origin main
 ```
 
 Then on github.com: repo **Settings > Pages > Build and deployment > Source >
 GitHub Actions**. The first workflow run starts on push (or trigger it under
 **Actions > Build & deploy to GitHub Pages > Run workflow**). After ~3-4
-minutes the site is live at `https://YOUR_USER.github.io/scarab-ledger/`.
+minutes the site is live at `https://banomx.github.io/vaal-street/`.
 
 Notes:
 - Prices refresh hourly, at 10 minutes past. GGG publishes one digest per
@@ -149,10 +169,12 @@ Notes:
   enough room for two full 3–5 month league timelines with extra rollover room.
 - You can run `npm run data` locally for both games, or `npm run data:poe1` and
   `npm run data:poe2` separately. The dev server will serve snapshots from
-  `public/data/<game>/`. Delete the relevant folder to go
-  back to the live `/ninja` proxy during development. (Self-history needs the
-  deployed site URL; locally set `PAGES_BASE_URL=https://YOUR_USER.github.io/scarab-ledger`
-  if you want it, same if you later use a custom domain.)
+  `public/data/<game>/`. In development, deleting the relevant folder (or
+  loading `?data=live`) goes back to the live `/ninja` proxy. Self-history needs
+  the deployed site URL, so locally set
+  `PAGES_BASE_URL=https://banomx.github.io/vaal-street` if you want it — same if
+  you later use a custom domain. Never set `RESET_HISTORY=true`: it discards the
+  accumulated timeline, which no source can rebuild.
 
 ## Production build (for later, e.g. serving from your own box)
 
@@ -161,8 +183,9 @@ npm run build        # outputs static files to dist/
 npm run preview      # serves dist/ on :5173 with the same /ninja proxy
 ```
 
-If you later serve `dist/` with nginx instead, keep the proxy — the app calls
-`/ninja/api/data/...` first and only falls back to poe.ninja directly:
+A production build reads the generated snapshots only, so serving `dist/` needs
+no proxy and no API credentials — any static host will do. The `/ninja` proxy
+below is only needed if you want `?data=live` to work on that host:
 
 ```nginx
 location /ninja/ {
@@ -549,15 +572,21 @@ stitching, the shared axis, carry-forward and thinning.
 ## Where things live
 
 - `src/app/` — application boot and the PoE 1 / PoE 2 selection only.
-- `src/shared/` — game-neutral UI, data-path and scoped-storage helpers.
-- `src/games/poe1/Poe1App.jsx` — PoE 1 shell, navigation, fetching and styles.
+- `src/shared/` — game-neutral UI, data paths, scoped storage, and the snapshot
+  contract (`shared/data/snapshot.js`, `shared/data/dataMode.js`).
+- `src/games/poe1/Poe1App.jsx` — PoE 1 shell, navigation, data loading, styles.
 - `src/games/poe1/catalogue/` — PoE 1 market families and scarab catalogue.
 - `src/games/poe1/features/` — feature-owned UI, calculations and datasets:
   `bosses`, `delve`, `gems`, `overview`, `pricing` and `strategies`.
 - `src/games/poe2/` — PoE 2 shell and isolated PoE 2-only features.
-- `scripts/poe1/` — PoE 1 snapshot pipeline, source adapters and diagnostics.
-- `scripts/tests/poe1/` — PoE 1 tests, separated from operational scripts.
+- `scripts/shared/` — staging, publication gates, source provenance, RePoE.
+- `scripts/poe1/`, `scripts/poe2/` — each game's snapshot pipeline, endpoint
+  registry (`endpoints.mjs`) and publication gates (`validate.mjs`).
+- `scripts/tools/merge-pages-artifact.mjs` — merge a downloaded Pages artifact
+  back into `public/data` after a deployment loss.
+- `scripts/tests/{shared,poe1,poe2}/` — tests, separated from operational scripts.
 - `public/data/<game>/<league>/` — generated snapshots split by game and league.
+- `public/data/<game>/quality.json` — the last run's publication-gate report.
 - `vite.config.js` — the `/ninja` proxy for dev and preview.
 
 See `AGENTS.md` for the short maintenance map and `docs/architecture.md` for
@@ -571,8 +600,10 @@ the ownership and data-retention rules.
 
 ## Notes
 
-- If poe.ninja is unreachable, the app shows a clearly labelled demo snapshot
-  instead of breaking. Reload once you're back online.
+- If a published snapshot cannot be read — missing, unparseable, or written by a
+  newer schema than the build — the page says so and shows nothing rather than
+  substituting sample data. `quality.json` warnings and a stale timestamp are
+  surfaced the same way. Sample data only ever appears under `?data=demo`.
 - Price history loads lazily per mechanic (one request per scarab in the
   group, cached), so opening a group the first time takes a moment.
 - 1h–12h change comes from accumulated hourly snapshots. 24h/48h can also fall

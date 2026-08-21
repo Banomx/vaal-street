@@ -7,6 +7,8 @@ import PriceCell from "../pricing/PriceCell.jsx";
 import PriceChart, { PctBadge, Sparkline, rateAt, realPct } from "../pricing/PriceChart.jsx";
 import { unitForSeries } from "../pricing/money.js";
 import { nearestHistoryWindow } from "../pricing/marketWindows.js";
+import { POE1_SCHEMA_VERSIONS } from "../../config.js";
+import { isUsable, loadDocument } from "../../../../shared/data/snapshot.js";
 
 /* ================================================================
    GEM LEVELLING
@@ -122,20 +124,20 @@ export default function Gems({
   const patch = useCallback((p) => setSettings((s) => sanitizeSettings({ ...s, ...p })), []);
 
   useEffect(() => {
+    if (!staticBase) return undefined; // no league folder yet
     let cancelled = false;
-    const grab = async (file, set) => {
-      try {
-        // Same revalidation rule as the other generated files: the URL does
-        // not change between hourly deployments.
-        const res = await fetch(`${staticBase}/${file}`, { cache: "no-cache" });
-        if (res.ok) { const j = await res.json(); if (!cancelled) set(j); return; }
-      } catch { /* fall through */ }
-      if (!cancelled) set("missing");
+    /* Same revalidation rule as the other generated files: the URL does not
+       change between hourly deployments. A file that fails its schema contract
+       is treated as absent here rather than rendered — Poe1App validates the
+       same tree and is the one that explains why on screen. */
+    const grab = async (file, set, options) => {
+      const doc = await loadDocument(`${staticBase}/${file}`, { supported: POE1_SCHEMA_VERSIONS, ...options });
+      if (!cancelled) set(isUsable(doc) ? doc.data : "missing");
     };
     setGemData(null); setHist({}); setPrices(null); setOpen(null);
-    grab("gems.json", setGemData);
-    grab("gems-history.json", (j) => { if (j !== "missing") setHist(j); });
-    grab("prices.json", (j) => setPrices(j === "missing" ? "missing" : (j.prices || {})));
+    grab("gems.json", setGemData, { required: ["items"] });
+    grab("gems-history.json", (j) => { if (j !== "missing") setHist(j); }, { versioned: false });
+    grab("prices.json", (j) => setPrices(j === "missing" ? "missing" : (j.prices || {})), { required: ["prices"] });
     return () => { cancelled = true; };
   }, [staticBase]);
 

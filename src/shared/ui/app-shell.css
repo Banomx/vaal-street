@@ -173,7 +173,14 @@
 
 .app-source-strip--quiet { background: #1d1912; }
 .app-source-strip--alert { border-color: #7a361b; background: #2a130b; color: #e6a078; }
+.app-source-strip--notice { border-color: #4d3a1e; background: #221a10; color: #c6ac83; }
+.app-source-strip--warning { border-color: #7a5a1b; background: #251a09; color: #e6c078; }
+.app-source-strip--error { border-color: #8a2f2f; background: #2a0f0f; color: #f0928c; }
 .app-source-strip--spaced { margin: 6px 0 16px; }
+
+.app-snapshot-notice ul { margin: 4px 0 0; padding-left: 18px; }
+.app-snapshot-notice li { margin: 2px 0; }
+.app-snapshot-notice strong { color: inherit; font-weight: 600; }
 
 @media (max-width: 720px) {
   .app-header { align-items: flex-start; flex-direction: column; }

@@ -53,10 +53,90 @@ RePoE's `base_items.min.json` maps GGG Metadata paths to display names and tags.
 It contributes no prices. If either the GGG digest or the name mapping is
 unavailable, the snapshot completes with poe.ninja and poe.watch instead.
 
-Each deployed JSON file records `generatedAt`; files using GGG also record
-`gggHour`, the newest completed market hour used by the snapshot. Individual
-GGG entries record `marketHour`, which differs when a thin boss item came from a
-recent earlier hour.
+Each deployed JSON file records `schemaVersion` and `generatedAt`; files using
+GGG also record `gggHour`, the newest completed market hour used by the
+snapshot. Individual GGG entries record `marketHour`, which differs when a thin
+boss item came from a recent earlier hour.
+
+## Publication: stage, gate, promote
+
+Neither fetcher writes into `public/data/<game>/` while it runs. `createStage()`
+in `scripts/shared/dataset.mjs` makes a sibling `.staging-<pid>-<n>` directory,
+the run generates into that, and only a run that passes its own gates is
+promoted over the published tree by an atomic rename. A run that fails discards
+its staging directory, exits non-zero and leaves the previous deployment live —
+GitHub Pages only uploads after a successful workflow, so failing loudly is
+strictly safer than publishing damage. Abandoned staging directories from a
+killed run are cleared at the start of the next one.
+
+The gates are `scripts/poe1/validate.mjs` and `scripts/poe2/validate.mjs`, both
+runnable on their own against the checked-in tree:
+
+```bash
+npm run validate            # both games
+node scripts/poe1/validate.mjs --previous <dir> --write
+```
+
+They report at three levels, and only the third stops a deploy:
+
+| level | meaning |
+|---|---|
+| `warning` | worth reading in the log; publishes |
+| `degraded` | the dataset is publishable but visibly worse — stale leagues, a missing envelope field |
+| `failure` | not published: a collapsed price count, a non-finite value, a history that lost points, an index naming files that do not exist |
+
+Several gates are *comparisons against the previous published tree* rather than
+fixed thresholds, because the only reliable definition of "this run broke
+something" is "it is much worse than the last one": `collapsed()` fails a run
+whose priced-name count, league count or history depth drops sharply. The
+report is written to `public/data/<game>/quality.json` and read by the browser.
+
+Every run also records where its numbers came from. `sourceRecord()` captures a
+feed's URL, fetch time, ETag/Last-Modified and a content hash — RePoE publishes
+no version or manifest, so a content hash is the only way to notice its
+dictionary changed. PoE 1 writes one `sources.json` per league holding those
+records plus the Metadata coverage and classification confidence for the run.
+
+## Snapshot contract in the browser
+
+`src/shared/data/snapshot.js` is the only place the app decides whether a
+downloaded file may be rendered. Every read returns a state instead of throwing
+or yielding `null`:
+
+| state | means |
+|---|---|
+| `ready` | parsed, schema understood, required fields present |
+| `missing` | 404 — the run never wrote this file |
+| `offline` | the request itself failed |
+| `corrupt` | a 200 that will not parse, or a document missing required fields |
+| `incompatible` | a `schemaVersion` this build does not read |
+
+The distinctions matter: an absent history is ordinary for a league in its first
+hour, while an unreadable one means the build is older than the data and drawing
+it would be a guess. `summarize()` folds a league's documents, its freshness and
+`quality.json` into one verdict, which `SnapshotNotice.jsx` renders. Bare maps
+with no envelope — the derived `<key>-history.json` files — are read with
+`versioned: false` so they are not reported as pre-contract forever.
+
+Two rules follow from this and are enforced by
+`scripts/tests/shared/test-snapshot.mjs`:
+
+- **Nothing is invented.** A PoE 2 league with no stored timeline gets an
+  explicit "current snapshot only" banner; it used to be given a fabricated
+  one-point history, which renders as a flat line and a 0% move — a claim about
+  the market rather than an admission that nothing has been recorded.
+- **A production build reads snapshots only.** `src/shared/data/dataMode.js`
+  resolves the mode from `?data=` and the dev flag: `static` in production,
+  `auto` (static → live → demo) in development. The live poe.ninja API and the
+  sample dataset are unreachable from a deployed page unless asked for by URL,
+  so a broken deployment can never be silently answered with sample prices.
+
+Which files exist is not guessed either. Each league entry in `index.json`
+carries a `files` map (`{ scarabs: "scarabs.json", … }`, keys camel-cased from
+the filenames) describing what that run actually published; the app addresses
+every file through it, with the names in each game's `config.js` as the fallback
+for a tree written before the map existed. The gates fail a run whose manifest
+names a file that is not there.
 
 ## Repository boundaries
 
@@ -68,18 +148,18 @@ application layout is:
 src/
   app/                         boot and game selection
   shared/
-    data/                      game-neutral path helpers
+    data/                      path helpers, snapshot contract, data-mode rule
     storage/                   versioned, scoped browser storage
-    ui/                        game-neutral UI controls
+    ui/                        game-neutral UI controls, incl. SnapshotNotice
   games/
     poe1/
-      Poe1App.jsx              PoE 1 shell, navigation, fetching and styles
-      config.js                PoE 1 endpoints and data namespace
+      Poe1App.jsx              PoE 1 shell, navigation, data loading and styles
+      config.js                PoE 1 endpoints, schema versions, file fallbacks
       catalogue/               market-family and scarab catalogues
       features/<feature>/      UI, calculations and curated data together
     poe2/
       Poe2App.jsx              PoE 2 shell, league/currency controls
-      config.js                PoE 2 data namespace
+      config.js                PoE 2 data namespace, schema versions, files
       shared/                  reusable PoE 2-only UI such as the market browser
       features/overview/       PoE 2 landing briefing and feature registry
       features/bosses/         PoE 2 boss UI, EV model and curated rates
@@ -191,9 +271,12 @@ PoE 2 history is accumulated by `scripts/poe2/history.mjs`. A fresh run merges
 the checked-in file with the deployed `price-history.json`, lets the deployed
 copy win an overlapping timestamp, and appends the new snapshot. The most recent
 7 days remain at hourly resolution; older data keeps the latest snapshot per
-UTC day and expires after 430 days. `RESET_HISTORY=true` starts a new timeline.
-Code-only deployments reuse all four current/history files, so a push does not
-erase accumulated data. `src/games/poe2/shared/MarketBrowser.jsx` projects the
+UTC day and expires after 430 days. `RESET_HISTORY=true` starts a new timeline
+and must not be used: the accumulated points are the only copy of what the
+market did, and no upstream feed can rebuild them. Code-only deployments reuse
+all four current/history files, so a push does not erase accumulated data; a
+reuse run that would publish fewer points than it read throws instead of
+promoting. `src/games/poe2/shared/MarketBrowser.jsx` projects the
 current catalogue into the collapsible parent/subcategory browser with adjacent
 search results used by both Price Tracker and Exchange. Unique gear uses
 slot-level children derived from normalized metadata rather than a curated name
@@ -492,10 +575,17 @@ families use), capped at 400 rather than 1,200 — there are ~800 gems against
 
 A push to `main` deploys code only: the workflow sets `DATA_MODE=reuse` and
 `mirrorExisting()` copies the live deployment's data forward instead of taking
-a new snapshot. It copies **file by file from `LEAGUE_FILES`**, so a file a run
-writes but that list omits is deleted by the next code push — the tab that
-reads it goes empty, and if the missing file was a self-history, the following
-scheduled run starts accumulating from zero.
+a new snapshot. It **overlays** the deployment onto the checked-in tree and
+removes nothing: after a repository move the checked-in files are the only copy
+of the timeline, because the previous Pages site is gone. A league the
+deployment no longer serves keeps whatever is checked in and is marked `stale`
+rather than dropped, and the checked-in history seeds are merged point-by-point
+before the derived curves are rebuilt from them.
+
+It copies **file by file from `LEAGUE_FILES`**, so a file a run writes but that
+list omits is not carried forward — the tab that reads it goes empty, and if the
+missing file was a self-history, the following scheduled run starts accumulating
+from zero.
 
 The per-family names are therefore derived from
 `src/games/poe1/catalogue/categories.js` via

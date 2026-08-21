@@ -118,7 +118,7 @@ globalThis.fetch = async (url) => {
     if (file === "scarabs-backfill.json") return J(SCARAB_BACKFILL);
     if (file === "astrolabes-selfhistory.json") return J(ASTRO_SELF);
     if (file === "catalysts-selfhistory.json") return J(CATALYST_SELF);
-    if (file === "catalysts.json") return J({ items: [{ name: "Intrinsic Catalyst", chaosValue: 42 }] });
+    if (file === "catalysts.json") return J({ generatedAt: ago(1), items: [{ name: "Intrinsic Catalyst", chaosValue: 42 }] });
     if (file === "catalysts-history.json") return J({ "Intrinsic Catalyst": [{ day: 8, value: 42 }] });
     return NOPE();
   }

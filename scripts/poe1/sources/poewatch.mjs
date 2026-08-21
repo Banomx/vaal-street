@@ -53,12 +53,14 @@
    share a mean.
    ================================================================ */
 
+import { JSON_HEADERS, roundPrice } from "../../shared/dataset.mjs";
+
 const BASE = process.env.WATCH_BASE || "https://api.poe.watch";
 /* The beta pricing panel is served by the site rather than the documented API,
    and is not in the published schema. It is the only place `activePrice` — what
    is actually clearing, rather than the cheapest ask — is exposed. */
 const SITE = process.env.WATCH_SITE_BASE || "https://poe.watch";
-const HEADERS = { "User-Agent": "scarab-ledger-snapshot/0.3 (github actions; contact via repo issues)", Accept: "application/json" };
+const HEADERS = { ...JSON_HEADERS };
 
 /* Every category the site has a use for. `bases` is ~18k rows of crafting
    bases and `enchantment` is helmet enchants — neither is referenced by any
@@ -313,9 +315,9 @@ const excluded = new Set();
     // is a roll and the floor is the honest quote for an unspecified one.
     const c = Math.min(...chaos);
     prices[name] = {
-      c: Math.round(c * 100) / 100,
-      lo: Math.round(Math.min(...pick.map((r) => r.lo)) * 100) / 100,
-      hi: Math.round(Math.max(...pick.map((r) => r.hi)) * 100) / 100,
+      c: roundPrice(c),
+      lo: roundPrice(Math.min(...pick.map((r) => r.lo))),
+      hi: roundPrice(Math.max(...pick.map((r) => r.hi))),
       n: pick.length,
       daily: e.daily,
       ...(pick[0]?.id != null ? { wid: pick[0].id } : {}),
@@ -335,9 +337,9 @@ const excluded = new Set();
         const levelPick = traded(levelBase.length ? levelBase : levelAll);
         const levelChaos = levelPick.map(quote);
         prices[`${name} (ilvl ${level})`] = {
-          c: Math.round(Math.min(...levelChaos) * 100) / 100,
-          lo: Math.round(Math.min(...levelPick.map((r) => r.lo)) * 100) / 100,
-          hi: Math.round(Math.max(...levelPick.map((r) => r.hi)) * 100) / 100,
+          c: roundPrice(Math.min(...levelChaos)),
+          lo: roundPrice(Math.min(...levelPick.map((r) => r.lo))),
+          hi: roundPrice(Math.max(...levelPick.map((r) => r.hi))),
           n: levelPick.length,
           daily: Math.max(...levelPick.map((r) => r.daily)),
           ...(levelPick[0]?.id != null ? { wid: levelPick[0].id } : {}),
@@ -360,7 +362,7 @@ const excluded = new Set();
     const prev = prices[x.name];
     prices[x.name] = {
       ...(prev || { lo: x.chaos, hi: x.chaos, n: 1 }),
-      c: Math.round(x.chaos * 100) / 100,
+      c: roundPrice(x.chaos),
       exchange: true,
       volume24H: x.volume24H,
       ...(x.change24H ? { change24H: x.change24H } : {}),
@@ -461,7 +463,7 @@ export function watchCategoryItems(rows, re, divineRate, cats = null, exchange =
     const change = x?.change24H ?? r.change ?? 0;
     out.push({
       id: r.id, name: r.name,
-      chaosValue: Math.round(chaos * 100) / 100,
+      chaosValue: roundPrice(chaos) ?? 0,
       divineValue: divineRate > 0 ? chaos / divineRate : 0,
       change24: change, change48: change,
       daily: x ? x.volume24H : r.daily,
@@ -492,7 +494,7 @@ export function adaptBeta(json) {
   const price = Number(b?.activePrice);
   if (!(price > 0)) return null;
   return {
-    c: Math.round(price * 100) / 100,
+    c: roundPrice(price),
     confidence: b.liveConfidence || null,
     lowConfidence: b.liveLowConfidence === true,
     samples: Number(b.liveSampleCount) || 0,

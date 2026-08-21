@@ -18,7 +18,7 @@
    is what lets the site tell "this scarab got more valuable" apart from "chaos
    deflated under it" (rateHistory + the change*R fields below).             */
 
-import { mkdir, readFile, readdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import {
   watchLeagues, matchWatchLeague, fetchWatchLeague, watchCategoryItems, watchStatus,
   fetchWatchBeta,
@@ -26,46 +26,59 @@ import {
 import {
   fetchGggExchange, fetchGggPriceLookback, mergeGggLookback,
 } from "./sources/ggg-exchange.mjs";
+import {
+  GEM_HISTORY_CAP, GEM_HISTORY_HOURLY_HOURS, HOUR_MS, RATE_HISTORY_CAP, SELF_HISTORY_CAP,
+  applySelfChanges, buildRateHistory, historyOrigin, historySourceOf, mergeBackfill,
+  SIGNED_HISTORY_KEYS, mergeHistorySeedDocument, mergeSelfHistory, normalizePoint, ratePointsFrom,
+  rateSane, rebuildDerivedHistory, stitchHistory, thinPoints,
+} from "./history.mjs";
 import { CATEGORIES, CATEGORY_BY_KEY, FETCHED_CATEGORIES } from "../../src/games/poe1/catalogue/categories.js";
+import {
+  CROSS_CHECK, EXCHANGE_TYPES, LEGACY_TYPES, STASH_CURRENCY_TYPES, STASH_ITEM_TYPES,
+} from "./endpoints.mjs";
+import { nameIndex } from "../shared/repoe.mjs";
+import { enrichFromRepoe } from "./enrich.mjs";
+import {
+  changesFromSparkline, chaosDivisor, currencyEvidence, evidenceFrom, exchangeNamesById,
+  exchangeRows, isBaseVariant, normKey, slugToName,
+} from "./sources/ninja.mjs";
 import { GCP_NAME, VAAL_ORB_NAME, computeGems, parseVariant } from "../../src/games/poe1/features/gems/gems.js";
-import { applyRenames, breakingNames, describeDiff, diffCatalogue } from "../../src/games/poe1/catalogue/catalogue.js";
+import {
+  applyRenames, breakingNames, describeDiff, diffCatalogue, identityKind, stableId, unresolvedSeries,
+} from "../../src/games/poe1/catalogue/catalogue.js";
+import { classificationCoverage, isGggCategory } from "../../src/games/poe1/catalogue/classify.js";
 import { describeSpreads } from "../../src/games/poe1/features/pricing/priceCheck.js";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import {
+  QualityReport, USER_AGENT, clearAbandonedStages, createStage, roundPrice, writeJsonFile,
+} from "../shared/dataset.mjs";
+import { POE1_SCHEMA_VERSION, checkCuratedCoverage, validatePoe1 } from "./validate.mjs";
 
 const NINJA = "https://poe.ninja";
-const OUT = process.env.DATA_OUT || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "public", "data", "poe1");
-const HEADERS = { "User-Agent": "scarab-ledger-snapshot/0.2 (github actions; contact via repo issues)" };
+/* Where the run publishes to, and where it actually writes.
+
+   `OUT` is a staging directory for the length of a run and only becomes the
+   published tree once every gate has passed. Generating in place makes failing
+   safely impossible: by the time you know a run is bad you have already
+   overwritten the thing you would have fallen back to. */
+const FINAL_OUT = process.env.DATA_OUT || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "public", "data", "poe1");
+let OUT = FINAL_OUT;
+const HEADERS = { "User-Agent": USER_AGENT };
 let localHistorySeeds = new Map();
 const FETCH_TIMEOUT_MS = Math.max(5_000, Number(process.env.FETCH_TIMEOUT_MS) || 30_000);
 const HISTORY_LEAGUES = 2;   // ninja backfill only for the first N leagues (politeness)
-/* History retention, one rule for every family.
-
-   The workflow runs hourly, so an unthinned league would be ~2,900 points.
-   Recent hours stay at full resolution because the change badges read 1h to
-   48h straight off these points; everything older collapses to one point per
-   UTC day, which is all a league-long curve can render anyway.
-
-   MAX_DAYS is the "compare the last two leagues" window: a league is 3-5 months,
-   so ~14 months keeps two complete timelines readable end to end. A thinned league
-   costs ~72 + 430 = roughly 500 points, so the cap is headroom against a
-   pathological run rather than the thing doing the shaping. */
-const HISTORY_HOURLY_HOURS = 72;
-const HISTORY_MAX_DAYS = 430;
-const SELF_HISTORY_CAP = 1200;
-/* Gems keep a tighter budget: there are ~800 of them against 120 scarabs, so
-   the same point count is an order of magnitude more bytes. */
-const GEM_HISTORY_HOURLY_HOURS = 48;
-const GEM_HISTORY_CAP = 400;
-const RATE_HISTORY_CAP = 600; // max points in the emitted chaos-per-divine series
 const DELAY_MS = 300;
-const HOUR_MS = 3600_000;
 const GGG_THIN_PRICE_MAX_AGE_HOURS = Math.max(1, Number(process.env.GGG_THIN_PRICE_MAX_AGE_HOURS) || 24);
 
-/* A divine has never been worth less than ~20c or more than a few thousand.
-   Every rate that enters the pipeline goes through this, because the shape of
-   the source (ratio vs. inverse ratio) is not always knowable up front. */
-const rateSane = (v) => typeof v === "number" && isFinite(v) && v >= 20 && v <= 20000;
+/* Retention windows, the day axis, thinning, merging and the change windows all
+   live in ./history.mjs — they are pure, and recovery tools have to reach them
+   without importing this file, which takes a snapshot the moment it loads.
+   Re-exported here because the regression suite drives them through this
+   module's public surface. */
+export {
+  applySelfChanges, historyOrigin, mergeBackfill, mergeSelfHistory, stitchHistory, thinPoints,
+};
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const slugify = (s) => s.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -77,14 +90,6 @@ async function getJson(url) {
   return res.json();
 }
 async function tryJson(url) { try { return await getJson(url); } catch { return null; } }
-
-function changesFromSparkline(sp) {
-  const data = ((sp && sp.data) || []).filter((v) => v != null);
-  const last = data.length ? data[data.length - 1] : 0;
-  const p24 = data.length > 1 ? data[data.length - 2] : last;
-  const p48 = data.length > 2 ? data[data.length - 3] : p24;
-  return { change24: last - p24, change48: last - p48 };
-}
 
 const median = (arr) => {
   const s = arr.filter((v) => isFinite(v) && v > 0).sort((a, b) => a - b);
@@ -119,6 +124,26 @@ async function getLeagues() {
   return all;
 }
 
+/* Publish the stable key beside the display name.
+
+   History is keyed by display name and stays that way for now — every consumer
+   reads it, and re-keying the whole contract at once would break all of them
+   for a benefit nothing yet uses. What the migration to stable keys needs is
+   the map from one to the other, recorded at the moment both are known. Once
+   two consecutive snapshots carry it, a name-keyed series can be moved to its
+   stable key with evidence rather than by guesswork.
+
+   `identity` says how the key was obtained, because a Metadata path GGG stated
+   and a path recovered by matching names are not the same claim. */
+function attachStableKeys(items) {
+  for (const item of items || []) {
+    const key = stableId(item);
+    if (key) item.key = key;
+    if (!item.identity && key) item.identity = identityKind(key);
+  }
+  return items;
+}
+
 /* What to credit in the UI. The site says where its numbers came from, and
    that claim has to track what actually answered on the day — poe.watch can be
    down, or thin on a category, and saying "poe.watch" then would be a lie. */
@@ -132,19 +157,6 @@ function sourceLabel({ ggg = 0, watch = 0, ninja = 0 } = {}) {
   return `${sources.slice(0, -1).join(", ")} and ${sources.at(-1)}`;
 }
 
-function isGggCategory(item, key) {
-  const tags = new Set(item.tags || []);
-  if (key === "scarabs") return tags.has("scarab") || /scarab/i.test(item.name);
-  if (key === "astrolabes") return /astrolabe/i.test(item.name);
-  if (key === "catalysts") return /catalyst/i.test(item.name);
-  if (key === "fossils") return /fossil$/i.test(item.name);
-  if (key === "resonators") return /resonator$/i.test(item.name);
-  return false;
-}
-
-/* GGG supplies prices under internal Metadata ids; the fallback sources still
-   supply useful display/history fields. Merge on the RePoE-resolved name, but
-   let GGG's completed-trade price win wherever both know the item. */
 function mergeGggCategory(fallbackItems, ggg, key, divineRate) {
   const official = (ggg?.items || []).filter((item) => isGggCategory(item, key));
   const byName = new Map((fallbackItems || []).map((item) => [item.name, { ...item }]));
@@ -252,26 +264,6 @@ async function getScarabPrices(lgParams, divisor = null, watch = null) {
   return null;
 }
 
-const SMALL_WORDS = new Set(["of", "the", "a", "and", "in"]);
-function slugToName(slug) {
-  if (!slug || typeof slug !== "string") return null;
-  const out = [];
-  for (const [i, w] of slug.split("-").entries()) {
-    // "the-maven-s-writ" -> "The Maven's Writ": a lone "s" is a possessive
-    // that lost its apostrophe on the way into the slug.
-    if (w === "s" && out.length) { out[out.length - 1] += "'s"; continue; }
-    out.push((i > 0 && SMALL_WORDS.has(w)) ? w : w.charAt(0).toUpperCase() + w.slice(1));
-  }
-  return out.join(" ");
-}
-
-/* Slugs can't round-trip every name — "awakeners-orb" is really
-   "Awakener's Orb" and no amount of guessing recovers that apostrophe. The
-   stash currency overview does carry real names, so we borrow those as a
-   dictionary and match on letters-and-digits only. Names only; its prices
-   are not what we quote against. */
-const normKey = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
-
 async function getNameDictionary(p) {
   const dict = {};
   for (const t of ["Currency", "Fragment"]) {
@@ -350,7 +342,7 @@ function adaptExchange(j, nameRe = /scarab/i, divisor = null) {
   const items = raw.map(({ line, name }, i) => ({
     id: line.id ?? line.itemId ?? name,
     name,
-    chaosValue: Math.round((chaosVals[i] ?? 0) * 100) / 100,
+    chaosValue: roundPrice(chaosVals[i]) ?? 0,
     divineValue: divineRate ? (chaosVals[i] ?? 0) / divineRate : 0,
     ...changesFromSparkline(line.sparkline || line.sparkLine),
   }));
@@ -380,100 +372,15 @@ function adaptExchange(j, nameRe = /scarab/i, divisor = null) {
    Either way the arithmetic is exact rather than heuristic, and the run
    logs Chaos Orb's computed price as a self-check. */
 
-/* Sources, in priority order. A name found by an earlier source is not
-   overwritten by a later one.
-
-   poe.ninja documents three families (https://poe.ninja/docs/api):
-
-     exchange/current/overview        "Currency-exchange pricing for a
-                                      category" — the in-game bulk market.
-                                      This is the right source for anything
-                                      fungible: currency, fragments, scarabs,
-                                      astrolabes, omens, essences, oils,
-                                      divination cards.
-     stash/current/item/overview      "Stash-based item pricing" — things that
-                                      aren't fungible and are priced per
-                                      listing: uniques, gems, maps.
-     stash/current/currency/overview  "Stash-based currency pricing", PoE 1
-                                      only. Same goods as the exchange, priced
-                                      the older way. Kept purely as gap-fill.
-
-   The exchange type list below is exactly what the docs enumerate for PoE 1 —
-   guessing extra ones (Incubator, Vial, Catalyst...) just burns requests, and
-   leaving DivinationCard out of it is why cards went unpriced. */
-const EXCHANGE_TYPES = [
-  "Currency", "Fragment", "Scarab", "Astrolabe", "Omen", "Tattoo",
-  "AllflameEmber", "Runegraft", "DjinnCoin", "DivinationCard", "Artifact",
-  "Oil", "DeliriumOrb", "Fossil", "Resonator", "Essence",
-];
-const STASH_ITEM_TYPES = [
-  "UniqueWeapon", "UniqueArmour", "UniqueAccessory", "UniqueFlask", "UniqueJewel",
-  "SkillGem", "Map", "UniqueMap", "BlightedMap", "BlightRavagedMap",
-  // Boss entry costs live here: the Incandescent / Screaming / Polaric /
-  // Writhing Invitations are all "Invitation".
-  "Invitation", "Vial", "Beast", "UniqueRelic",
-];
-/* Probed 2026-08 on Allflame and served by nothing, in any family: Incubator,
-   Memory, Coffin, Tincture, Catalyst, and both legacy paths. Re-check with
-   scripts/poe1/tools/probe-price.mjs before adding any of them back. BaseType answers
-   with ~18k rows of item bases and is deliberately not fetched. */
-/* PoE 1 only, and the same goods the exchange already covers — used solely to
-   fill names the exchange didn't return. */
-const STASH_CURRENCY_TYPES = ["Currency", "Fragment"];
-/* The published type lists have disagreed with reality more than once, so any
-   type that comes back empty from its documented family is retried against the
-   other one before we give up on it. */
-const CROSS_CHECK = ["Invitation", "Vial", "Beast", "UniqueRelic"];
-/* Last resort: the pre-migration endpoint. */
-/* Both legacy families answered nothing when probed, but the fallback only
-   fires for types the documented families left empty, so it costs nothing
-   until the new API moves again. */
-const LEGACY_TYPES = ["UniqueRelic", "Vial", "Invitation"];
+/* Which endpoint serves what, which types are enabled, and why the documented
+   rest is skipped, all live in ./endpoints.mjs. Keeping the documented list and
+   the consumed subset in one registry is what makes "is this missing on
+   purpose?" answerable without archaeology. */
 
 const exchUrl = (p, t) => `${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(p)}&type=${t}`;
 const stashItemUrl = (p, t) => `${NINJA}/poe1/api/economy/stash/current/item/overview?league=${encodeURIComponent(p)}&type=${t}`;
 const stashCurrUrl = (p, t) => `${NINJA}/poe1/api/economy/stash/current/currency/overview?league=${encodeURIComponent(p)}&type=${t}`;
 const legacyUrl = (p, t) => `${NINJA}/api/data/itemoverview?league=${encodeURIComponent(p)}&type=${t}`;
-
-function isBaseVariant(type, l) {
-  if (type === "SkillGem") {
-    return !l.corrupted && (l.gemLevel ?? 1) <= 1 && (l.gemQuality ?? 0) === 0;
-  }
-  return !l.variant && !(l.links > 0);
-}
-
-function exchangeNamesById(j) {
-  const byId = {};
-  for (const it of (j.core?.items || [])) {
-    if (it.id != null) byId[it.id] = it.name;
-    if (it.itemId != null) byId[it.itemId] = it.name;
-  }
-  return byId;
-}
-
-function exchangeRows(j, dict = null) {
-  if (!j || !Array.isArray(j.lines)) return [];
-  const byId = exchangeNamesById(j);
-  return j.lines
-    .map((l) => {
-      const id = l.id ?? l.itemId;
-      let name = byId[id] || l.name || slugToName(id);
-      if (dict && name) name = dict[normKey(name)] || name;
-      return { name, primaryValue: l.primaryValue ?? 0 };
-    })
-    .filter((r) => r.name && r.primaryValue > 0);
-}
-
-/* Divide every exchange primaryValue by this to get chaos. */
-function chaosDivisor(currencyJson) {
-  if (!currencyJson) return null;
-  const names = exchangeNamesById(currencyJson);
-  const primaryName = names[currencyJson.core?.primary];
-  if (primaryName && /^chaos orb$/i.test(primaryName)) return 1;
-  const chaos = exchangeRows(currencyJson).find((r) => /^chaos orb$/i.test(r.name));
-  if (chaos && chaos.primaryValue > 0) return chaos.primaryValue;
-  return null;
-}
 
 /* Resolve the league param that answers, and the chaos calibration, once —
    every exchange-shaped fetch for that league then converts identically. */
@@ -531,17 +438,36 @@ async function getPriceMap(lgParams, ctx, watch = null) {
   // `variant` is poe.ninja's roll label ("Life", "ES", "1 Prefix, 2 Suffix").
   // Kept per name so a drop line that identifies WHICH variant it is can be
   // priced exactly, instead of falling back to the floor across all of them.
-  const add = (rank, name, chaos, preferred, variant = null) => {
+  /* Evidence accumulates across the rows that stand behind one quote: listing
+     counts sum, the deepest traded market wins the volume figure, and item
+     state is taken from the preferred (base-variant) row, since that is the
+     form being priced. */
+  const mergeEvidence = (into, ev, preferred) => {
+    if (!ev) return into;
+    const out = into || {};
+    for (const key of ["sid", "did", "bt"]) if (out[key] == null && ev[key] != null) out[key] = ev[key];
+    if (ev.lc) out.lc = (out.lc || 0) + ev.lc;
+    if (ev.cnt) out.cnt = (out.cnt || 0) + ev.cnt;
+    if (ev.vol && !(out.vol >= ev.vol)) {
+      out.vol = ev.vol;
+      if (ev.mvc) out.mvc = ev.mvc;
+      if (ev.mvr) out.mvr = ev.mvr;
+    }
+    if (preferred) for (const key of ["cor", "lk", "gl", "gq"]) if (ev[key] != null) out[key] = ev[key];
+    return out;
+  };
+  const add = (rank, name, chaos, preferred, variant = null, evidence = null) => {
     if (!name || !(chaos > 0)) return;
     const e = acc[name];
     if (e && e.rank < rank) return;
     if (!e || e.rank > rank) {
-      acc[name] = { rank, all: [chaos], base: preferred ? [chaos] : [], byVariant: {} };
+      acc[name] = { rank, all: [chaos], base: preferred ? [chaos] : [], byVariant: {}, ev: mergeEvidence(null, evidence, preferred) };
       if (variant) acc[name].byVariant[variant] = chaos;
       return;
     }
     e.all.push(chaos);
     if (preferred) e.base.push(chaos);
+    e.ev = mergeEvidence(e.ev, evidence, preferred);
     // Same variant listed twice (different links, say): keep the cheaper.
     if (variant && (e.byVariant[variant] == null || chaos < e.byVariant[variant])) e.byVariant[variant] = chaos;
   };
@@ -552,8 +478,8 @@ async function getPriceMap(lgParams, ctx, watch = null) {
   for (const t of EXCHANGE_TYPES) {
     const j = (t === "Currency" && ctx?.currency) ? ctx.currency : await tryJson(exchUrl(p, t));
     if (!(t === "Currency" && ctx?.currency)) await sleep(DELAY_MS);
-    const rows = exchangeRows(j, ctx?.dict);
-    for (const r of rows) add(RANK.ninja, r.name, r.primaryValue / div, true);
+    const rows = exchangeRows(j, ctx?.dict, { divisor: div });
+    for (const r of rows) add(RANK.ninja, r.name, r.primaryValue / div, true, null, r.evidence);
     tally(`exch:${t}`, rows.length);
   }
 
@@ -566,10 +492,10 @@ async function getPriceMap(lgParams, ctx, watch = null) {
     for (const l of lines) {
       const chaos = l.chaosValue ?? l.chaosEquivalent;
       if (!l.name || !(chaos > 0)) continue;
-      add(RANK.ninja, l.name, chaos, isBaseVariant(t, l), l.variant || null);
+      add(RANK.ninja, l.name, chaos, isBaseVariant(t, l), l.variant || null, evidenceFrom(l));
       // Maps are labelled inconsistently — the tier 17s group under
       // "Nightmare Map" and baseType isn't always the display name.
-      if (/Map$/.test(t) && l.baseType && l.baseType !== l.name) add(RANK.ninja, l.baseType, chaos, true);
+      if (/Map$/.test(t) && l.baseType && l.baseType !== l.name) add(RANK.ninja, l.baseType, chaos, true, null, evidenceFrom(l));
       n++;
     }
     tally(t, n);
@@ -585,13 +511,19 @@ async function getPriceMap(lgParams, ctx, watch = null) {
   for (const t of STASH_CURRENCY_TYPES) {
     const j = await tryJson(stashCurrUrl(p, t));
     await sleep(DELAY_MS);
+    /* The currency overview publishes identity alongside the price:
+       `currencyDetails` carries the trade id and icon per name, and each line
+       carries both sides of the book. Both were being dropped, which is why a
+       currency row could not say how deep either side was. */
+    const details = new Map();
+    for (const d of (j?.currencyDetails || [])) if (d?.name) details.set(d.name, d);
     let n = 0, filled = 0;
     for (const l of (j?.lines || [])) {
       const name = l.currencyTypeName || l.name;
       const chaos = l.chaosEquivalent ?? l.chaosValue;
       if (!name || !(chaos > 0)) continue;
       if (!acc[name]) filled++;
-      add(RANK.ninjaStashCurrency, name, chaos, true);
+      add(RANK.ninjaStashCurrency, name, chaos, true, null, currencyEvidence(l, details.get(name)));
       n++;
     }
     tally(`stash:${t}`, n);
@@ -604,9 +536,9 @@ async function getPriceMap(lgParams, ctx, watch = null) {
     if (counts[t]) continue;
     const j = await tryJson(exchUrl(p, t));
     await sleep(DELAY_MS);
-    const rows = exchangeRows(j, ctx?.dict);
+    const rows = exchangeRows(j, ctx?.dict, { divisor: div });
     if (!rows.length) continue;
-    for (const r of rows) add(RANK.ninja, r.name, r.primaryValue / div, true);
+    for (const r of rows) add(RANK.ninja, r.name, r.primaryValue / div, true, null, r.evidence);
     counts[`exch:${t}`] = rows.length;
     console.log(`    ${t} answered from the exchange, not the stash item overview`);
   }
@@ -618,7 +550,7 @@ async function getPriceMap(lgParams, ctx, watch = null) {
     await sleep(DELAY_MS);
     let n = 0;
     for (const l of (j?.lines || [])) {
-      if (l.name && l.chaosValue > 0) { add(RANK.legacy, l.name, l.chaosValue, isBaseVariant(t, l)); n++; }
+      if (l.name && l.chaosValue > 0) { add(RANK.legacy, l.name, l.chaosValue, isBaseVariant(t, l), null, evidenceFrom(l)); n++; }
     }
     if (n) counts[`legacy:${t}`] = n;
   }
@@ -687,18 +619,23 @@ async function getPriceMap(lgParams, ctx, watch = null) {
     // several hundred, and the median put it over 40c inside Uber Atziri's
     // pool, where it carries 39% of the loot share.
     const typical = e.base.length ? midLow(pick) : Math.min(...pick);
+    const c = roundPrice(typical);
+    // No usable quote means the name is left out. Publishing it at zero would
+    // read as a free item to every consumer downstream.
+    if (c == null) continue;
     prices[name] = {
-      c: Math.round(typical * 100) / 100,
-      lo: Math.round(Math.min(...pick) * 100) / 100,
-      hi: Math.round(Math.max(...pick) * 100) / 100,
+      c,
+      lo: roundPrice(Math.min(...pick)) ?? c,
+      hi: roundPrice(Math.max(...pick)) ?? c,
       n: pick.length,
+      ...(e.ev || {}),
     };
     // Only worth carrying when there is a choice to make. One variant is just
     // the base price under another name.
     const vs = Object.keys(e.byVariant || {});
     if (vs.length > 1) {
       const v = {};
-      for (const k of vs) v[k] = Math.round(e.byVariant[k] * 100) / 100;
+      for (const k of vs) { const rounded = roundPrice(e.byVariant[k]); if (rounded != null) v[k] = rounded; }
       prices[name].v = v;
     }
   }
@@ -948,52 +885,6 @@ async function readLocalHistorySeeds() {
   return seeds;
 }
 
-const timestampOf = (point) => Date.parse(point?.t);
-
-/* A checked-in recovery seed and the newest deployment can overlap. Merge by
-   timestamp and let the deployed point win, since it is the newer authority.
-   This is deliberately exported: losing these raw points is irreversible, so
-   the recovery rule belongs in the regression suite. */
-export function mergeSelfHistory(seed = { points: [] }, deployed = { points: [] }) {
-  const byTime = new Map();
-  for (const point of [...(seed.points || []), ...(deployed.points || [])]) {
-    const ms = timestampOf(point);
-    if (isFinite(ms)) byTime.set(point.t, point);
-  }
-  return {
-    ...seed,
-    ...deployed,
-    points: [...byTime.values()].sort((a, b) => timestampOf(a) - timestampOf(b)),
-  };
-}
-
-export function mergeBackfill(seed = { series: {} }, deployed = { series: {} }) {
-  const series = {};
-  for (const name of new Set([...Object.keys(seed.series || {}), ...Object.keys(deployed.series || {})])) {
-    const byTime = new Map();
-    for (const point of [...(seed.series?.[name] || []), ...(deployed.series?.[name] || [])]) {
-      const ms = timestampOf(point);
-      if (isFinite(ms)) byTime.set(point.t, point);
-    }
-    series[name] = [...byTime.values()].sort((a, b) => timestampOf(a) - timestampOf(b));
-  }
-  return { ...seed, ...deployed, series };
-}
-
-function derivedHistoryPointCount(history) {
-  return Object.values(history || {}).reduce((count, points) => count + (Array.isArray(points) ? points.length : 0), 0);
-}
-
-function mergeHistorySeedDocument(file, seed, deployed) {
-  if (!deployed) return seed;
-  if (file.endsWith("selfhistory.json")) return mergeSelfHistory(seed, deployed);
-  if (file.endsWith("backfill.json")) return mergeBackfill(seed, deployed);
-  // A reset can choose a new fallback day zero. Do not splice two derived day
-  // axes together; keep the fuller curve and let the next fetch rebuild it
-  // from the merged absolute-time self-history above.
-  return derivedHistoryPointCount(seed) > derivedHistoryPointCount(deployed) ? seed : deployed;
-}
-
 function localHistorySeed(slug, file) {
   const text = localHistorySeeds.get(historySeedKey(slug, file));
   if (!text) return null;
@@ -1107,6 +998,9 @@ async function trackCatalogue(slug, cat, items, curated) {
   const diff = diffCatalogue(previous, items);
   const breaking = breakingNames(diff, curated);
   console.log(`  ${describeDiff(cat.key, diff)}`);
+  if (diff.collisions?.length) {
+    console.log(`  ${cat.key}: ${diff.collisions.length} identity collision(s) — reported, never applied`);
+  }
   if (breaking.length) {
     console.log(`  ${cat.key}: CURATED NAMES AFFECTED — ${breaking.join(", ")}`
       + " (update the relevant dataset under src/games/poe1/features/)");
@@ -1145,33 +1039,6 @@ function carryRecentGggBossPrices(snapshot, previous, names, latestHourISO) {
   return Object.keys(prices).length;
 }
 
-function normalizePoint(p) {
-  // old format: {date: "YYYY-MM-DD"}; new format: {t: ISO timestamp}
-  // `rate` (chaos per divine) is newer still — points written before the
-  // divine-rate feature simply don't have one, and everything downstream
-  // treats a missing rate as "not measurable here" rather than an error.
-  const out = { t: p.t || `${p.date}T00:00:00Z`, values: p.values || {} };
-  if (rateSane(p.rate)) out.rate = p.rate;
-  return out;
-}
-
-/* Full resolution for the recent window, one point per UTC day before it, and
-   nothing older than the retention window at all. Keeps the newest point of
-   each older day, so the curve stays a curve and the file stays small. */
-export function thinPoints(points, { nowMs = Date.now(), hourlyHours = HISTORY_HOURLY_HOURS, maxDays = HISTORY_MAX_DAYS } = {}) {
-  const cutoff = nowMs - hourlyHours * HOUR_MS;
-  const oldest = nowMs - maxDays * 86400000;
-  const kept = [];
-  const dayLast = new Map();
-  for (const p of points) {
-    const ms = Date.parse(p.t);
-    if (!isFinite(ms) || ms < oldest) continue;
-    if (ms >= cutoff) { kept.push(p); continue; }
-    dayLast.set(p.t.slice(0, 10), p);
-  }
-  return [...dayLast.values(), ...kept].sort((a, b) => (a.t < b.t ? -1 : 1));
-}
-
 /* Every family stores its accumulated snapshots the same way, under its own
    key: `<key>-selfhistory.json`. Scarabs used to write the unprefixed
    `selfhistory.json`; that name is read once so the accumulated curve carries
@@ -1182,10 +1049,11 @@ async function loadSelfHistory(slug, key) {
   const base = pagesBaseUrl();
   if (!base || process.env.RESET_HISTORY === "true") return { points: [] };
   const names = [`${key}-selfhistory.json`, LEGACY_SELF_HISTORY[key]].filter(Boolean);
+  const dropNonPositive = !SIGNED_HISTORY_KEYS.has(key);
   for (const name of names) {
     const prev = await deployedLeagueJson(base, slug, name);
     if (prev && Array.isArray(prev.points) && prev.points.length) {
-      return { points: prev.points.map(normalizePoint) };
+      return { points: prev.points.map((point) => normalizePoint(point, { dropNonPositive })) };
     }
   }
   return { points: [] };
@@ -1201,7 +1069,9 @@ async function updateSelfHistory(slug, key, items, rate = null, renames = []) {
   applyRenames(self.points, renames);
   const points = thinPoints(self.points);
   const values = {};
-  for (const it of items) values[it.name] = Math.round(it.chaosValue * 100) / 100;
+  /* A price that rounds away is not a free item, so it is left out and the
+     series carries a gap rather than a zero. */
+  for (const it of items) { const value = roundPrice(it.chaosValue); if (value != null) values[it.name] = value; }
   const point = { t: new Date().toISOString(), values }; // one point per run
   if (rateSane(rate)) point.rate = Math.round(rate * 100) / 100;
   points.push(point);
@@ -1256,7 +1126,7 @@ async function getGemVariants(lgParams) {
       const row = byName.get(l.name);
       row.variants.push({
         l: level, q: quality, ...(corrupted ? { c: 1 } : {}),
-        v: Math.round(chaos * 100) / 100,
+        v: roundPrice(chaos) ?? chaos,
         ...(l.listingCount != null || l.count != null ? { n: l.listingCount ?? l.count } : {}),
       });
       // The sparkline shown in the list is the gem's own price trend at the
@@ -1278,102 +1148,6 @@ async function getGemVariants(lgParams) {
 /* Recompute change windows from our own accumulated points when we have data
    old enough; otherwise sparkline-derived values (24h/48h only) stay. The
    15-min tolerance forgives GitHub's cron starting a few minutes late. */
-const CHANGE_WINDOWS = [[1, "change1"], [2, "change2"], [4, "change4"], [8, "change8"], [12, "change12"], [24, "change24"], [48, "change48"]];
-export function applySelfChanges(items, self) {
-  const pts = (self.points || []).map(normalizePoint);
-  if (pts.length < 2) return;
-  const last = pts[pts.length - 1];
-  const now = Date.parse(last.t);
-  /* The newest point at least `hours` old — and not much older than that.
-     Without the upper bound a gap in the schedule turns a four-hour-old price
-     into the "1h" badge, which is the same lie nearestRateWindow guards
-     against on the rate line. One run's slack (plus the 15 min of drift the
-     lower bound already allows) is as far as a window may stretch. */
-  const refFor = (hours) => {
-    const cutoff = now - (hours * 3600e3 - 15 * 60e3);
-    const oldest = now - (hours + 1) * 3600e3 - 15 * 60e3;
-    let ref = null;
-    for (const p of pts) { if (Date.parse(p.t) <= cutoff) ref = p; else break; }
-    return ref && Date.parse(ref.t) >= oldest ? ref : null;
-  };
-  for (const [hours, key] of CHANGE_WINDOWS) {
-    const ref = refFor(hours);
-    if (!ref) continue;
-    for (const it of items) {
-      const v = ref.values[it.name];
-      const latest = last.values[it.name];
-      if (v > 0 && latest > 0) it[key] = (latest / v - 1) * 100;
-      /* Same window, priced in divine instead of chaos: this is the move the
-         item made against the rest of the economy rather than against a chaos
-         orb that is itself drifting. Only computable once both ends of the
-         window know their rate. */
-      if (v > 0 && latest > 0 && rateSane(ref.rate) && rateSane(last.rate)) {
-        it[`${key}R`] = ((latest / last.rate) / (v / ref.rate) - 1) * 100;
-      }
-    }
-  }
-}
-
-/* ---------- one day axis per league ----------
-
-   Everything a league plots hangs off a single origin: the scarab curves, the
-   category curves and the chaos-per-divine line. That is what lets the site
-   add a scarab series to an Astrolabe series and mean it — before this, each
-   family anchored day 0 at its own first snapshot, so "day 3" meant a
-   different moment on each tab.
-
-   League start is the origin whenever we know it and it is plausible. The
-   guard is against Standard, whose "start" is 2013 and would put every point
-   at day 4700; a league that has outlived the retention window is equally not
-   something to anchor to. */
-export function historyOrigin({ leagueStart, backfill = {}, self = { points: [] }, nowMs = Date.now() }) {
-  const ms = leagueStart ? Date.parse(leagueStart) : NaN;
-  if (isFinite(ms) && ms <= nowMs && nowMs - ms <= HISTORY_MAX_DAYS * 86400000) {
-    return { t0Ms: ms, axis: "league day" };
-  }
-  let earliest = null;
-  const seen = (candidate) => { if (isFinite(candidate) && (earliest == null || candidate < earliest)) earliest = candidate; };
-  for (const points of Object.values(backfill)) for (const p of points || []) seen(Date.parse(p.t));
-  for (const p of self.points || []) seen(Date.parse(p.t));
-  return earliest == null ? null : { t0Ms: earliest, axis: "days since first snapshot" };
-}
-
-/* Backfill and accumulation stitched onto that axis, the same way
-   buildRateHistory does it for the divine rate: bucket both by time, let our
-   own snapshots win where they overlap — they are hourly and they are ours —
-   then convert to days.
-
-   backfill: { name: [{ t, value }] }   self: { points: [{ t, values }] }
-   out:      { name: [{ day, value }] } — the shape the app plots. */
-export function stitchHistory({ backfill = {}, self = { points: [] }, t0Ms, nowMs = Date.now() }) {
-  const byName = new Map();
-  const put = (name, ms, value) => {
-    if (!isFinite(ms) || ms > nowMs + HOUR_MS || !(value > 0)) return;
-    let bucket = byName.get(name);
-    if (!bucket) byName.set(name, (bucket = new Map()));
-    bucket.set(Math.round(ms / 600e3), { ms, value }); // 10-min buckets
-  };
-  for (const [name, points] of Object.entries(backfill)) {
-    for (const p of points || []) put(name, Date.parse(p.t), p.value);
-  }
-  for (const p of self.points || []) {
-    const ms = Date.parse(p.t);
-    for (const [name, value] of Object.entries(p.values || {})) put(name, ms, value);
-  }
-  const out = {};
-  for (const [name, bucket] of byName) {
-    // Points before day 0 have no axis to sit on — the same rule the rate line
-    // uses, so the two series always share a domain.
-    const series = [...bucket.values()]
-      .sort((a, b) => a.ms - b.ms)
-      .map((p) => ({ day: Math.round(((p.ms - t0Ms) / 86400000) * 100) / 100, value: p.value }))
-      .filter((p) => isFinite(p.day) && p.day >= -0.01)
-      .map((p) => ({ day: Math.max(0, p.day), value: p.value }));
-    if (series.length) out[name] = series;
-  }
-  return out;
-}
-
 /* ---------- poe.ninja backfill ----------
 
    The legacy itemhistory endpoint hands over a whole league in one request per
@@ -1415,19 +1189,20 @@ async function buildFamilyHistory({ slug, key, league, items, divineRate, rename
     ? await updateSelfHistory(slug, key, items, divineRate, renames)
     : await loadSelfHistory(slug, key);
   applySelfChanges(items, self);
-  return { backfillFile: stored, backfill, self };
+  /* Names the curve holds that the catalogue no longer lists. Never removed —
+     a series is the only copy of what an item did, and a retired name can come
+     back — but a growing list is how you notice a feed quietly dropping rows. */
+  const orphaned = unresolvedSeries(self.points, items.map((item) => item.name));
+  if (orphaned.length) {
+    console.log(`  ${key}: ${orphaned.length} accumulated series no longer in the catalogue, retained: `
+      + `${orphaned.slice(0, 12).join(", ")}${orphaned.length > 12 ? `, +${orphaned.length - 12} more` : ""}`);
+  }
+  return { backfillFile: stored, backfill, self, orphaned };
 }
 
 function familyHistoryFiles({ backfill, self, t0Ms }) {
   const history = t0Ms == null ? {} : stitchHistory({ backfill, self, t0Ms });
-  const hasBackfill = Object.keys(backfill).length > 0;
-  const hasSelf = (self.points || []).length > 0;
-  return {
-    history,
-    historySource: !Object.keys(history).length ? "none"
-      : hasBackfill && hasSelf ? "ninja+self"
-      : hasBackfill ? "ninja" : "self",
-  };
+  return { history, historySource: historySourceOf(history, backfill, self) };
 }
 
 /* ---------- chaos-per-divine history ----------
@@ -1442,26 +1217,12 @@ function familyHistoryFiles({ backfill, self, t0Ms }) {
         keep whichever produces plausible rates.
      2. accumulation — every snapshot stores its own rate, so the curve keeps
         growing even when (1) is dead, which is the steady state. */
-function ratePointsFrom(list) {
-  const raw = [];
-  for (const e of list || []) {
-    const daysAgo = e?.daysAgo ?? e?.DaysAgo;
-    const value = e?.value ?? e?.Value;
-    if (typeof daysAgo === "number" && typeof value === "number" && value > 0) raw.push({ daysAgo, value });
-  }
-  if (raw.length < 3) return [];
-  // The same series read as chaos-per-divine and as divine-per-chaos; whichever
-  // lands inside a believable band is the one poe.ninja meant.
-  let best = [];
-  for (const invert of [false, true]) {
-    const pts = raw
-      .map((p) => ({ daysAgo: p.daysAgo, rate: invert ? 1 / p.value : p.value }))
-      .filter((p) => rateSane(p.rate));
-    if (pts.length > best.length && pts.length >= raw.length * 0.6) best = pts;
-  }
-  return best;
-}
-
+/* poe.ninja's legacy currency history hands over a whole league in one request
+   when it answers, which is the only way a league older than this site has a
+   rate line at all. Its shape has changed over the years and the ratio is
+   sometimes quoted the other way up, so `ratePointsFrom` tries both
+   orientations and keeps whichever produces plausible rates. When it is dead
+   the curve still grows from our own snapshots, so failure is silent. */
 async function getDivineRateBackfill(lgParam) {
   const overview = await tryJson(`${NINJA}/api/data/currencyoverview?league=${encodeURIComponent(lgParam)}&type=Currency`);
   const divine = (overview?.currencyDetails || []).find((d) => d?.name === "Divine Orb");
@@ -1478,37 +1239,6 @@ async function getDivineRateBackfill(lgParam) {
     if (pts.length > best.length) best = pts;
   }
   return best;
-}
-
-/* Merge accumulated + backfilled rates onto the league's day axis, so the rate
-   line and every price line on the page share an x. */
-function buildRateHistory({ self, backfill = [], t0Ms, nowMs = Date.now() }) {
-  const byMs = new Map();
-  for (const p of backfill) {
-    const ms = nowMs - p.daysAgo * 86400000;
-    byMs.set(Math.round(ms / 600e3), { ms, rate: p.rate }); // 10-min buckets
-  }
-  // Our own snapshots are the more trustworthy source, so they overwrite.
-  for (const p of (self.points || []).map(normalizePoint)) {
-    if (!rateSane(p.rate)) continue;
-    const ms = Date.parse(p.t);
-    if (!isFinite(ms)) continue;
-    byMs.set(Math.round(ms / 600e3), { ms, rate: p.rate });
-  }
-  let out = [...byMs.values()]
-    .sort((a, b) => a.ms - b.ms)
-    .map((p) => ({ day: Math.round(((p.ms - t0Ms) / 86400000) * 100) / 100, rate: Math.round(p.rate * 100) / 100 }))
-    // Points older than day 0 have no price line to sit next to; dropping them
-    // keeps the chart domain identical to the one the price series defines.
-    .filter((p) => isFinite(p.day) && p.day >= -0.01)
-    .map((p) => ({ day: Math.max(0, p.day), rate: p.rate }));
-  if (out.length > RATE_HISTORY_CAP) {
-    const step = Math.ceil(out.length / RATE_HISTORY_CAP);
-    const thinned = out.filter((_, i) => i % step === 0);
-    if (thinned[thinned.length - 1] !== out[out.length - 1]) thinned.push(out[out.length - 1]);
-    out = thinned;
-  }
-  return out;
 }
 
 /* ---------- reuse mode: mirror the currently deployed data ----------
@@ -1532,7 +1262,7 @@ export const FAMILY_FILES = (key) => [
 ];
 
 export const LEAGUE_FILES = [
-  "prices.json", "catalogue.json",
+  "prices.json", "catalogue.json", "sources.json",
   ...CATEGORIES.flatMap((c) => FAMILY_FILES(c.key)),
   "gems.json", "gems-history.json", "gems-selfhistory.json",
   /* Scarabs wrote these two before every family shared one naming rule. They
@@ -1589,31 +1319,95 @@ async function applyLocalHistorySeeds(allowedSlugs) {
   return merged;
 }
 
+async function readJson(file) {
+  try { return JSON.parse(await readFile(file, "utf8")); } catch { return null; }
+}
+
+/* What a league directory actually contains, as a logical-name -> filename
+   map on the index entry.
+
+   The browser used to guess: it requested every file it had ever known about
+   and read a 404 as "no data", which makes "this family was not generated this
+   hour" and "this build is asking for a file that no longer exists" the same
+   event. Publishing the manifest means a rename in here needs no matching
+   change in the app, and a file the run genuinely failed to write is visible
+   as an absence from the manifest rather than as a silent empty panel.
+
+   The key is the filename camel-cased: `scarabs-history.json` ->
+   `scarabsHistory`. Mechanical on purpose — a new family needs no entry in a
+   translation table that someone would forget to update. */
+function fileKey(name) {
+  return name.replace(/\.json$/, "").replace(/-([a-z0-9])/g, (_, char) => char.toUpperCase());
+}
+
+async function describeLeagueFiles(dir) {
+  let names;
+  try { names = await readdir(dir); } catch { return {}; }
+  const files = {};
+  for (const name of names.sort()) {
+    if (!name.endsWith(".json")) continue;
+    /* An empty or unreadable file is not published as available — advertising
+       it would send the browser after something it cannot use. */
+    try { if ((await stat(path.join(dir, name))).size < 2) continue; } catch { continue; }
+    files[fileKey(name)] = name;
+  }
+  return files;
+}
+
+/* Every family that keeps an accumulated curve, so a rebuild covers all of
+   them rather than whichever one someone remembered. */
+const DERIVED_KEYS = [...CATEGORIES.map((c) => c.key), "gems"];
+
+/* Reuse mode overlays the live deployment onto the checked-in tree instead of
+   replacing it. The tree is a recovery seed — after a repository move it is the
+   only copy of the timeline, because the previous Pages site is gone — so a
+   league the deployment no longer serves is kept and marked stale rather than
+   deleted. Nothing here removes files. */
 async function mirrorExisting() {
   const base = pagesBaseUrl();
   if (!base) return false;
   const idxText = await tryText(`${base}/data/poe1/index.json`)
     ?? await tryText(`${base}/data/index.json`); // migration from the old unscoped layout
-  if (!idxText) return false;
-  let idx;
-  try { idx = JSON.parse(idxText); } catch { return false; }
-  if (!idx.leagues || !idx.leagues.length) return false;
+  let idx = null;
+  if (idxText) { try { idx = JSON.parse(idxText); } catch { /* fall back to the local index */ } }
+  const local = await readJson(path.join(OUT, "index.json"));
+  const merged = new Map();
+  for (const league of [...(local?.leagues || []), ...(idx?.leagues || [])]) {
+    if (league?.slug) merged.set(league.slug, { ...merged.get(league.slug), ...league });
+  }
+  if (!merged.size) return false;
 
-  await rm(OUT, { recursive: true, force: true });
   await mkdir(OUT, { recursive: true });
   const kept = [];
-  for (const l of idx.leagues) {
-    const main = await tryText(`${base}/data/poe1/${l.slug}/scarabs.json`)
-      ?? await tryText(`${base}/data/${l.slug}/scarabs.json`);
-    if (!main) { console.log(`- ${l.name}: deployed data missing, dropping`); continue; }
-    await carryForward(l.slug, LEAGUE_FILES);
-    kept.push(l);
-    console.log(`- ${l.name}: reused deployed data`);
+  for (const league of merged.values()) {
+    const copied = await carryForward(league.slug, LEAGUE_FILES);
+    const seeded = await readJson(path.join(OUT, league.slug, "prices.json"));
+    if (!copied && !seeded) { console.log(`- ${league.name}: nothing deployed and nothing checked in, dropping`); continue; }
+    kept.push(copied ? { ...league, stale: undefined } : { ...league, stale: true });
+    /* Filled in after the history merge below, so the manifest describes the
+       tree that is actually published rather than the one mid-restore. */
+    console.log(`- ${league.name}: ${copied
+      ? `reused ${copied} deployed file(s)`
+      : "no deployed data — kept the checked-in recovery snapshot, marked stale"}`);
   }
   if (!kept.length) return false;
   const restored = await applyLocalHistorySeeds(new Set(kept.map((league) => league.slug)));
   if (restored) console.log(`Merged ${restored} checked-in history recovery file(s).`);
-  await writeFile(path.join(OUT, "index.json"), JSON.stringify({ ...idx, leagues: kept }));
+  let rebuilt = 0;
+  for (const league of kept) {
+    rebuilt += (await rebuildDerivedHistory(path.join(OUT, league.slug), DERIVED_KEYS)).rebuilt;
+  }
+  if (rebuilt) console.log(`Rebuilt ${rebuilt} derived history file(s) from the merged raw snapshots.`);
+  const listed = [];
+  for (const league of kept) {
+    listed.push(JSON.parse(JSON.stringify({ ...league, files: await describeLeagueFiles(path.join(OUT, league.slug)) })));
+  }
+  await writeFile(path.join(OUT, "index.json"), JSON.stringify({
+    ...(idx || local || {}),
+    schemaVersion: POE1_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    leagues: listed,
+  }));
   return true;
 }
 
@@ -1628,8 +1422,12 @@ async function main() {
     }
     console.log("Nothing deployed to reuse — falling back to a full fetch.");
   }
-  await rm(OUT, { recursive: true, force: true });
+  /* The output tree is not wiped first. It holds the checked-in recovery seeds,
+     and a family whose feed fails this hour keeps its last file instead of
+     disappearing from the site; `written` below is what decides which leagues
+     the index actually advertises. */
   await mkdir(OUT, { recursive: true });
+  const previousIndex = await readJson(path.join(OUT, "index.json"));
 
   const leagues = await getLeagues();
   console.log("Leagues:", leagues.map((l) => l.name).join(", "));
@@ -1658,8 +1456,14 @@ async function main() {
     if (st) console.log(`poe.watch status: ${st.computed}/${st.requested} stashes processed, change ${String(st.changeID).slice(0, 24)}…`);
   }
 
+  /* Built once for the whole run: the name index is the same for every league,
+     and rebuilding it per family would walk a 20k-entry dictionary 40 times. */
+  const repoeIndex = gggExchange?.baseItems ? nameIndex(gggExchange.baseItems) : null;
+
   const written = [];
   for (const [li, lg] of leagues.entries()) {
+    const metadataCoverage = [];
+    const classification = [];
     try {
       const ggg = gggExchange?.byLeague?.[lg.name] || null;
       if (ggg) {
@@ -1699,6 +1503,9 @@ async function main() {
           : await getDivineRate(leagueParam, exchangeDivineRate);
       const mergedScarabs = mergeGggCategory(priced?.items || [], ggg, "scarabs", divineRate);
       const items = mergedScarabs.items;
+      const scarabCoverage = enrichFromRepoe(items, gggExchange?.baseItems, repoeIndex);
+      const scarabClassification = classificationCoverage(items, "scarabs");
+      attachStableKeys(items);
       if (!items.length) {
         // Writing nothing would delete this league from the site and restart
         // every accumulated curve in it. Keep the last good snapshot instead.
@@ -1758,9 +1565,13 @@ async function main() {
         watch: source === "watch" ? mergedScarabs.fallbackCount : 0,
         ninja: source !== "watch" && source !== "ggg" ? mergedScarabs.fallbackCount : 0,
       });
-      await writeFile(path.join(dir, "scarabs.json"), JSON.stringify({ generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate, priceSource: scarabSource, historySource, historyAxis, rateHistory, rateHistorySource, items }));
+      /* historyOrigin is the absolute moment day 0 sits on. The day axis alone
+         cannot be re-anchored later, so storing it is what lets reuse mode
+         rebuild these curves without calling poe.ninja for the league start. */
+      const historyOriginISO = origin ? new Date(origin.t0Ms).toISOString() : null;
+      await writeFile(path.join(dir, "scarabs.json"), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate, priceSource: scarabSource, historySource, historyAxis, historyOrigin: historyOriginISO, rateHistory, rateHistorySource, items }));
       await writeFile(path.join(dir, "scarabs-history.json"), JSON.stringify(history));
-      await writeFile(path.join(dir, "scarabs-selfhistory.json"), JSON.stringify(self));
+      await writeFile(path.join(dir, "scarabs-selfhistory.json"), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, ...self }));
       if (scarabHist.backfillFile) await writeFile(path.join(dir, "scarabs-backfill.json"), JSON.stringify(scarabHist.backfillFile));
       // broad price map for the boss profitability tab
       let currencyPrices = null;
@@ -1805,7 +1616,7 @@ async function main() {
             watch: pm.counts?.["poe.watch"] || 0,
             ninja: Object.entries(pm.counts || {}).filter(([k]) => k !== "poe.watch" && k !== "GGG Currency Exchange").reduce((n, [, v]) => n + v, 0),
           });
-          await writeFile(path.join(dir, "prices.json"), JSON.stringify({ generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate, priceSource, prices: pm.prices }));
+          await writeFile(path.join(dir, "prices.json"), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate, priceSource, prices: pm.prices }));
           console.log(`  prices: ${Object.keys(pm.prices).length} names across ${pm.categories} sources (league=${pm.leagueParam})`);
           await reportUnpricedBossItems(pm.prices, lg.name, li === 0);
           currencyPrices = pm.prices;
@@ -1830,7 +1641,7 @@ async function main() {
           const vaalOrb = currencyPrices?.[VAAL_ORB_NAME]?.c || 0;
           if (!gcp) console.log(`  gems: WARNING — no ${GCP_NAME} price, so the "level it yourself" input cost is understated`);
           await writeFile(path.join(dir, "gems.json"), JSON.stringify({
-            generatedAt, divineRate, priceSource: "poe.ninja stash item overview",
+            schemaVersion: POE1_SCHEMA_VERSION, generatedAt, divineRate, priceSource: "poe.ninja stash item overview",
             gcp, vaalOrb, gems: gemRows,
           }));
 
@@ -1852,7 +1663,7 @@ async function main() {
             console.log(`  gems: ${Object.keys(profits).length} priced, ${gemSelf.points.length} history point(s), 1 GCP ${Math.round(gcp)}c, 1 Vaal Orb ${Math.round(vaalOrb)}c`);
           }
           await writeFile(path.join(dir, "gems-history.json"), JSON.stringify(gemHist));
-          await writeFile(path.join(dir, "gems-selfhistory.json"), JSON.stringify(gemSelf));
+          await writeFile(path.join(dir, "gems-selfhistory.json"), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, ...gemSelf }));
         } else {
           console.log(`  gems: no data for ${lg.name}`);
         }
@@ -1873,6 +1684,10 @@ async function main() {
           const rate2 = ggg?.divineRate || r?.exchangeDivineRate || divineRate;
           const mergedCat = mergeGggCategory(r?.items || [], ggg, cat.key, rate2);
           const catItems = mergedCat.items;
+          const catCoverage = enrichFromRepoe(catItems, gggExchange?.baseItems, repoeIndex);
+          attachStableKeys(catItems);
+          if (catCoverage.total) metadataCoverage.push({ family: cat.key, ...catCoverage });
+          classification.push({ family: cat.key, ...classificationCoverage(catItems, cat.key) });
           if (!catItems.length) {
             const kept = await carryForward(slug, FAMILY_FILES(cat.key));
             console.log(`  ${cat.key}: no data for ${lg.name}${kept ? ` — kept the ${kept} deployed file(s)` : ""}`);
@@ -1895,9 +1710,9 @@ async function main() {
             watch: r?.source === "watch" ? mergedCat.fallbackCount : 0,
             ninja: r && r.source !== "watch" ? mergedCat.fallbackCount : 0,
           });
-          await writeFile(path.join(dir, `${cat.key}.json`), JSON.stringify({ generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate: rate2, priceSource: catPriceSource, historySource: catHistorySource, historyAxis, rateHistory, rateHistorySource, items: catItems }));
+          await writeFile(path.join(dir, `${cat.key}.json`), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate: rate2, priceSource: catPriceSource, historySource: catHistorySource, historyAxis, historyOrigin: historyOriginISO, rateHistory, rateHistorySource, items: catItems }));
           await writeFile(path.join(dir, `${cat.key}-history.json`), JSON.stringify(catHist));
-          await writeFile(path.join(dir, `${cat.key}-selfhistory.json`), JSON.stringify(catFam.self));
+          await writeFile(path.join(dir, `${cat.key}-selfhistory.json`), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, ...catFam.self }));
           if (catFam.backfillFile) await writeFile(path.join(dir, `${cat.key}-backfill.json`), JSON.stringify(catFam.backfillFile));
           console.log(`  ${cat.key}: ${catItems.length} items (${mergedCat.officialCount} priced by GGG), ${Object.keys(catHist).length} history series`);
         } catch (e) {
@@ -1906,22 +1721,101 @@ async function main() {
         }
       }
 
+      /* Provenance for the league, kept out of prices.json because every
+         browser downloads that file hourly and this is diagnostic. It states
+         which digest and which dictionary the numbers came from, how many rows
+         each source offered, and how much of the result RePoE could identify. */
+      if (scarabCoverage.total) metadataCoverage.unshift({ family: "scarabs", ...scarabCoverage });
+      classification.unshift({ family: "scarabs", ...scarabClassification });
+      await writeFile(path.join(dir, "sources.json"), JSON.stringify({
+        schemaVersion: POE1_SCHEMA_VERSION,
+        generatedAt,
+        league: lg.name,
+        gggHour: ggg ? gggExchange.hourISO : null,
+        nextChangeId: ggg ? gggExchange.nextChangeId ?? null : null,
+        sources: gggExchange?.sources || [],
+        metadataCoverage,
+        classification,
+      }));
+
       if (catalogue.length) {
         const breaking = catalogue.flatMap((entry) => entry.breaking);
-        await writeFile(path.join(dir, "catalogue.json"), JSON.stringify({ generatedAt, categories: catalogue }));
+        await writeFile(path.join(dir, "catalogue.json"), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, generatedAt, categories: catalogue }));
         if (breaking.length) console.log(`  catalogue: ${breaking.length} curated name(s) need attention`);
       }
 
-      written.push({ name: lg.name, slug, group: lg.group || "current" });
+      written.push({ name: lg.name, slug, group: lg.group || "current", files: await describeLeagueFiles(dir) });
       console.log(`- ${lg.name}: ${items.length} scarabs, ${Object.keys(history).length} history series, 1 div = ${Math.round(divineRate)}c, rate history ${rateHistory.length}pt (${rateHistorySource})`);
     } catch (e) {
-      console.log(`- ${lg.name}: FAILED (${e.message})`);
+      /* A league that throws used to vanish from the index while the run still
+         reported success, which silently deletes its accumulated history on the
+         next pass. Keep the last good copy and say it is stale instead. */
+      const slug = slugify(lg.name);
+      const carried = await carryForward(slug, LEAGUE_FILES);
+      const seeded = await readJson(path.join(OUT, slug, "prices.json"));
+      console.log(`- ${lg.name}: FAILED (${e.message})${carried || seeded ? " — kept the last valid snapshot, marked stale" : ""}`);
+      if (carried || seeded) {
+        written.push({
+          name: lg.name, slug, group: lg.group || "current", stale: true,
+          files: await describeLeagueFiles(path.join(OUT, slug)),
+        });
+      }
     }
   }
 
+  /* A league the source list stopped naming is not proof the league retired —
+     it is far more often one bad response. Retain what it had, flagged, so a
+     quiet upstream failure cannot erase a timeline. */
+  const fetched = new Set(written.map((league) => league.slug));
+  for (const league of previousIndex?.leagues || []) {
+    if (!league?.slug || fetched.has(league.slug)) continue;
+    const carried = await carryForward(league.slug, LEAGUE_FILES);
+    const seeded = await readJson(path.join(OUT, league.slug, "prices.json"));
+    if (!carried && !seeded) { console.log(`- ${league.name}: gone from the source list and nothing left to keep`); continue; }
+    written.push({ ...league, stale: true, files: await describeLeagueFiles(path.join(OUT, league.slug)) });
+    console.log(`- ${league.name}: gone from the source list — retained its last snapshot, marked stale`);
+  }
+
   if (!written.length) throw new Error("No league data could be fetched — aborting so the old deployment stays up.");
-  await writeFile(path.join(OUT, "index.json"), JSON.stringify({ generatedAt: new Date().toISOString(), leagues: written }));
-  console.log(`Done. Wrote ${written.length} league(s) to ${OUT}`);
+  const fresh = written.filter((league) => !league.stale).length;
+  if (!fresh) throw new Error("Every league is stale — aborting so the old deployment stays up.");
+  await writeFile(path.join(OUT, "index.json"), JSON.stringify({
+    schemaVersion: POE1_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    leagues: written,
+  }));
+  console.log(`Done. Wrote ${written.length} league(s) (${fresh} fresh) to ${OUT}`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+/* Generate into staging, gate the result, and only then replace the published
+   tree. A run that cannot pass its own gates exits non-zero and leaves the
+   previous deployment live — GitHub Pages only uploads after a successful
+   workflow, so failing loudly is strictly safer than publishing the damage. */
+async function run() {
+  const cleared = await clearAbandonedStages(FINAL_OUT);
+  if (cleared) console.log(`Cleared ${cleared} abandoned staging director(ies).`);
+  const stage = await createStage(FINAL_OUT);
+  OUT = stage.dir;
+  try {
+    await main();
+    const report = await validatePoe1(OUT, { previousDir: FINAL_OUT, report: new QualityReport({ game: "poe1" }) });
+    const index = await readJson(path.join(OUT, "index.json"));
+    const primary = index?.leagues?.find((league) => !league.stale && league.group === "current");
+    if (primary) {
+      try { await checkCuratedCoverage(OUT, FINAL_OUT, report, { league: primary.slug }); }
+      catch (error) { report.warn("curated-coverage", `coverage check skipped: ${error.message}`); }
+    }
+    await writeJsonFile(path.join(OUT, "quality.json"), report.toJSON());
+    report.print();
+    if (!report.publishable) {
+      throw new Error(`PoE 1 dataset failed ${report.failures.length} publication gate(s) — not publishing`);
+    }
+    await stage.promote();
+    console.log(`Promoted the staged PoE 1 dataset to ${FINAL_OUT}.`);
+  } catch (error) {
+    await stage.discard();
+    throw error;
+  }
+}
+
+run().catch((e) => { console.error(e); process.exit(1); });

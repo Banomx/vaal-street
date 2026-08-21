@@ -1,6 +1,9 @@
+import { JSON_HEADERS, sourceRecord } from "../shared/dataset.mjs";
+import { fetchBaseItems } from "../shared/repoe.mjs";
+
 const BASE = process.env.GGG_POE2_EXCHANGE_BASE || "https://web.poecdn.com/api/currency-exchange/poe2";
 const ITEMS_URL = process.env.REPOE_POE2_ITEMS_URL || "https://repoe-fork.github.io/poe2/base_items.min.json";
-const HEADERS = { "User-Agent": "scarab-ledger/0.1 (+https://github.com/Banomx/scarab-ledger)", Accept: "application/json" };
+const HEADERS = { ...JSON_HEADERS };
 const HOUR = 3600;
 const FETCH_TIMEOUT_MS = Number(process.env.POE2_FETCH_TIMEOUT_MS || 30000);
 
@@ -93,9 +96,26 @@ export function buildGggPrices(markets, baseItems, league, hour = null) {
       }
     }
     if (!(exalted > 0)) continue;
+    /* Stock and the hour's own low/high ratio band travel with the price. A
+       completed-trade mean says what cleared; the band and the stock say how
+       much room there was around it, which is the difference between a price
+       you can act on and one hour's coincidence. */
+    const bounds = direct ? ratioBounds(direct, id, EXALTED_ID)
+      : id !== DIVINE_ID && divineExalted > 0 && find(id, DIVINE_ID)
+        ? (() => {
+          const raw = ratioBounds(find(id, DIVINE_ID), id, DIVINE_ID);
+          return raw ? { low: raw.low * divineExalted, high: raw.high * divineExalted } : null;
+        })()
+        : null;
+    const stockMarket = direct || (id === DIVINE_ID ? find(DIVINE_ID, EXALTED_ID) : find(id, DIVINE_ID));
     const entry = {
       exalted,
       volume1H,
+      ...(bounds ? { low: bounds.low, high: bounds.high } : {}),
+      ...(stockMarket ? {
+        lowStock: amount(stockMarket, "lowest_stock", id) || undefined,
+        highStock: amount(stockMarket, "highest_stock", id) || undefined,
+      } : {}),
       source: "GGG completed trades",
       itemId: id,
       type: baseItems?.[id]?.item_class || baseItems?.[id]?.itemClass || null,
@@ -129,11 +149,29 @@ export async function fetchGggPoe2({ now = Date.now() } = {}) {
     } catch (error) { lastError = error; }
   }
   if (!payload) throw lastError || new Error("GGG returned no completed PoE 2 trade digest");
-  const baseItems = await getJson(ITEMS_URL);
+  const { baseItems, provenance: repoe } = await fetchBaseItems(ITEMS_URL, {
+    id: "repoe.poe2.baseItems", headers: HEADERS, timeoutMs: FETCH_TIMEOUT_MS,
+  });
   const leagues = [...new Set(payload.markets.map((market) => market.league).filter(Boolean))];
   return {
     hour,
+    marketHour: new Date(hour * 1000).toISOString(),
+    nextChangeId: payload.next_change_id ?? null,
+    marketCount: payload.markets.length,
     baseItems,
+    sources: [
+      sourceRecord({
+        id: "ggg.poe2.currencyExchange",
+        endpointFamily: "ggg",
+        url: `${BASE}/${hour}`,
+        requestedAt: new Date().toISOString(),
+        observedAt: new Date(hour * 1000).toISOString(),
+        ok: true,
+        rawRows: payload.markets.length,
+        version: payload.next_change_id != null ? String(payload.next_change_id) : null,
+      }),
+      repoe,
+    ],
     byLeague: Object.fromEntries(leagues.map((league) => [league, buildGggPrices(payload.markets, baseItems, league, hour)])),
   };
 }

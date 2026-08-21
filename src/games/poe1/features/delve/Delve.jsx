@@ -17,6 +17,8 @@ import PriceCell from "../pricing/PriceCell.jsx";
 import PriceChart, { PctBadge, rateAt } from "../pricing/PriceChart.jsx";
 import { unitForSeries } from "../pricing/money.js";
 import { CHANGE_KEYS, CHANGE_WINDOW_OPTIONS, nearestRateWindow } from "../pricing/marketWindows.js";
+import { POE1_SCHEMA_VERSIONS } from "../../config.js";
+import { isUsable, loadDocument } from "../../../../shared/data/snapshot.js";
 
 /* ================================================================
    DELVE
@@ -201,27 +203,27 @@ export default function Delve({ league, staticBase, currency, divineRate, mirror
                                          snapshot taken before this feature
                                          started writing fossils.json. */
   useEffect(() => {
+    if (!staticBase) return undefined; // no league folder yet
     let cancelled = false;
-    const grab = async (file, set) => {
-      try {
-        // Generated market files keep the same URL between hourly deployments.
-        // Revalidate them so an old browser cache cannot freeze boss medians.
-        const res = await fetch(`${staticBase}/${file}`, { cache: "no-cache" });
-        if (res.ok) { const j = await res.json(); if (!cancelled) set(j); return; }
-      } catch { /* fall through */ }
-      if (!cancelled) set("missing");
+    /* Generated market files keep the same URL between hourly deployments.
+       Revalidate them so an old browser cache cannot freeze boss medians, and
+       check each one against the schema this build reads — an unreadable file
+       is treated as absent rather than rendered from whatever came back. */
+    const grab = async (file, set, options) => {
+      const doc = await loadDocument(`${staticBase}/${file}`, { supported: POE1_SCHEMA_VERSIONS, ...options });
+      if (!cancelled) set(isUsable(doc) ? doc.data : "missing");
     };
     setFossilData(null); setResoData(null); setPriceMap(null); setHist({});
-    grab("fossils.json", (j) => { setFossilData(j); if (j !== "missing" && j.generatedAt) setGeneratedAt(j.generatedAt); });
-    grab("resonators.json", setResoData);
-    grab("fossils-history.json", (j) => { if (j !== "missing") setHist((h) => ({ ...h, ...j })); });
-    grab("resonators-history.json", (j) => { if (j !== "missing") setHist((h) => ({ ...h, ...j })); });
+    grab("fossils.json", (j) => { setFossilData(j); if (j !== "missing" && j.generatedAt) setGeneratedAt(j.generatedAt); }, { required: ["items"] });
+    grab("resonators.json", setResoData, { required: ["items"] });
+    grab("fossils-history.json", (j) => { if (j !== "missing") setHist((h) => ({ ...h, ...j })); }, { versioned: false });
+    grab("resonators-history.json", (j) => { if (j !== "missing") setHist((h) => ({ ...h, ...j })); }, { versioned: false });
     grab("prices.json", (j) => {
       if (j === "missing") { setPriceMap("missing"); return; }
       setPriceMap(j.prices || {});
       setPriceSource(j.priceSource || null);
       setGeneratedAt((g) => g || j.generatedAt || null);
-    });
+    }, { required: ["prices"] });
     return () => { cancelled = true; };
   }, [staticBase]);
 
