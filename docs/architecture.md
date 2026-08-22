@@ -184,7 +184,7 @@ src/
       shared/                  reusable PoE 2-only UI such as the market browser
       features/overview/       PoE 2 landing briefing and feature registry
       features/bosses/         PoE 2 boss UI, EV model and curated rates
-      features/farms/          tablet-family movement and baseline graphs
+      features/farms/          tablet entry cost against mechanic return indices
       features/exchange/       completed-pair analysis and Currency Exchange UI
       features/pricing/        PoE 2 market timeline UI and selectors
 ```
@@ -275,16 +275,101 @@ Custom PoE 2 TTK profiles have no built-in/default profile;
 profit/hour exists only for boss ids with a user-entered time. Rate edits,
 league-scoped manual prices, and TTK profiles use the game-scoped browser store.
 
-The PoE 2 Popular farms view consumes `PrecursorTablets` and `UniqueTablets`
-from the same normalized snapshot. Normal precursor-tablet quotes are retained
-as each mechanic's baseline even when a cheaper Magic or Rare quote exists.
-GGG tablet tags assign the league card; unique tablets appear only as context.
-Baseline histories use the shared aligned PoE 2 timeline and can calculate
-Divine-adjusted movement from the Divine/Exalted rate at both endpoints.
-The cards default to descending baseline value. When a history first adopts
-the Normal-tablet contract, `tabletBaselineVersion` removes older tablet series
-that represented the cheapest rarity; subsequent Normal points then accumulate
-normally without a false parser-change spike.
+The PoE 2 Popular farms view pairs what a league mechanic costs to enter with
+what its markets return. It consumes `PrecursorTablets` and `UniqueTablets` for
+the entry side and the mechanic's own output markets for the return side, all
+from the same normalized snapshot.
+
+Normal precursor-tablet quotes are retained as each mechanic's baseline even
+when a cheaper Magic or Rare quote exists. In practice Normal is the only
+rarity any source quotes — neither the published prices nor the raw
+`sourcePrices` carry a rolled tablet — so every entry cost the view shows is a
+**floor**, and it says so rather than implying it is the price of a tablet
+someone would run. GGG tablet tags assign the league card; unique tablets appear
+only as context. Baseline histories use the shared aligned PoE 2 timeline and
+can calculate Divine-adjusted movement from the Divine/Exalted rate at both
+endpoints. When a history first adopts the Normal-tablet contract,
+`tabletBaselineVersion` removes older tablet series that represented the
+cheapest rarity; subsequent Normal points then accumulate normally without a
+false parser-change spike.
+
+### Mechanic identity
+
+`src/games/poe2/features/farms/mechanics.js` decides which markets belong to
+which mechanic. It asserts membership and never a drop rate. Matchers run in
+source-trust order: GGG's own exchange `marketFamily`, then a `metadataPath`
+prefix, then item tags.
+
+The source check is not decoration. `marketFamily` carries two different
+vocabularies — GGG's exchange category and PoE2Scout's `CategoryApiId` — and
+the second one files Soul Cores under `expedition` and Idols under `ritual`.
+Only a value from `GGG completed trades` is read as a mechanic name, so a rune
+is never counted as Expedition output. Incursion has no GGG family at all; its
+pool is the `CurrencyIncursion` and `Thesis` metadata paths.
+
+Uniques need curation, because nothing structural connects Xoph's Blood to
+Breach. A short per-mechanic name list, verified against poe2db.tw, supplies
+them. That is membership only, the same trade `catalogue/scarabs.js` makes in
+PoE 1, and it carries the same rename risk: `curatedCoverage` reports any
+curated name that matched no market instead of letting it vanish.
+
+Overseer and Irradiated have no attributable output market and are labelled that
+way. Their cards show entry cost alone.
+
+### The return index
+
+`farmIndex.js` builds a fixed-weight (Laspeyres) basket per mechanic, rebased to
+100 at the start of the window. Weights are taken once from the latest snapshot,
+so index movement is price movement and never weight churn. Three weightings are
+offered: traded supply (cleared units, the default), traded value, and equal.
+
+Traded supply is a market measurement used as the closest observable stand-in
+for how often an item is produced. It is labelled as such and is **not** a drop
+rate; no drop rate appears anywhere in this feature.
+
+The three rules that keep a summed basket honest are the ones
+`poe1/features/strategies/stratHistory.js` already documents: a member with no
+stored history is excluded and named rather than back-filled, the plotted window
+is the members' overlap, and a member missing one hourly sample inside that
+window contributes its nearest one. Below three surviving members there is no
+index and the card says why.
+
+Stash-quoted uniques stay out of the basket. GGG cleared volume and poe.ninja
+listing counts are not the same measurement, so giving a stash-priced unique a
+share of a volume-weighted basket would mean inventing the weight. They render
+as a separate chase-item list instead.
+
+Return against entry is reported as a ratio, `(1 + return) / (1 + entry) - 1`,
+not as a difference of two percentages. Subtracting breaks down as soon as
+either side is large: a tablet up 486% against a basket down 6% is not
+-492%.
+
+A card is drawn whenever either half exists. A mechanic with an output pool and
+no tablet quote still renders, with the entry cost stated as unknown — Runes of
+Aldur prices no Expedition Tablet while Expedition clears more than any other
+mechanic, and keying the list off tablet families alone hid it completely.
+
+### Tower rules, and what is deliberately not quantified
+
+The exposure model rests on game rules rather than on measurements: a tower node
+takes three tablets and four on a city biome; mechanic tablets compete, so
+filling every slot with one mechanic makes it the only major mechanic that
+spawns; and more copies of a tablet means more encounters of it.
+
+These support *relative* exposure between mechanics and nothing more. Four
+things are left unquantified on purpose, and are stated on the page rather than
+modelled away: absolute encounters or loot per slot; the affix uplift on any
+tablet, since every non-unique tablet rolls two prefixes and two suffixes and no
+source prices a rolled one; the Overseer/Irradiated loot uplift and atlas-tree
+influence; and Vaal realizing late as temple room rather than as drops in the
+map that ran it. This is why the return figure is an index and never an EV per
+map.
+
+One known imprecision is named rather than papered over: GGG groups every Omen
+under the Ritual exchange family, including Abyss-themed Omens that also drop
+from Abyss, and no source splits that supply.
+
+`scripts/tests/poe2/test-farms.mjs` covers all of the above against fixtures.
 
 ## History
 

@@ -1,17 +1,10 @@
 import { buildPriceTimeline } from "../pricing/priceTimeline.js";
+import { FAMILY_LABELS, FAMILY_ORDER } from "./mechanics.js";
 
-const FAMILY_ORDER = ["atlas", "bossing", "breach", "ritual", "delirium", "abyss", "expedition", "vaal"];
-
-const FAMILY_LABELS = {
-  atlas: "Atlas",
-  bossing: "Map bosses",
-  breach: "Breach",
-  ritual: "Ritual",
-  delirium: "Delirium",
-  abyss: "Abyss",
-  expedition: "Expedition",
-  vaal: "Fate of the Vaal",
-};
+/* The tablet family ids and the mechanic ids are deliberately the same set, so
+   a tablet baseline and its mechanic's output pool join without a lookup. They
+   live in mechanics.js and are re-exported here for the existing importers. */
+export { FAMILY_LABELS, FAMILY_ORDER };
 
 function textFor(name, entry) {
   return [name, entry?.baseType, entry?.marketFamily, entry?.type, entry?.itemClass, ...(entry?.tags || [])]
