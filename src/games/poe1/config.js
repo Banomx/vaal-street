@@ -43,6 +43,27 @@ export const POE1_LEAGUE_FILES = {
   ])),
 };
 
+/* What each generated file must contain before the app will render it.
+
+   One place, because the alternative is every panel restating the contract
+   from memory — and a panel that asks for a field the generator does not write
+   fails silently: the document is refused, the tab shows its empty state, and
+   it reads exactly like data that has not been generated yet. That is what
+   happened to the gem tab, which asked `gems.json` for `items` when the file
+   holds `gems`.
+
+   `scripts/tests/poe1/test-contracts.mjs` checks every entry here against the
+   checked-in dataset, so a rename in the generator fails a test rather than
+   emptying a tab in production. */
+export const POE1_FILE_CONTRACTS = {
+  prices: ["generatedAt", "prices"],
+  gems: ["generatedAt", "gems"],
+  catalogue: ["generatedAt", "categories"],
+  ...Object.fromEntries(CATEGORIES.map((category) => [category.key, ["generatedAt", "items"]])),
+};
+
+export const requiredFields = (key) => POE1_FILE_CONTRACTS[key] || [];
+
 /* Which data sources this page may use — see ../../shared/data/dataMode.js.
    For PoE 1 that is: the generated snapshots (always), poe.ninja's API (dev
    and ?data=live only) and the sample dataset (?data=demo, or the last resort

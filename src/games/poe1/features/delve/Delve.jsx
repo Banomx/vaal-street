@@ -17,7 +17,7 @@ import PriceCell from "../pricing/PriceCell.jsx";
 import PriceChart, { PctBadge, rateAt } from "../pricing/PriceChart.jsx";
 import { unitForSeries } from "../pricing/money.js";
 import { CHANGE_KEYS, CHANGE_WINDOW_OPTIONS, nearestRateWindow } from "../pricing/marketWindows.js";
-import { POE1_SCHEMA_VERSIONS } from "../../config.js";
+import { POE1_SCHEMA_VERSIONS, requiredFields } from "../../config.js";
 import { isUsable, loadDocument } from "../../../../shared/data/snapshot.js";
 
 /* ================================================================
@@ -214,8 +214,8 @@ export default function Delve({ league, staticBase, currency, divineRate, mirror
       if (!cancelled) set(isUsable(doc) ? doc.data : "missing");
     };
     setFossilData(null); setResoData(null); setPriceMap(null); setHist({});
-    grab("fossils.json", (j) => { setFossilData(j); if (j !== "missing" && j.generatedAt) setGeneratedAt(j.generatedAt); }, { required: ["items"] });
-    grab("resonators.json", setResoData, { required: ["items"] });
+    grab("fossils.json", (j) => { setFossilData(j); if (j !== "missing" && j.generatedAt) setGeneratedAt(j.generatedAt); }, { required: requiredFields("fossils") });
+    grab("resonators.json", setResoData, { required: requiredFields("resonators") });
     grab("fossils-history.json", (j) => { if (j !== "missing") setHist((h) => ({ ...h, ...j })); }, { versioned: false });
     grab("resonators-history.json", (j) => { if (j !== "missing") setHist((h) => ({ ...h, ...j })); }, { versioned: false });
     grab("prices.json", (j) => {
@@ -223,7 +223,7 @@ export default function Delve({ league, staticBase, currency, divineRate, mirror
       setPriceMap(j.prices || {});
       setPriceSource(j.priceSource || null);
       setGeneratedAt((g) => g || j.generatedAt || null);
-    }, { required: ["prices"] });
+    }, { required: requiredFields("prices") });
     return () => { cancelled = true; };
   }, [staticBase]);
 

@@ -7,7 +7,7 @@ import PriceCell from "../pricing/PriceCell.jsx";
 import PriceChart, { PctBadge, Sparkline, rateAt, realPct } from "../pricing/PriceChart.jsx";
 import { unitForSeries } from "../pricing/money.js";
 import { nearestHistoryWindow } from "../pricing/marketWindows.js";
-import { POE1_SCHEMA_VERSIONS } from "../../config.js";
+import { POE1_SCHEMA_VERSIONS, requiredFields } from "../../config.js";
 import { isUsable, loadDocument } from "../../../../shared/data/snapshot.js";
 
 /* ================================================================
@@ -135,9 +135,9 @@ export default function Gems({
       if (!cancelled) set(isUsable(doc) ? doc.data : "missing");
     };
     setGemData(null); setHist({}); setPrices(null); setOpen(null);
-    grab("gems.json", setGemData, { required: ["items"] });
+    grab("gems.json", setGemData, { required: requiredFields("gems") });
     grab("gems-history.json", (j) => { if (j !== "missing") setHist(j); }, { versioned: false });
-    grab("prices.json", (j) => setPrices(j === "missing" ? "missing" : (j.prices || {})), { required: ["prices"] });
+    grab("prices.json", (j) => setPrices(j === "missing" ? "missing" : (j.prices || {})), { required: requiredFields("prices") });
     return () => { cancelled = true; };
   }, [staticBase]);
 

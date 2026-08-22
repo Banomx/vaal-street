@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
-import { POE1_SCHEMA_VERSIONS } from "../../config.js";
+import { POE1_SCHEMA_VERSIONS, requiredFields } from "../../config.js";
 import { isUsable, loadDocument } from "../../../../shared/data/snapshot.js";
 import { sourceNote } from "../pricing/priceCheck.js";
 import PriceCell, { NumInput } from "../pricing/PriceCell.jsx";
@@ -121,7 +121,7 @@ export default function BossProfit({ league, staticBase, currency, divineRate, m
       /* Boss expected values are built from these prices, so a file that fails
          its schema contract is refused rather than half-read: a resolver
          missing half its names quietly turns a loss into a profit. */
-      const doc = await loadDocument(`${staticBase}/prices.json`, { supported: POE1_SCHEMA_VERSIONS, required: ["prices"] });
+      const doc = await loadDocument(`${staticBase}/prices.json`, { supported: POE1_SCHEMA_VERSIONS, required: requiredFields("prices") });
       if (cancelled) return;
       if (!isUsable(doc)) { setPriceMap("missing"); return; }
       setPriceMap(doc.data.prices || {});

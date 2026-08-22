@@ -1526,9 +1526,20 @@ async function main() {
       if (!items.length) {
         // Writing nothing would delete this league from the site and restart
         // every accumulated curve in it. Keep the last good snapshot instead.
-        const carried = await carryForward(slugify(lg.name), LEAGUE_FILES);
-        console.log(`- ${lg.name}: no usable scarab data — ${carried ? `kept the ${carried} deployed file(s)` : "and nothing deployed to keep"}`);
-        if (carried) written.push({ name: lg.name, slug: slugify(lg.name), group: lg.group || "current" });
+        const slug = slugify(lg.name);
+        const carried = await carryForward(slug, LEAGUE_FILES);
+        console.log(`- ${lg.name}: no usable scarab data — ${carried ? `kept the ${carried} deployed file(s), marked stale` : "and nothing deployed to keep"}`);
+        /* Same treatment as any other league that produced nothing this hour:
+           keep what was there, say it is stale, and publish the manifest of
+           what is actually in the directory. This branch used to advertise the
+           league as fresh and without a files map — so the browser guessed
+           filenames and presented an old snapshot as current. */
+        if (carried) {
+          written.push({
+            name: lg.name, slug, group: lg.group || "current", stale: true,
+            files: await describeLeagueFiles(path.join(OUT, slug)),
+          });
+        }
         continue;
       }
       // divineValue may be missing/zero from some sources — recompute

@@ -13,7 +13,7 @@ import { AppHeader, AppTabs, SourceStrip } from "../../shared/ui/AppShell.jsx";
 import SnapshotNotice from "../../shared/ui/SnapshotNotice.jsx";
 import {
   POE1_API_BASES, POE1_EXCHANGE_BASES, POE1_LEAGUE_FILES, POE1_SCHEMA_VERSIONS, POE1_STATIC_BASE,
-  allowsDemo, allowsLiveApi, currentDataMode,
+  allowsDemo, allowsLiveApi, currentDataMode, requiredFields,
 } from "./config.js";
 import { isUsable, leagueFileUrl, loadDocument, summarize, worstLevel } from "../../shared/data/snapshot.js";
 import { SMART_DIV_AT, fmtChaos, fmtDiv, fmtPrice, unitFor, unitForSeries } from "./features/pricing/money.js";
@@ -441,8 +441,8 @@ export default function Poe1App({ activeGame, onGameChange }) {
     if (!descriptor?.slug) throw new Error("unknown league in snapshot index");
     const url = (key) => leagueFileUrl(STATIC_BASE, descriptor, key, POE1_LEAGUE_FILES);
     const [scarabs, broad] = await Promise.all([
-      loadDocument(url("scarabs"), { ...SCHEMA, required: ["items", "generatedAt"] }),
-      loadDocument(url("prices"), { ...SCHEMA, required: ["prices"] }),
+      loadDocument(url("scarabs"), { ...SCHEMA, required: requiredFields("scarabs") }),
+      loadDocument(url("prices"), { ...SCHEMA, required: requiredFields("prices") }),
     ]);
     const report = leagueVerdict({
       documents: { "The scarab snapshot": scarabs, "The broad price list": broad },
@@ -681,7 +681,8 @@ export default function Poe1App({ activeGame, onGameChange }) {
         // Fetch data + history together, commit together: setting catData
         // first re-runs this effect and cancels the in-flight history fetch.
         const [snapshot, history] = await Promise.all([
-          loadDocument(leagueFileUrl(STATIC_BASE, descriptor, categoryKey, POE1_LEAGUE_FILES), { ...SCHEMA, required: ["items"] }),
+          loadDocument(leagueFileUrl(STATIC_BASE, descriptor, categoryKey, POE1_LEAGUE_FILES),
+            { ...SCHEMA, required: requiredFields(categoryKey) }),
           loadDocument(leagueFileUrl(STATIC_BASE, descriptor, `${categoryKey}History`, POE1_LEAGUE_FILES),
             { versioned: false }),
         ]);

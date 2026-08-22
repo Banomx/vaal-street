@@ -14,7 +14,7 @@
     "test:poe1": "node scripts/tests/poe1/test-money.mjs && node scripts/tests/poe1/test-boss.mjs && node scripts/tests/poe1/test-delve.mjs && node scripts/tests/poe1/test-gems.mjs && node scripts/tests/poe1/test-farm-strategy.mjs && node scripts/tests/poe1/test-overview-trends.mjs && node scripts/tests/poe1/test-catalogue.mjs && node scripts/tests/poe1/test-price-check.mjs && node scripts/tests/poe1/test-ggg-exchange.mjs && node scripts/tests/poe1/test-evidence.mjs && node scripts/tests/poe1/test-poewatch.mjs && node scripts/tests/poe1/test-fetch-shapes.mjs && node scripts/tests/poe1/test-history.mjs && node scripts/tests/poe1/test-recovery.mjs && node scripts/tests/poe1/test-rate.mjs",
     "test:poe2": "node scripts/tests/poe2/test-boss.mjs && node scripts/tests/poe2/test-prices.mjs && node scripts/tests/poe2/test-exchange.mjs && node scripts/tests/poe2/test-history.mjs && node scripts/tests/poe2/test-reuse.mjs",
     "audit-drops:poe1": "node scripts/poe1/tools/audit-drops.mjs",
-    "test:shared": "node scripts/tests/shared/test-publication.mjs && node scripts/tests/shared/test-snapshot.mjs",
+    "test:shared": "node scripts/tests/shared/test-publication.mjs && node scripts/tests/shared/test-snapshot.mjs && node scripts/tests/shared/test-contracts.mjs",
     "validate": "npm run validate:poe1 && npm run validate:poe2",
     "validate:poe1": "node scripts/poe1/validate.mjs",
     "validate:poe2": "node scripts/poe2/validate.mjs"

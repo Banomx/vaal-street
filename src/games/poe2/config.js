@@ -19,3 +19,13 @@ export const POE2_LEAGUE_FILES = {
   exchangeMarkets: "exchange-markets.json",
   exchangeHistory: "exchange-history.json",
 };
+
+/* What each file must contain before the app will render it. Checked against
+   the generated dataset by scripts/tests/poe2/test-contracts.mjs — a field
+   named here that the generator does not write would silently empty a tab. */
+export const POE2_FILE_CONTRACTS = {
+  prices: ["generatedAt", "prices"],
+  priceHistory: ["timestamps", "series"],
+  exchangeMarkets: ["generatedAt", "items"],
+  exchangeHistory: ["snapshots", "pairKeys"],
+};
