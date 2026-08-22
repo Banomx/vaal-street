@@ -19,7 +19,8 @@
 
 import assert from "node:assert/strict";
 import {
-  COMPETING, NEUTRAL, SLOTS, curatedCoverage, hasOutputPool, mechanicFor, mechanicPools,
+  COMPETING, ENTRY_DUAL_ROLE, NEUTRAL, SLOTS, curatedCoverage, entrySource, hasOutputPool,
+  mechanicFor, mechanicPools, resolveEntry,
 } from "../../../src/games/poe2/features/farms/mechanics.js";
 import {
   MIN_MEMBERS, buildBasketIndex, concentration, liquidity, poolFlow, poolMovers, poolWeights,
@@ -214,15 +215,48 @@ ok(spread(.2, 0) > 0 && spread(0, .2) < 0, "spread takes the sign of the side th
 /* This league prices no Expedition Tablet while Expedition clears more than any
    other mechanic. Keying the card list off tablet families alone dropped it
    from the page entirely, so pool membership has to be able to stand alone. */
-const tabletless = mechanicPools({
-  "Expedition Logbook": ggg("Expedition", { exalted: 414, volume1H: 95 }),
+const expeditionPrices = {
+  "Expedition Logbook": ggg("Expedition", { exalted: 414, volume1H: 95, tags: ["expedition_logbook", "default"] }),
   "Perfect Flux": ggg("Expedition", { exalted: 11852, volume1H: 28 }),
   "Void Flux": ggg("Expedition", { exalted: 12, volume1H: 300 }),
-});
+};
+const tabletless = mechanicPools(expeditionPrices);
 ok(tabletless.expedition.members.length === 3,
   "a mechanic's pool exists independently of whether its tablet is quoted");
 ok(poolFlow(tabletless.expedition.members) > 0,
   "flow is reported for a mechanic with no tablet baseline");
+
+/* ---- entry sources ---- */
+
+/* Expedition is entered through a logbook, not a tablet: roughly ten maps of
+   access either way, so the two quotes sit on the same axis. */
+const logbook = resolveEntry("expedition", expeditionPrices);
+ok(logbook.kind === "logbook", "Expedition declares a logbook entry");
+ok(logbook.name === "Expedition Logbook" && logbook.entry.exalted === 414,
+  "the logbook entry resolves to a real quote");
+
+/* Matched on the tag, so a rename does not silently unprice the entry side. */
+const renamed = resolveEntry("expedition", {
+  "Kalguuran Expedition Logbook": ggg("Expedition", { exalted: 500, tags: ["expedition_logbook", "default"] }),
+});
+ok(renamed.name === "Kalguuran Expedition Logbook",
+  "the entry is found by tag rather than by display name");
+
+ok(resolveEntry("breach", expeditionPrices) === null,
+  "a mechanic with no declared entry source falls back to its precursor tablet");
+
+const unquoted = resolveEntry("expedition", { "Perfect Flux": ggg("Expedition", { exalted: 11852 }) });
+ok(unquoted !== null && unquoted.name === null && unquoted.entry === null,
+  "a declared entry source that matches nothing reports an unknown entry, not a substitute price");
+ok(entrySource("expedition") !== null && entrySource("ritual") === null,
+  "entrySource only answers for mechanics that declare one");
+
+/* The logbook is deliberately left in the return basket: expeditions drop
+   logbooks, so sustain is part of what the mechanic returns. The consequence is
+   that one item sits on both sides of the card, which the UI states outright. */
+ok(tabletless.expedition.members.some((member) => member.name === "Expedition Logbook"),
+  "the entry logbook stays in the Expedition return basket, so sustain is counted");
+ok(ENTRY_DUAL_ROLE.length > 0, "the dual role has a note the card can show");
 
 /* ---- movers ---- */
 

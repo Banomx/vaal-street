@@ -65,7 +65,54 @@ export const DEFERRED = {
 export const NEUTRAL_NOTE = "Overseer and Irradiated tablets do not compete for the map's major mechanic and have no attributable output market. They raise other loot through their own affix rolls and atlas-tree choices by an amount no available data measures.";
 
 /* Rule 4. */
-export const FLOOR_NOTE = "Tablet quotes are Normal-rarity only — no source prices a rolled tablet — so every entry cost here is a floor rather than the price of a tablet someone would run.";
+export const FLOOR_NOTE = "Tablet and logbook quotes are Normal-rarity only — no source prices a rolled one — so every entry cost here is a floor rather than the price of what someone would actually run.";
+
+/* Rule 3b: a tablet covers the maps in its tower's radius, roughly ten of them,
+   and an Expedition Logbook grants roughly ten maps of Expedition. One block of
+   access either way, so the two quotes compare directly and neither is divided
+   down to a per-map figure — "around ten" is too soft to bake into an absolute
+   number the page displays.
+
+   Most mechanics are entered through their precursor tablet, which is what
+   `buildTabletFamilies` already resolves. Expedition is not: no source prices
+   an Expedition Tablet, and the logbook is the thing people actually buy. It is
+   matched on its tag rather than its name for the same reason the pools are —
+   a rename should not silently unprice the entry side.
+
+   The logbook is deliberately left in the Expedition return pool as well. An
+   expedition drops logbooks, so sustain is part of what the mechanic returns,
+   and holding it out would understate Expedition. The consequence is that one
+   item sits on both sides of that card, which damps the spread a little
+   (+11.9% against +12.1% held out on the checked-in snapshot); ENTRY_DUAL_ROLE
+   is what the card says about it rather than leaving a reader to assume the two
+   sides are independent. */
+export const ENTRY_SOURCES = {
+  expedition: {
+    kind: "logbook",
+    tag: /^expedition_logbook$/,
+    label: "Expedition Logbook",
+    unit: "roughly 10 maps of Expedition, the same block of access a tablet buys",
+  },
+};
+
+export const ENTRY_DUAL_ROLE = "Expeditions drop logbooks, so the logbook is both the entry cost here and part of the return basket. Sustain is counted rather than ignored, which damps the spread slightly.";
+
+/* Anything without a declaration is entered through its precursor tablet. */
+export function entrySource(id) {
+  return ENTRY_SOURCES[id] || null;
+}
+
+/* Resolved from the snapshot rather than from a name list, so a mechanic whose
+   entry item is simply not quoted this hour reports an unknown entry instead of
+   borrowing some other market's price. */
+export function resolveEntry(id, prices = {}) {
+  const source = ENTRY_SOURCES[id];
+  if (!source) return null;
+  for (const [name, entry] of Object.entries(prices || {})) {
+    if ((entry?.tags || []).some((tag) => source.tag.test(tag))) return { ...source, name, entry };
+  }
+  return { ...source, name: null, entry: null };
+}
 
 /* The exchange category is only trustworthy as a mechanic name when it came
    from GGG's own feed. PoE2Scout's CategoryApiId lands in the same field in

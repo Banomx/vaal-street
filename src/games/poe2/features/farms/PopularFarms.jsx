@@ -3,7 +3,8 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import { fmtPrice } from "../bosses/bossProfit.js";
 import { buildTabletFamilies, sortTabletRows, tabletFamilyTimeline } from "./tabletFarms.js";
-import { curatedCoverage, FAMILY_LABELS, FAMILY_ORDER, FLOOR_NOTE, hasOutputPool, mechanicPools, NEUTRAL_NOTE, TONES, DEFERRED } from "./mechanics.js";
+import { buildPriceTimeline } from "../pricing/priceTimeline.js";
+import { curatedCoverage, ENTRY_DUAL_ROLE, FAMILY_LABELS, FAMILY_ORDER, FLOOR_NOTE, hasOutputPool, mechanicPools, NEUTRAL_NOTE, resolveEntry, TONES, DEFERRED } from "./mechanics.js";
 import { buildBasketIndex, liquidity, poolFlow, poolMovers, WEIGHT_MODES } from "./farmIndex.js";
 
 const RANGES = [[24, "24h"], [168, "7d"], [720, "30d"], [null, "All"]];
@@ -124,9 +125,27 @@ export default function PopularFarms({ league, priceData, history, currency, cha
       const family = byFamily.get(id) || {
         id, label: FAMILY_LABELS[id] || id, baseline: null, baselineName: null, uniques: [],
       };
-      const timeline = family.baselineName
-        ? tabletFamilyTimeline(history, family, { currency: divineAdjusted ? "divine" : currency, rangeHours, divineAdjusted })
-        : { points: [], change: null, unit: "Exalted", canDivineAdjust: false };
+      /* Most mechanics are entered through a tablet; Expedition is entered
+         through a logbook. `tabletFamilyTimeline` carries the
+         `tabletBaselineVersion` compatibility logic that only makes sense for a
+         Normal precursor tablet, so a non-tablet entry reads its series
+         straight from the aligned timeline instead. */
+      const declared = resolveEntry(id, markets);
+      const entry = declared?.entry
+        ? { name: declared.name, item: declared.entry, kind: declared.kind, label: declared.label, unit: declared.unit }
+        : family.baseline
+          ? { name: family.baselineName, item: family.baseline.entry, kind: "tablet", label: family.baselineName, unit: null }
+          : { name: null, item: null, kind: declared ? declared.kind : "tablet", label: declared?.label || null, unit: null };
+      const timeline = entry.kind === "tablet"
+        ? (family.baselineName
+          ? tabletFamilyTimeline(history, family, { currency: divineAdjusted ? "divine" : currency, rangeHours, divineAdjusted })
+          : { points: [], change: null, unit: "Exalted", canDivineAdjust: false })
+        : entry.name
+          ? (() => {
+            const line = buildPriceTimeline(history, entry.name, { currency: divineAdjusted ? "divine" : currency, rangeHours });
+            return { ...line, change: divineAdjusted ? line.divineAdjustedChange : line.change };
+          })()
+          : { points: [], change: null, unit: "Exalted", canDivineAdjust: false };
       const last = timeline.points[timeline.points.length - 1];
       const pool = pools[id] || null;
       const index = pool ? buildBasketIndex(history, pool.members, { mode: weightMode, rangeHours, divineAdjusted }) : null;
@@ -140,16 +159,17 @@ export default function PopularFarms({ league, priceData, history, currency, cha
         : null;
       return {
         ...family,
+        entry,
         timeline,
         pool,
         index,
         movers,
         spread,
         flow: pool ? poolFlow(pool.members) : 0,
-        baselineValue: Number(family.baseline?.entry?.exalted || last?.exalted) || 0,
+        baselineValue: Number(entry.item?.exalted || last?.exalted) || 0,
       };
     });
-  }, [currency, divineAdjusted, families, history, pools, rangeHours, weightMode]);
+  }, [currency, divineAdjusted, families, history, markets, pools, rangeHours, weightMode]);
 
   const sorted = useMemo(() => (sortMode === "spread"
     ? [...rows].sort((left, right) => (right.spread ?? -Infinity) - (left.spread ?? -Infinity))
@@ -216,27 +236,27 @@ export default function PopularFarms({ league, priceData, history, currency, cha
     <section className="p2pf-grid">
       {sorted.map((row, index) => {
         const move = row.timeline.change;
-        const market = liquidity(row.baseline?.entry);
+        const market = liquidity(row.entry.item);
         const chart = mergeSeries(row.timeline.points, row.index?.points || []);
         const heavy = row.index?.concentration?.heavy && row.pool?.members.length;
         const topWeight = row.index ? [...row.index.weights.entries()].sort((left, right) => right[1] - left[1])[0] : null;
         return <article className="p2pf-card" key={row.id} style={{ "--tone": TONES[row.id] || "#bd6846" }}>
           <header>
-            <div><span className="p2pf-rank">{index + 1}</span><h3>{row.label}</h3><em>{row.baselineName || "No tablet quote in this league"}</em></div>
+            <div><span className="p2pf-rank">{index + 1}</span><h3>{row.label}</h3><em>{row.entry.name || `No ${row.entry.kind} quote in this league`}</em></div>
             <div className="p2pf-value">
               <strong>{row.baselineValue > 0 ? fmtPrice(row.baselineValue, currency, divineExalted, chaosExalted) : "—"}</strong>
-              <span className={tone(move)}>{move == null ? (row.baselineName ? "Building history" : "Entry cost unknown") : `entry ${pct(move)}`}</span>
+              <span className={tone(move)}>{move == null ? (row.entry.name ? "Building history" : "Entry cost unknown") : `entry ${pct(move)}`}</span>
               {row.index?.change != null && <span className={tone(row.index.change)}>{`return ${pct(row.index.change)}`}</span>}
             </div>
           </header>
           <div className="p2pf-badges">
-            {row.baseline
+            {row.entry.item
               ? <>
-                <span>Normal baseline</span>
-                <span>{sourceLabel(row.baseline.entry)}</span>
+                <span title={row.entry.unit || undefined}>{row.entry.kind === "logbook" ? "Logbook entry" : "Normal baseline"}</span>
+                <span>{sourceLabel(row.entry.item)}</span>
                 <span className={market.tone}>{market.count ? `${number(market.count, 0)} ${market.unit}` : market.label}</span>
               </>
-              : <span className="unknown">no tablet quote</span>}
+              : <span className="unknown">{`no ${row.entry.kind} quote`}</span>}
             {hasOutputPool(row.id)
               ? <>
                 <span>{row.pool.members.length} pool markets</span>
@@ -258,8 +278,9 @@ export default function PopularFarms({ league, priceData, history, currency, cha
                 <Line type="monotone" dataKey="entry" stroke="#8d7a70" strokeWidth={1.6} strokeDasharray="4 3" dot={false} connectNulls={false} animationDuration={800} />
                 <Line type="monotone" dataKey="ret" stroke={TONES[row.id] || "#bd6846"} strokeWidth={2.2} dot={false} connectNulls={false} animationDuration={800} />
               </LineChart>
-            </ResponsiveContainer> : <div className="p2pf-chart-empty">{row.baselineName ? `The graph starts when ${row.baselineName} receives stored prices.` : "No stored prices for this mechanic yet."}</div>}
+            </ResponsiveContainer> : <div className="p2pf-chart-empty">{row.entry.name ? `The graph starts when ${row.entry.name} receives stored prices.` : "No stored prices for this mechanic yet."}</div>}
           </div>
+          {row.entry.kind === "logbook" && row.entry.item && <p className="p2pf-note">{ENTRY_DUAL_ROLE}</p>}
           {hasOutputPool(row.id) && row.index?.reason && <p className="p2pf-note">No return index: {row.index.reason}.</p>}
           {!hasOutputPool(row.id) && <p className="p2pf-note">{NEUTRAL_NOTE}</p>}
           {DEFERRED[row.id] && <p className="p2pf-note">{DEFERRED[row.id]}</p>}
