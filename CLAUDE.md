@@ -10,6 +10,13 @@ instead of choosing silently. Keep durable repository rules in `AGENTS.md` and
 keep changing API details in `docs/architecture.md`, the relevant
 `endpoints.mjs` file, source-adapter comments and regression tests.
 
+## General
+
+Work pragmatically and prefer simple, maintainable solutions.
+Follow the existing structure, conventions, and style of a project before introducing new ones.
+Do not create unnecessary files, abstractions, summaries, or additional complexity.
+Improve the modules that exist rather than rewriting them wholesale.
+
 ## Start every task safely
 
 Before editing:
