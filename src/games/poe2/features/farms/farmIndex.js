@@ -171,23 +171,75 @@ export function buildBasketIndex(history, members = [], { mode = "supply", range
 }
 
 /* A mover has to be sellable to be worth reading, so a market with almost no
-   trade and almost no listings cannot headline one. */
+   trade and almost no listings cannot headline one. The gate applies to the
+   mover shortlists only — the full pool table and the top-of-pool list show
+   everything, because hiding a market is what made the card misleading. */
 const MOVER_VOLUME = 5;
 const MOVER_LISTINGS = 50;
 
-export function poolMovers(history, members = [], { rangeHours = null, divineAdjusted = false, limit = 3 } = {}) {
-  const rows = [];
-  for (const member of members) {
-    const market = liquidity(member.entry);
-    if (market.basis === "volume" ? market.count < MOVER_VOLUME : market.count < MOVER_LISTINGS) continue;
+/* How much of the index's move each market is responsible for.
+
+   Ranking movers by percentage change sounded reasonable and was actively
+   misleading: percentage systematically favours the cheapest markets, so
+   Ritual's headline was three omens worth under 2 Exalted while Omen of Chance
+   at 5,635 never appeared. A reader could only conclude the farm was junk.
+
+   For a fixed-weight index the move decomposes exactly:
+
+     contribution_i = w_i * (price_i(t) - price_i(0)) / SUM_j w_j * price_j(0)
+
+   and those contributions sum to the index change, so the list explains the
+   number the card already shows. Note this is not weight * percentage change,
+   which is not additive in a price index — that version summed to 38 points
+   against a 2.88% move. */
+export function poolContributions(history, members = [], { mode = "supply", rangeHours = null, divineAdjusted = false } = {}) {
+  const index = buildBasketIndex(history, members, { mode, rangeHours, divineAdjusted });
+  const included = new Set(index.included);
+  const surviving = members.reduce((sum, member) => sum + (included.has(member.name) ? index.weights.get(member.name) || 0 : 0), 0);
+
+  const rows = members.map((member) => {
+    const share = included.has(member.name)
+      ? (surviving > 0 ? (index.weights.get(member.name) || 0) / surviving : 1 / (included.size || 1))
+      : 0;
     const timeline = buildPriceTimeline(history, member.name, { currency: "exalted", rangeHours });
     const change = divineAdjusted ? timeline.divineAdjustedChange : timeline.change;
-    if (change == null || !Number.isFinite(change)) continue;
-    rows.push({ ...member, change, market });
-  }
-  rows.sort((left, right) => right.change - left.change);
+    const first = timeline.points[0]?.exalted ?? null;
+    const last = timeline.points[timeline.points.length - 1]?.exalted ?? null;
+    return {
+      ...member,
+      market: liquidity(member.entry),
+      weight: share,
+      change: Number.isFinite(change) ? change : null,
+      /* Weighted in the index's own units; divided by the base basket below. */
+      delta: included.has(member.name) && first != null && last != null ? share * (last - first) : null,
+      base: included.has(member.name) && first != null ? share * first : 0,
+    };
+  });
+
+  const base = rows.reduce((sum, row) => sum + row.base, 0);
+  for (const row of rows) row.contribution = base > 0 && row.delta != null ? row.delta / base : null;
+  return { index, rows };
+}
+
+/* What the mechanic is actually worth finding. Sorted by price rather than by
+   turnover on purpose: the point of this list is that a farm's best drops are
+   visible, and turnover ranking pushes the rare expensive ones back out of
+   sight. Several of them clear once an hour, so the volume travels with every
+   row and `liquidity` tiers it — the caveat is shown, the item is not hidden. */
+export function topOfPool(rows = [], limit = 5) {
+  return [...rows]
+    .filter((row) => Number(row.entry?.exalted) > 0)
+    .sort((left, right) => Number(right.entry.exalted) - Number(left.entry.exalted))
+    .slice(0, limit);
+}
+
+export function poolMovers(rows = [], limit = 5) {
+  const eligible = rows.filter((row) => {
+    if (row.contribution == null) return false;
+    return row.market.basis === "volume" ? row.market.count >= MOVER_VOLUME : row.market.count >= MOVER_LISTINGS;
+  }).sort((left, right) => right.contribution - left.contribution);
   return {
-    up: rows.filter((row) => row.change > 0).slice(0, limit),
-    down: rows.filter((row) => row.change < 0).slice(-limit).reverse(),
+    up: eligible.filter((row) => row.contribution > 0).slice(0, limit),
+    down: eligible.filter((row) => row.contribution < 0).slice(-limit).reverse(),
   };
 }

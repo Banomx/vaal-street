@@ -5,7 +5,7 @@ import { fmtPrice } from "../bosses/bossProfit.js";
 import { buildTabletFamilies, sortTabletRows, tabletFamilyTimeline } from "./tabletFarms.js";
 import { buildPriceTimeline } from "../pricing/priceTimeline.js";
 import { curatedCoverage, ENTRY_DUAL_ROLE, FAMILY_LABELS, FAMILY_ORDER, FLOOR_NOTE, hasOutputPool, mechanicPools, NEUTRAL_NOTE, resolveEntry, TONES, DEFERRED } from "./mechanics.js";
-import { buildBasketIndex, liquidity, poolFlow, poolMovers, WEIGHT_MODES } from "./farmIndex.js";
+import { liquidity, poolContributions, poolFlow, poolMovers, topOfPool, WEIGHT_MODES } from "./farmIndex.js";
 
 const RANGES = [[24, "24h"], [168, "7d"], [720, "30d"], [null, "All"]];
 
@@ -16,6 +16,16 @@ function number(value, digits = 2) {
 function pct(value, digits = 1) {
   if (value == null || !Number.isFinite(value)) return "—";
   return `${value >= 0 ? "+" : ""}${number(value * 100, digits)}%`;
+}
+
+/* Percentage points of the index move, not a percentage of the market itself. */
+function points(value) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const pp = value * 100;
+  /* Anything this small rounds to zero, and a signed "-0pp" reads as a real
+     move in the wrong direction. */
+  if (Math.abs(pp) < .005) return "0pp";
+  return `${pp > 0 ? "+" : ""}${number(pp, Math.abs(pp) >= 10 ? 1 : 2)}pp`;
 }
 
 function tone(value) {
@@ -65,12 +75,77 @@ function mergeSeries(entryPoints, indexPoints) {
   return [...byTime.values()].sort((left, right) => left.at - right.at);
 }
 
+/* Contribution first, because that is the ranking and it adds up to the index
+   move on the card. The percentage stays beside it so a big relative swing on a
+   cheap market is still legible — it just no longer decides the order. */
 function MoverRow({ row, currency, divineExalted, chaosExalted }) {
   return <li>
     <span title={row.name}>{row.name}</span>
     <b>{fmtPrice(Number(row.entry.exalted) || 0, currency, divineExalted, chaosExalted)}</b>
-    <em className={tone(row.change)}>{pct(row.change)}</em>
+    <em className={tone(row.contribution)} title="Share of the index move this market is responsible for">{points(row.contribution)}</em>
+    <i className={tone(row.change)}>{pct(row.change, 0)}</i>
   </li>;
+}
+
+function TopRow({ row, currency, divineExalted, chaosExalted }) {
+  return <li>
+    <span title={row.name}>{row.name}</span>
+    <b>{fmtPrice(Number(row.entry.exalted) || 0, currency, divineExalted, chaosExalted)}</b>
+    <em className={row.market.tone} title={row.market.label}>{row.market.count ? `${number(row.market.count, 0)} ${row.market.unit}` : row.market.label}</em>
+    <i className={tone(row.change)}>{pct(row.change, 0)}</i>
+  </li>;
+}
+
+const POOL_COLUMNS = [
+  ["name", "Market", (row) => row.name],
+  ["price", "Price", (row) => Number(row.entry.exalted) || 0],
+  ["volume", "Liquidity", (row) => row.market.count],
+  ["weight", "Weight", (row) => row.weight],
+  ["change", "Change", (row) => (row.change == null ? -Infinity : row.change)],
+  ["contribution", "Contribution", (row) => (row.contribution == null ? -Infinity : row.contribution)],
+];
+
+/* The whole pool, because the shortlists above are a summary and a summary is
+   what hid Omen of Chance in the first place. Every market the mechanic has is
+   reachable here, including the ones too thin to headline a mover list. */
+function PoolTable({ rows, currency, divineExalted, chaosExalted }) {
+  const [open, setOpen] = useState(false);
+  const [sort, setSort] = useState({ key: "price", desc: true });
+  const sorted = useMemo(() => {
+    const read = POOL_COLUMNS.find(([key]) => key === sort.key)?.[2] || (() => 0);
+    return [...rows].sort((left, right) => {
+      const a = read(left);
+      const b = read(right);
+      const order = typeof a === "string" ? a.localeCompare(b) : a - b;
+      return sort.desc ? -order : order;
+    });
+  }, [rows, sort]);
+
+  if (!rows.length) return null;
+  return <div className="p2pf-pool">
+    <button type="button" className="p2pf-pool-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      {open ? "Hide" : `Show all ${rows.length}`} pool market{rows.length === 1 ? "" : "s"}
+    </button>
+    {open && <div className="p2pf-pool-scroll">
+      <table className="p2pf-pool-table">
+        <thead><tr>{POOL_COLUMNS.map(([key, label]) => <th key={key} aria-sort={sort.key === key ? (sort.desc ? "descending" : "ascending") : "none"}>
+          <button type="button" onClick={() => setSort((value) => ({ key, desc: value.key === key ? !value.desc : true }))}>
+            {label}{sort.key === key ? (sort.desc ? " ↓" : " ↑") : ""}
+          </button>
+        </th>)}</tr></thead>
+        <tbody>
+          {sorted.map((row) => <tr key={row.name}>
+            <td title={row.name}>{row.name}</td>
+            <td>{fmtPrice(Number(row.entry.exalted) || 0, currency, divineExalted, chaosExalted)}</td>
+            <td className={row.market.tone}>{row.market.count ? `${number(row.market.count, 0)} ${row.market.unit}` : "unknown"}</td>
+            <td>{row.weight > 0 ? `${number(row.weight * 100, 1)}%` : "—"}</td>
+            <td className={tone(row.change)}>{pct(row.change, 0)}</td>
+            <td className={tone(row.contribution)}>{points(row.contribution)}</td>
+          </tr>)}
+        </tbody>
+      </table>
+    </div>}
+  </div>;
 }
 
 function ChaseTile({ name, entry, currency, divineExalted, chaosExalted }) {
@@ -79,6 +154,7 @@ function ChaseTile({ name, entry, currency, divineExalted, chaosExalted }) {
     <span title={name}>{name}</span>
     <b>{fmtPrice(Number(entry.exalted) || 0, currency, divineExalted, chaosExalted)}</b>
     <em className={market.tone}>{market.count ? `${number(market.count, 0)} ${market.unit}` : market.label}</em>
+    <i />
   </li>;
 }
 
@@ -148,8 +224,13 @@ export default function PopularFarms({ league, priceData, history, currency, cha
           : { points: [], change: null, unit: "Exalted", canDivineAdjust: false };
       const last = timeline.points[timeline.points.length - 1];
       const pool = pools[id] || null;
-      const index = pool ? buildBasketIndex(history, pool.members, { mode: weightMode, rangeHours, divineAdjusted }) : null;
-      const movers = pool ? poolMovers(history, pool.members, { rangeHours, divineAdjusted }) : null;
+      /* One walk of the pool's histories feeds the index, the movers, the
+         top-of-pool list and the full table, so opening the table costs
+         nothing extra. */
+      const contributions = pool ? poolContributions(history, pool.members, { mode: weightMode, rangeHours, divineAdjusted }) : null;
+      const index = contributions?.index || null;
+      const movers = contributions ? poolMovers(contributions.rows) : null;
+      const top = contributions ? topOfPool(contributions.rows) : [];
       /* A difference of two percentages stops meaning anything once either one
          is large — a tablet up 486% against a basket down 6% is not "-492%".
          The ratio says what was actually asked: how the return moved relative
@@ -164,6 +245,8 @@ export default function PopularFarms({ league, priceData, history, currency, cha
         pool,
         index,
         movers,
+        top,
+        rows: contributions?.rows || [],
         spread,
         flow: pool ? poolFlow(pool.members) : 0,
         baselineValue: Number(entry.item?.exalted || last?.exalted) || 0,
@@ -287,8 +370,14 @@ export default function PopularFarms({ league, priceData, history, currency, cha
           {row.index?.excluded?.length > 0 && <p className="p2pf-note">Outside the index — no stored history yet: {row.index.excluded.join(", ")}.</p>}
           {row.pool?.caveat && <p className="p2pf-note">{row.pool.caveat}</p>}
           <footer>
+            {row.top.length > 0 && <div className="p2pf-movers">
+              <span>Most valuable drops</span>
+              <ul>
+                {row.top.map((item) => <TopRow key={item.name} row={item} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}
+              </ul>
+            </div>}
             {row.movers && (row.movers.up.length > 0 || row.movers.down.length > 0) && <div className="p2pf-movers">
-              <span>Pool movers</span>
+              <span>What moved the index</span>
               <ul>
                 {row.movers.up.map((mover) => <MoverRow key={mover.name} row={mover} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}
                 {row.movers.down.map((mover) => <MoverRow key={mover.name} row={mover} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}
@@ -302,6 +391,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
             </div>}
             {row.uniques.length > 0 && <div className="p2pf-uniques"><span>Unique tablets · {row.uniques.length}</span>{row.uniques.map(({ name, entry }) => <UniqueTabletTile key={name} name={name} entry={entry} baselineValue={row.baselineValue} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}</div>}
           </footer>
+          <PoolTable rows={row.rows} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />
         </article>;
       })}
     </section>
@@ -309,5 +399,5 @@ export default function PopularFarms({ league, priceData, history, currency, cha
 }
 
 const css = `
-.p2pf-main{display:grid;gap:14px}.p2pf-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:20px 22px;border:1px solid #3e281e;border-radius:8px;background:linear-gradient(105deg,#17100d,#0d0908)}.p2pf-head>div:first-child>span,.p2pf-tool>span{color:#bd6846;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.p2pf-head h2{margin:4px 0;color:#f0ded5;font-size:27px}.p2pf-head p{max-width:700px;margin:0;color:#9c867c;font-size:13.5px}.p2pf-tools{display:flex;align-items:flex-end;gap:12px;flex-shrink:0;flex-wrap:wrap}.p2pf-tool{display:grid;gap:5px}.p2pf-ranges button,.p2pf-sort button{padding:6px 10px}.p2pf-adjust{display:flex;align-items:center;gap:7px;padding-bottom:6px;color:#c7ada1;font-size:12px;white-space:nowrap;cursor:pointer}.p2pf-adjust input{accent-color:#a44e2d}.p2pf-adjust.disabled{opacity:.45;cursor:not-allowed}.p2pf-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid #3d281f;border-radius:8px;background:#100b09}.p2pf-summary>div{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 16px;border-right:1px solid #302019}.p2pf-summary>div:last-child{border-right:0}.p2pf-summary span{grid-column:1/-1;color:#9b6b56;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase}.p2pf-summary strong{color:#ddc8be;font-size:14px}.p2pf-summary em{color:#ad9185;font-size:12px;font-style:normal;text-align:right}.p2pf-summary em.gain{color:#79bd72}.p2pf-summary em.loss{color:#d9705c}.p2pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px}.p2pf-card{min-width:0;overflow:hidden;border:1px solid #45291f;border-top:2px solid var(--tone);border-radius:8px;background:linear-gradient(150deg,rgba(255,255,255,.015),transparent 45%),#110c0a}.p2pf-card>header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:15px 16px 7px}.p2pf-card>header>div:first-child{display:grid;grid-template-columns:auto 1fr;column-gap:8px}.p2pf-rank{grid-row:1/3;align-self:center;color:#756159;font-size:12px}.p2pf-card h3{margin:0;color:#ead7ce;font-size:19px}.p2pf-card header em{color:#8e776d;font-size:11.5px;font-style:normal}.p2pf-value{display:grid;text-align:right}.p2pf-value strong{color:#f0d8cb;font-size:17px}.p2pf-value span{font-size:11px}.gain{color:#79bd72}.loss{color:#d9705c}.p2pf-badges{display:flex;flex-wrap:wrap;gap:5px;padding:0 16px 5px}.p2pf-badges span{padding:3px 6px;border:1px solid #3c2921;border-radius:999px;background:#17100d;color:#987f74;font-size:9.5px}.p2pf-badges .thin{border-color:#7b382d;color:#e18272}.p2pf-badges .limited{border-color:#765428;color:#d2a563}.p2pf-badges .active,.p2pf-badges .deep{border-color:#355c3a;color:#7fbd82}.p2pf-badges .gain{border-color:#355c3a;color:#7fbd82}.p2pf-badges .loss{border-color:#7b382d;color:#e18272}.p2pf-chart{height:140px;margin:0 6px}.p2pf-chart-empty{display:grid;height:140px;padding:12px;place-items:center;text-align:center;color:#75645c;font-size:12px}.p2pf-note{margin:0;padding:6px 16px 0;color:#7d6b62;font-size:10.5px;line-height:1.45}.p2pf-card footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;padding:11px 16px 14px;margin-top:9px;border-top:1px solid #302019;color:#806d64;font-size:10.5px}.p2pf-movers{display:grid;align-content:start;gap:5px;min-width:0}.p2pf-movers>span,.p2pf-uniques>span{color:#9b6b56;font-size:9px;letter-spacing:.11em;text-transform:uppercase}.p2pf-movers ul{display:grid;gap:3px;margin:0;padding:0;list-style:none}.p2pf-movers li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:baseline}.p2pf-movers li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#bda49a;font-size:10.5px}.p2pf-movers li b{color:#d8bfb3;font-size:10.5px;font-weight:600}.p2pf-movers li em{font-style:normal;font-size:10px;text-align:right}.p2pf-movers li em.thin{color:#e18272}.p2pf-movers li em.limited{color:#d2a563}.p2pf-movers li em.active{color:#7fbd82}.p2pf-movers li em.unknown{color:#75645c}.p2pf-uniques{display:grid;gap:7px;min-width:0}.p2pf-unique-tile{padding:8px;border:1px solid #35251e;border-radius:6px;background:linear-gradient(120deg,#17100d,#100b09)}.p2pf-unique-main{display:grid;gap:4px;min-width:0}.p2pf-unique-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.p2pf-unique-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dbc5ba;font-size:11.5px}.p2pf-unique-title b{flex-shrink:0;color:#efc5b3;font-size:11.5px;font-weight:600}.p2pf-unique-meta,.p2pf-unique-delta{display:flex;justify-content:space-between;gap:8px}.p2pf-unique-meta span{color:#75645c;font-size:9px}.p2pf-unique-meta .thin{color:#e18272}.p2pf-unique-meta .limited{color:#d2a563}.p2pf-unique-meta .active,.p2pf-unique-meta .deep{color:#7fbd82}.p2pf-relative{position:relative;height:5px;overflow:hidden;border-radius:999px;background:#2a1c16}.p2pf-relative i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--tone),#e08a62)}.p2pf-relative b{position:absolute;top:-2px;bottom:-2px;left:25%;width:1px;background:#f0d7ca;opacity:.7}.p2pf-unique-delta span,.p2pf-unique-delta em{font-size:9.5px}.p2pf-unique-delta span{color:#9d8175}.p2pf-unique-delta em{font-style:normal;text-align:right}.p2pf-empty{padding:40px;border:1px solid #3e281e;border-radius:8px;text-align:center;color:#806d64}@media(max-width:1100px){.p2pf-head{align-items:flex-start;flex-direction:column}.p2pf-tools{width:100%;flex-wrap:wrap}}@media(max-width:720px){.p2pf-summary{grid-template-columns:1fr}.p2pf-summary>div{border-right:0;border-bottom:1px solid #302019}.p2pf-summary>div:last-child{border-bottom:0}}@media(max-width:520px){.p2pf-grid{grid-template-columns:1fr}.p2pf-tools{align-items:flex-start;flex-direction:column}}
+.p2pf-main{display:grid;gap:14px}.p2pf-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:20px 22px;border:1px solid #3e281e;border-radius:8px;background:linear-gradient(105deg,#17100d,#0d0908)}.p2pf-head>div:first-child>span,.p2pf-tool>span{color:#bd6846;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.p2pf-head h2{margin:4px 0;color:#f0ded5;font-size:27px}.p2pf-head p{max-width:700px;margin:0;color:#9c867c;font-size:13.5px}.p2pf-tools{display:flex;align-items:flex-end;gap:12px;flex-shrink:0;flex-wrap:wrap}.p2pf-tool{display:grid;gap:5px}.p2pf-ranges button,.p2pf-sort button{padding:6px 10px}.p2pf-adjust{display:flex;align-items:center;gap:7px;padding-bottom:6px;color:#c7ada1;font-size:12px;white-space:nowrap;cursor:pointer}.p2pf-adjust input{accent-color:#a44e2d}.p2pf-adjust.disabled{opacity:.45;cursor:not-allowed}.p2pf-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid #3d281f;border-radius:8px;background:#100b09}.p2pf-summary>div{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 16px;border-right:1px solid #302019}.p2pf-summary>div:last-child{border-right:0}.p2pf-summary span{grid-column:1/-1;color:#9b6b56;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase}.p2pf-summary strong{color:#ddc8be;font-size:14px}.p2pf-summary em{color:#ad9185;font-size:12px;font-style:normal;text-align:right}.p2pf-summary em.gain{color:#79bd72}.p2pf-summary em.loss{color:#d9705c}.p2pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px}.p2pf-card{min-width:0;overflow:hidden;border:1px solid #45291f;border-top:2px solid var(--tone);border-radius:8px;background:linear-gradient(150deg,rgba(255,255,255,.015),transparent 45%),#110c0a}.p2pf-card>header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:15px 16px 7px}.p2pf-card>header>div:first-child{display:grid;grid-template-columns:auto 1fr;column-gap:8px}.p2pf-rank{grid-row:1/3;align-self:center;color:#756159;font-size:12px}.p2pf-card h3{margin:0;color:#ead7ce;font-size:19px}.p2pf-card header em{color:#8e776d;font-size:11.5px;font-style:normal}.p2pf-value{display:grid;text-align:right}.p2pf-value strong{color:#f0d8cb;font-size:17px}.p2pf-value span{font-size:11px}.gain{color:#79bd72}.loss{color:#d9705c}.p2pf-badges{display:flex;flex-wrap:wrap;gap:5px;padding:0 16px 5px}.p2pf-badges span{padding:3px 6px;border:1px solid #3c2921;border-radius:999px;background:#17100d;color:#987f74;font-size:9.5px}.p2pf-badges .thin{border-color:#7b382d;color:#e18272}.p2pf-badges .limited{border-color:#765428;color:#d2a563}.p2pf-badges .active,.p2pf-badges .deep{border-color:#355c3a;color:#7fbd82}.p2pf-badges .gain{border-color:#355c3a;color:#7fbd82}.p2pf-badges .loss{border-color:#7b382d;color:#e18272}.p2pf-chart{height:140px;margin:0 6px}.p2pf-chart-empty{display:grid;height:140px;padding:12px;place-items:center;text-align:center;color:#75645c;font-size:12px}.p2pf-note{margin:0;padding:6px 16px 0;color:#7d6b62;font-size:10.5px;line-height:1.45}.p2pf-card footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;padding:11px 16px 14px;margin-top:9px;border-top:1px solid #302019;color:#806d64;font-size:10.5px}.p2pf-movers{display:grid;align-content:start;gap:5px;min-width:0}.p2pf-movers>span,.p2pf-uniques>span{color:#9b6b56;font-size:9px;letter-spacing:.11em;text-transform:uppercase}.p2pf-movers ul{display:grid;gap:3px;margin:0;padding:0;list-style:none}.p2pf-movers li{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px;align-items:baseline}.p2pf-movers li i{font-style:normal;font-size:9.5px;text-align:right;min-width:34px;color:#75645c}.p2pf-movers li i.gain{color:#79bd72}.p2pf-movers li i.loss{color:#d9705c}.p2pf-movers li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#bda49a;font-size:10.5px}.p2pf-movers li b{color:#d8bfb3;font-size:10.5px;font-weight:600}.p2pf-movers li em{font-style:normal;font-size:10px;text-align:right}.p2pf-movers li em.thin{color:#e18272}.p2pf-movers li em.limited{color:#d2a563}.p2pf-movers li em.active{color:#7fbd82}.p2pf-movers li em.unknown{color:#75645c}.p2pf-uniques{display:grid;gap:7px;min-width:0}.p2pf-unique-tile{padding:8px;border:1px solid #35251e;border-radius:6px;background:linear-gradient(120deg,#17100d,#100b09)}.p2pf-unique-main{display:grid;gap:4px;min-width:0}.p2pf-unique-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.p2pf-unique-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dbc5ba;font-size:11.5px}.p2pf-unique-title b{flex-shrink:0;color:#efc5b3;font-size:11.5px;font-weight:600}.p2pf-unique-meta,.p2pf-unique-delta{display:flex;justify-content:space-between;gap:8px}.p2pf-unique-meta span{color:#75645c;font-size:9px}.p2pf-unique-meta .thin{color:#e18272}.p2pf-unique-meta .limited{color:#d2a563}.p2pf-unique-meta .active,.p2pf-unique-meta .deep{color:#7fbd82}.p2pf-relative{position:relative;height:5px;overflow:hidden;border-radius:999px;background:#2a1c16}.p2pf-relative i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--tone),#e08a62)}.p2pf-relative b{position:absolute;top:-2px;bottom:-2px;left:25%;width:1px;background:#f0d7ca;opacity:.7}.p2pf-unique-delta span,.p2pf-unique-delta em{font-size:9.5px}.p2pf-unique-delta span{color:#9d8175}.p2pf-unique-delta em{font-style:normal;text-align:right}.p2pf-pool{padding:0 16px 14px}.p2pf-pool-toggle{width:100%;padding:6px 9px;border:1px solid #3c2921;border-radius:5px;background:#17100d;color:#b09287;font:inherit;font-size:10.5px;cursor:pointer}.p2pf-pool-toggle:hover{border-color:#7b3e24;color:#e4b49e}.p2pf-pool-scroll{max-height:320px;overflow:auto;margin-top:8px;border:1px solid #302019;border-radius:6px}.p2pf-pool-table{width:100%;border-collapse:collapse;font-size:10.5px}.p2pf-pool-table th{position:sticky;top:0;z-index:1;padding:0;background:#17100d;text-align:right}.p2pf-pool-table th:first-child{text-align:left}.p2pf-pool-table th button{width:100%;padding:6px 8px;border:0;border-bottom:1px solid #3c2921;background:transparent;color:#9b6b56;font:inherit;font-size:9px;letter-spacing:.09em;text-transform:uppercase;text-align:inherit;cursor:pointer}.p2pf-pool-table th button:hover{color:#e4b49e}.p2pf-pool-table td{padding:4px 8px;border-bottom:1px solid #241812;color:#bda49a;text-align:right;white-space:nowrap}.p2pf-pool-table td:first-child{max-width:190px;overflow:hidden;text-overflow:ellipsis;text-align:left}.p2pf-pool-table tbody tr:last-child td{border-bottom:0}.p2pf-pool-table tbody tr:hover td{background:#17100d}.p2pf-pool-table .thin{color:#e18272}.p2pf-pool-table .limited{color:#d2a563}.p2pf-pool-table .active{color:#7fbd82}.p2pf-pool-table .gain{color:#79bd72}.p2pf-pool-table .loss{color:#d9705c}.p2pf-empty{padding:40px;border:1px solid #3e281e;border-radius:8px;text-align:center;color:#806d64}@media(max-width:1100px){.p2pf-head{align-items:flex-start;flex-direction:column}.p2pf-tools{width:100%;flex-wrap:wrap}}@media(max-width:720px){.p2pf-summary{grid-template-columns:1fr}.p2pf-summary>div{border-right:0;border-bottom:1px solid #302019}.p2pf-summary>div:last-child{border-bottom:0}}@media(max-width:520px){.p2pf-grid{grid-template-columns:1fr}.p2pf-tools{align-items:flex-start;flex-direction:column}}
 `;

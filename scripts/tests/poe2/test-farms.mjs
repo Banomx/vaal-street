@@ -23,7 +23,8 @@ import {
   mechanicFor, mechanicPools, resolveEntry,
 } from "../../../src/games/poe2/features/farms/mechanics.js";
 import {
-  MIN_MEMBERS, buildBasketIndex, concentration, liquidity, poolFlow, poolMovers, poolWeights,
+  MIN_MEMBERS, buildBasketIndex, concentration, liquidity, poolContributions, poolFlow,
+  poolMovers, poolWeights, topOfPool,
 } from "../../../src/games/poe2/features/farms/farmIndex.js";
 
 let fails = 0;
@@ -258,7 +259,7 @@ ok(tabletless.expedition.members.some((member) => member.name === "Expedition Lo
   "the entry logbook stays in the Expedition return basket, so sustain is counted");
 ok(ENTRY_DUAL_ROLE.length > 0, "the dual role has a note the card can show");
 
-/* ---- movers ---- */
+/* ---- contributions, movers and top of pool ---- */
 
 const moverHistory = {
   timestamps,
@@ -270,11 +271,42 @@ const moverMembers = [
   { name: "Sinking", entry: { exalted: 5, volume1H: 500 } },
   { name: "Illiquid", entry: { exalted: 900, volume1H: 1 } },
 ];
-const movers = poolMovers(moverHistory, moverMembers);
-ok(movers.up.map((row) => row.name).join() === "Deep", "risers are ranked by change");
+const { index: moverIndex, rows: moverRows } = poolContributions(moverHistory, moverMembers);
+
+/* The property that makes contribution ranking meaningful: every market's share
+   of the move adds up to the move. Without it the numbers would look plausible
+   and mean nothing — the first attempt used weight x percentage change, which
+   summed to 38 points against a 2.88% index move. */
+near(moverRows.reduce((sum, row) => sum + (row.contribution || 0), 0), moverIndex.change,
+  "index contributions sum to the index change", 1e-12);
+
+/* Ranking by percentage would put the cheap market on top; by contribution the
+   market that actually carried the index does. This is the Ritual bug: three
+   sub-2-Exalted omens headlined while Omen of Chance at 5,635 never appeared. */
+const byPercent = [...moverRows].sort((a, b) => b.change - a.change)[0];
+const byContribution = [...moverRows].sort((a, b) => b.contribution - a.contribution)[0];
+ok(byPercent.name === "Illiquid", "percentage ranking favours the cheap, thin market");
+ok(byContribution.name === "Deep", "contribution ranking favours the market that moved the index");
+ok(byPercent.name !== byContribution.name,
+  "the two rankings genuinely differ, so the switch is not cosmetic");
+
+const movers = poolMovers(moverRows);
+ok(movers.up.map((row) => row.name).join() === "Deep", "risers are ranked by contribution");
 ok(movers.down.map((row) => row.name).join() === "Sinking", "fallers are reported separately");
 ok(![...movers.up, ...movers.down].some((row) => row.name === "Illiquid"),
   "a market nobody trades cannot headline a mover list");
+
+/* The shortlist gate is the reason a thin market must still be reachable. */
+const top = topOfPool(moverRows);
+ok(top[0].name === "Illiquid",
+  "top of pool is a price sort, so the expensive thin market is visible");
+ok(top[0].market.count === 1 && top[0].market.basis === "volume",
+  "its thinness travels with it rather than being hidden");
+ok(topOfPool(moverRows, 2).length === 2, "top of pool respects its limit");
+
+/* Nothing is dropped: the table renders one row per member, gate or no gate. */
+ok(moverRows.length === moverMembers.length,
+  "every pool member has a row, so the full table hides nothing");
 
 console.log(fails ? `${fails} failing assertion(s)` : "test-farms: all assertions passed");
 process.exit(fails ? 1 : 0);

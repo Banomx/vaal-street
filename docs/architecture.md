@@ -375,6 +375,43 @@ no tablet quote still renders, with the entry cost stated as unknown — Runes o
 Aldur prices no Expedition Tablet while Expedition clears more than any other
 mechanic, and keying the list off tablet families alone hid it completely.
 
+### Reading a pool: three views, one traversal
+
+Movers were originally the top three risers and fallers by percentage change.
+That was actively misleading. Percentage systematically favours the cheapest
+markets, so Ritual headlined three omens worth under 2 Exalted while Omen of
+Chance at 5,635 never appeared anywhere on the card — a reader could only
+conclude the farm dropped junk. Breach did the same, listing sub-3-Exalted
+catalysts while Refined Sibilant Catalyst sat at 2,020.
+
+`poolContributions` walks each pool once and the card renders three views of
+the result, so opening the table costs no extra history reading.
+
+**Most valuable drops** is a plain price sort. The point of the list is that a
+mechanic's best output is visible, and ranking it by turnover would push the
+rare expensive items back out of sight. Several of them clear once an hour, so
+the cleared volume travels with every row and `liquidity` tiers it: the caveat
+is shown rather than the item hidden, since hiding it caused the original bug.
+
+**What moved the index** ranks by each market's contribution to the index move.
+For a fixed-weight index that decomposes exactly:
+
+```
+contribution_i = w_i * (price_i(t) - price_i(0)) / SUM_j w_j * price_j(0)
+```
+
+and the contributions sum to the index change, so the list explains the number
+already on the card. This is deliberately *not* weight times percentage change,
+which is not additive in a price index — that version summed to 38 points
+against a 2.88% move. The percentage stays beside the contribution, so a market
+up 241% that moved the index by nothing reads as exactly that.
+
+Only the mover shortlists apply a liquidity gate. **The full pool table** is
+behind a toggle and lists every market with price, cleared volume, basket
+weight, change and contribution, sortable by any column. Nothing in a pool is
+unreachable, which is the actual fix — the shortlists are a summary, and a
+summary is what hid Omen of Chance.
+
 ### Tower rules, and what is deliberately not quantified
 
 The exposure model rests on game rules rather than on measurements: a tower node
