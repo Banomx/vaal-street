@@ -1,5 +1,5 @@
 /* ================================================================
-   POE.WATCH — the primary price source
+   POE.WATCH — listing/trade evidence and gap-fill source
 
    poe.watch (https://docs.poe.watch) publishes one flat array per item
    category, and each row already carries what this project had to work for
@@ -13,8 +13,9 @@
    its own item at roughly nine times the identified price. That is exactly
    what Catarina drops, and it is why her pool read as worthless.
 
-   poe.ninja stays wired up behind this as a fallback: poe.watch can be down,
-   and a thin category there is better filled than left empty.
+   poe.ninja remains the higher-trust listing source. poe.watch fills markets it
+   does not carry and can win a nearby disagreement when its fresher/deeper
+   evidence outweighs that trust prior.
 
    ---- on the price unit ----
    `mean`, `min` and `max` are chaos. This is worth stating because the API
@@ -53,7 +54,7 @@
    share a mean.
    ================================================================ */
 
-import { JSON_HEADERS, roundPrice } from "../../shared/dataset.mjs";
+import { JSON_HEADERS, roundPrice, sourceRecord } from "../../shared/dataset.mjs";
 
 const BASE = process.env.WATCH_BASE || "https://api.poe.watch";
 /* The beta pricing panel is served by the site rather than the documented API,
@@ -394,11 +395,28 @@ export async function fetchWatchLeague(leagueName, { delayMs = 150, categories =
   const rows = [];
   const counts = {};
   const failed = [];
+  const sources = [];
   let source = "compact";
+
+  const traced = async (pathAndQuery, { id, endpointFamily, requestedType } = {}) => {
+    const requestedAt = new Date().toISOString();
+    const payload = await tryWatch(pathAndQuery);
+    const rawRows = Array.isArray(payload) ? payload.length
+      : Array.isArray(payload?.items) ? payload.items.length : undefined;
+    sources.push(sourceRecord({
+      id, endpointFamily, requestedType, url: `${BASE}${pathAndQuery}`, requestedAt,
+      observedAt: requestedAt,
+      ok: payload != null, rawRows,
+      ...(!payload ? { warnings: ["request failed or returned no JSON"] } : {}),
+    }));
+    return payload;
+  };
 
   // One request for everything. /compact returns the same ItemData rows the
   // per-category endpoint does, already tagged with their category.
-  const compact = await tryWatch(`/compact?league=${encodeURIComponent(leagueName)}`);
+  const compact = await traced(`/compact?league=${encodeURIComponent(leagueName)}`, {
+    id: "poewatch.compact", endpointFamily: "compact",
+  });
   if (Array.isArray(compact?.items)) {
     collect(compact.items, rows, counts);
   } else {
@@ -406,22 +424,31 @@ export async function fetchWatchLeague(leagueName, { delayMs = 150, categories =
     // between a stale snapshot and no snapshot.
     source = "per-category";
     for (const cat of categories) {
-      const j = await tryWatch(`/get?category=${encodeURIComponent(cat)}&league=${encodeURIComponent(leagueName)}`);
+      const j = await traced(`/get?category=${encodeURIComponent(cat)}&league=${encodeURIComponent(leagueName)}`, {
+        id: "poewatch.category", endpointFamily: "category", requestedType: cat,
+      });
       if (!Array.isArray(j)) { failed.push(cat); await sleep(delayMs); continue; }
       collect(j.map((r) => ({ ...r, category: cat })), rows, counts);
       await sleep(delayMs);
     }
   }
-  if (!rows.length) return null;
+  if (!rows.length) {
+    return {
+      rows: [], exchange: [], counts, failed, source, sources, prices: {},
+      rate: 0, rateSource: "none", direct: 0,
+    };
+  }
 
-  const exRaw = await tryWatch(`/exchange/ratios?league=${encodeURIComponent(leagueName)}&game=poe1`);
+  const exRaw = await traced(`/exchange/ratios?league=${encodeURIComponent(leagueName)}&game=poe1`, {
+    id: "poewatch.exchange", endpointFamily: "exchange",
+  });
   const exchange = Array.isArray(exRaw?.items)
     ? exRaw.items.map(normaliseExchange).filter(Boolean)
     : [];
 
   const rate = watchDivineRate(rows, exchange);
   return {
-    rows, exchange, counts, failed, source,
+    rows, exchange, counts, failed, source, sources,
     prices: watchPriceMap(rows, exchange),
     ...rate,
   };

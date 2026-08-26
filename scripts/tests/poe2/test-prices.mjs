@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describePriceSources, enrichPriceMetadata, exchangeToPrices, itemStateKey, mergePrices, normalizeItemClass, scoutToPrices, selectTrackedLeagues, slugifyLeague, stashToPrices } from "../../poe2/prices.mjs";
+import { describePriceSources, enrichPriceMetadata, exchangeToPrices, itemStateKey, mergePrices, normalizeItemClass, poe2QuoteScore, scoutToPrices, selectTrackedLeagues, slugifyLeague, stashToPrices } from "../../poe2/prices.mjs";
 import { buildGggExchangeSnapshot, buildGggPrices, DIVINE_ID, EXALTED_ID, ratioBounds } from "../../poe2/ggg-exchange.mjs";
 import { groupMarkets, marketCategory, marketSubcategory } from "../../../src/games/poe2/features/pricing/marketCategories.js";
 import { buildTabletFamilies, sortTabletRows, tabletFamily, tabletFamilyTimeline } from "../../../src/games/poe2/features/farms/tabletFarms.js";
@@ -148,6 +148,17 @@ assert.equal(scout.Temporalis.exalted, 1100, "PoE2Scout keeps the conservative f
 assert.equal(scout["Origin Spark"].source, "PoE2Scout", "PoE2Scout falls back to Text for items without a Name");
 assert.equal(mergePrices({ Temporalis: stash.Temporalis }, scout).Temporalis.exalted, 850, "PoE2Scout cannot replace poe.ninja stash prices");
 assert.equal(mergePrices({ "Origin Spark": scout["Origin Spark"] }, { "Origin Spark": { exalted: 70, source: "poe.ninja exchange" } })["Origin Spark"].exalted, 70, "poe.ninja exchange replaces PoE2Scout gap-fill");
+
+const now = Date.now();
+const staleOfficial = { exalted: 50, source: "GGG completed trades", marketHour: new Date(now - 72 * 3600e3).toISOString(), volumeExalted: 1 };
+const liquidNinja = { exalted: 48, source: "poe.ninja exchange", observedAt: new Date(now - 3600e3).toISOString(), volumeExalted: 100000 };
+assert.ok(poe2QuoteScore(liquidNinja, now) > poe2QuoteScore(staleOfficial, now),
+  "fresh liquid evidence can beat a stale higher-trust source");
+assert.equal(mergePrices({ Test: staleOfficial }, { Test: liquidNinja }).Test.exalted, 48,
+  "the merge applies the evidence-aware score rather than fixed precedence");
+assert.equal(mergePrices({ Stateful: { exalted: 10, source: "poe.ninja stash", variant: "Normal" } },
+  { Stateful: { exalted: 20, source: "GGG completed trades", variant: "Corrupted", corrupted: true } }).Stateful.exalted, 10,
+  "incompatible item states are never compared as interchangeable quotes");
 assert.deepEqual(selectTrackedLeagues([{ name: "Runes of Aldur" }, { name: "Hardcore" }, { name: "Standard" }]), ["Runes of Aldur", "Standard"]);
 assert.equal(slugifyLeague("Runes of Aldur"), "runes-of-aldur");
 

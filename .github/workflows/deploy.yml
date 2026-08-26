@@ -8,11 +8,6 @@ on:
     # gives the CDN time to expose the previous hour.
     - cron: "10 * * * *"
   workflow_dispatch:          # manual "Run workflow" button
-    inputs:
-      reset_history:
-        description: "Wipe accumulated price history and start clean"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -39,7 +34,8 @@ jobs:
           # push = code deploy only (reuse deployed data, no new snapshot);
           # schedule + manual dispatch = fetch fresh data
           DATA_MODE: ${{ github.event_name == 'push' && 'reuse' || 'fetch' }}
-          RESET_HISTORY: ${{ inputs.reset_history }}
+      - run: npm test
+      - run: npm run validate
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

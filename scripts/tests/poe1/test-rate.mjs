@@ -104,7 +104,6 @@ globalThis.fetch = async (url) => {
 
 process.env.DATA_OUT = OUT_DIR;
 process.env.PAGES_BASE_URL = PAGES;
-delete process.env.RESET_HISTORY;
 await import("../../poe1/fetch-data.mjs");
 
 await (async () => {

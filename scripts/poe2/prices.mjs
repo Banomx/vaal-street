@@ -323,14 +323,46 @@ const QUOTE_FIELDS = new Set([
   "low", "high", "lowStock", "highStock", "thin", "observedAt",
 ]);
 
+const sourceTrust = (entry) => entry?.source === "GGG completed trades" ? 40
+    : entry?.source === "poe.ninja exchange" ? 30
+      : entry?.source === "poe.ninja stash" ? 20
+        : entry?.source === "PoE2Scout" ? 10 : 0;
+
+export function poe2QuoteScore(entry, now = Date.now()) {
+  if (!entry || !(Number(entry.exalted) > 0)) return -Infinity;
+  let score = sourceTrust(entry);
+  const volume = Number(entry.volumeExalted ?? entry.volume1H);
+  const listings = Number(entry.listingCount);
+  if (volume > 0) score += Math.min(24, Math.log10(1 + volume) * 5);
+  if (listings > 0) score += Math.min(12, Math.log10(1 + listings) * 4);
+  const low = Number(entry.low);
+  const high = Number(entry.high);
+  if (low > 0 && high >= low) {
+    const spread = high / low;
+    if (spread > 10) score -= 30;
+    else if (spread > 3) score -= 15;
+  }
+  if (entry.thin) score -= 10;
+  const observed = Date.parse(entry.observedAt || entry.marketHour || "");
+  if (Number.isFinite(observed)) {
+    const ageHours = Math.max(0, (now - observed) / 3600e3);
+    if (ageHours > 48) score -= 50;
+    else if (ageHours > 24) score -= 25;
+    else if (ageHours > 6) score -= 8;
+  }
+  return score;
+}
+
 export function mergePrices(target, incoming) {
-  const rank = (entry) => entry?.source === "GGG completed trades" ? 4
-    : entry?.source === "poe.ninja exchange" ? 3
-      : entry?.source === "poe.ninja stash" ? 2
-        : entry?.source === "PoE2Scout" ? 1 : 0;
   for (const [name, value] of Object.entries(incoming || {})) {
     const existing = target[name];
-    if (existing && rank(value) < rank(existing)) continue;
+    /* A corrupted/variant quote cannot replace a different item state merely
+       because its feed is trusted. When both sources state a concrete state,
+       they must agree before their price evidence is comparable. */
+    const existingState = itemStateKey(existing);
+    const incomingState = itemStateKey(value);
+    if (existing && existingState && incomingState && existingState !== incomingState) continue;
+    if (existing && poe2QuoteScore(value) < poe2QuoteScore(existing)) continue;
     const merged = { ...value };
     for (const [key, previous] of Object.entries(existing || {})) {
       if (QUOTE_FIELDS.has(key)) continue;

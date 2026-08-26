@@ -121,23 +121,38 @@ export async function createStage(finalDir, { seed = true } = {}) {
   };
 }
 
-/* A run that crashed before promoting leaves its staging directory behind.
-   Clearing them at the start of the next run keeps that from accumulating,
-   and the name pattern means only this script's own leftovers are touched. */
+/* A run that crashed before promoting leaves its staging directory behind. A
+   crash in the narrow window after the live tree moved aside can also leave a
+   `.previous-*` directory with no final directory. In that case the previous
+   tree is the recovery copy, not garbage: restore the newest one before
+   removing other leftovers. */
 export async function clearAbandonedStages(finalDir) {
   const parent = path.dirname(finalDir);
   const base = path.basename(finalDir);
   let entries;
   try { entries = await readdir(parent, { withFileTypes: true }); }
-  catch { return 0; }
+  catch { return { removed: 0, recovered: false }; }
+  const candidates = entries.filter((entry) => entry.isDirectory());
+  const previous = candidates.filter((entry) => entry.name.startsWith(`${base}${PREVIOUS_SUFFIX}`));
+  let recovered = false;
+  if (!await exists(finalDir) && previous.length) {
+    const dated = await Promise.all(previous.map(async (entry) => ({
+      entry,
+      modified: (await stat(path.join(parent, entry.name))).mtimeMs,
+    })));
+    dated.sort((a, b) => b.modified - a.modified);
+    await retryRename(path.join(parent, dated[0].entry.name), finalDir);
+    recovered = true;
+  }
   let removed = 0;
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+  for (const entry of candidates) {
     if (!entry.name.startsWith(`${base}${STAGE_SUFFIX}`) && !entry.name.startsWith(`${base}${PREVIOUS_SUFFIX}`)) continue;
-    await rm(path.join(parent, entry.name), { recursive: true, force: true });
+    const target = path.join(parent, entry.name);
+    if (!await exists(target)) continue; // the selected previous tree was restored
+    await rm(target, { recursive: true, force: true });
     removed += 1;
   }
-  return removed;
+  return { removed, recovered };
 }
 
 /* ---------------- source provenance ----------------
@@ -190,6 +205,93 @@ export function sourceRecord({
   }
   for (const [key, value] of Object.entries(record)) if (value === null) delete record[key];
   return record;
+}
+
+/* Publication-time checks for the diagnostic envelopes emitted by both games.
+   Adapters remain game-specific; these checks only enforce the common claims
+   every source record makes. */
+export function checkSourceRecords(report, label, records, { requiredPrefixes = [] } = {}) {
+  if (!Array.isArray(records) || !records.length) {
+    report.fail("sources-missing", `${label} contains no source provenance`);
+    return;
+  }
+  const malformed = [];
+  const failed = [];
+  const rejectionHeavy = [];
+  for (const record of records) {
+    if (!record?.id || !record?.endpointFamily || !record?.url
+      || !isIsoTimestamp(record?.requestedAt) || !isNotFuture(record.requestedAt)
+      || typeof record?.ok !== "boolean") {
+      malformed.push(record?.id || "unnamed");
+      continue;
+    }
+    if (!record.ok) failed.push(record.id);
+    const raw = Number(record.rawRows);
+    const rejected = Number(record.rejected);
+    const accepted = Number(record.accepted);
+    if (Number.isFinite(raw) && raw < 0 || Number.isFinite(rejected) && rejected < 0 || Number.isFinite(accepted) && accepted < 0) {
+      malformed.push(record.id);
+    }
+    if (Number.isFinite(raw) && Number.isFinite(rejected) && rejected > raw) malformed.push(record.id);
+    if (raw >= 20 && rejected / raw > 0.5) rejectionHeavy.push(`${record.id} ${rejected}/${raw}`);
+  }
+  if (malformed.length) report.fail("sources-shape", `${label} has ${malformed.length} malformed source record(s)`, malformed.slice(0, 12));
+  if (failed.length) report.warn("source-request-failed", `${label} records ${failed.length} failed request(s)`, failed.slice(0, 12));
+  if (rejectionHeavy.length) report.warn("source-rejections", `${label} rejected more than half the rows from ${rejectionHeavy.length} request(s)`, rejectionHeavy.slice(0, 12));
+  for (const prefix of requiredPrefixes) {
+    if (!records.some((record) => record?.ok && String(record.id).startsWith(prefix))) {
+      report.fail("selected-source-untracked", `${label} selected ${prefix} data but has no successful matching provenance record`);
+    }
+  }
+}
+
+export function checkMetadataCoverage(report, label, coverage, { classifications = [], previous = null } = {}) {
+  const rows = Array.isArray(coverage) ? coverage : coverage ? [coverage] : [];
+  const previousRows = Array.isArray(previous) ? previous : previous ? [previous] : [];
+  const previousByFamily = new Map(previousRows.map((row) => [row.family || "prices", row]));
+  if (!rows.length) {
+    report.warn("metadata-coverage-missing", `${label} reports no metadata coverage`);
+    return;
+  }
+  for (const row of rows) {
+    const family = row.family || "prices";
+    const total = Number(row.total) || 0;
+    const accounted = [row.byPath, row.byName, row.ambiguous, row.unmatched]
+      .reduce((sum, value) => sum + (Number(value) || 0), 0);
+    if (total < 0 || accounted !== total) {
+      report.fail("metadata-coverage-shape", `${label}/${family}: coverage accounts for ${accounted} of ${total} entries`);
+      continue;
+    }
+    if (total >= 10) {
+      const unresolved = ((Number(row.ambiguous) || 0) + (Number(row.unmatched) || 0)) / total;
+      const nameOnly = ((Number(row.byName) || 0) + (Number(row.ambiguous) || 0)) / total;
+      if (unresolved > 0.5) report.degrade("metadata-unresolved", `${label}/${family}: ${Math.round(unresolved * 100)}% of identities are ambiguous or unmatched`);
+      else if (unresolved > 0.1) report.warn("metadata-unresolved", `${label}/${family}: ${Math.round(unresolved * 100)}% of identities are ambiguous or unmatched`);
+      if (nameOnly > 0.8) report.warn("metadata-name-fallback", `${label}/${family}: ${Math.round(nameOnly * 100)}% of identities rely on display-name matching`);
+      const before = previousByFamily.get(family);
+      const beforeTotal = Number(before?.total) || 0;
+      if (beforeTotal >= 10) {
+        const beforeUnresolved = ((Number(before.ambiguous) || 0) + (Number(before.unmatched) || 0)) / beforeTotal;
+        const beforeByPath = (Number(before.byPath) || 0) / beforeTotal;
+        const nowByPath = (Number(row.byPath) || 0) / total;
+        if (unresolved > beforeUnresolved + 0.15) {
+          report.warn("metadata-coverage-regressed", `${label}/${family}: unresolved identity rose from ${Math.round(beforeUnresolved * 100)}% to ${Math.round(unresolved * 100)}%`);
+        }
+        if (beforeByPath > nowByPath + 0.2) {
+          report.warn("metadata-path-regressed", `${label}/${family}: Metadata-path identity fell from ${Math.round(beforeByPath * 100)}% to ${Math.round(nowByPath * 100)}%`);
+        }
+      }
+    }
+  }
+  for (const row of classifications || []) {
+    const total = Number(row.total) || 0;
+    const accounted = [row.metadata, row.exception, row.name].reduce((sum, value) => sum + (Number(value) || 0), 0);
+    if (total < 0 || accounted !== total) {
+      report.fail("classification-coverage-shape", `${label}/${row.family || "family"}: classification accounts for ${accounted} of ${total} entries`);
+    } else if (total >= 10 && Number(row.name) / total > 0.8) {
+      report.warn("classification-name-fallback", `${label}/${row.family || "family"}: ${Math.round(Number(row.name) / total * 100)}% of classification relies on names`);
+    }
+  }
 }
 
 /* ---------------- quality ---------------- */

@@ -13,12 +13,13 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  QualityReport, collapsed, isFinitePositive, isIsoTimestamp, isNotFuture, orderedUnique, readJsonFile, writeJsonFile,
+  QualityReport, checkMetadataCoverage, checkSourceRecords, collapsed, isFinitePositive, isIsoTimestamp, isNotFuture,
+  orderedUnique, readJsonFile, writeJsonFile,
 } from "../shared/dataset.mjs";
 import { isPlaceholderName } from "./prices.mjs";
 
-export const POE2_SCHEMA_VERSION = 1;
-export const SUPPORTED_SCHEMA_VERSIONS = [1];
+export const POE2_SCHEMA_VERSION = 2;
+export const SUPPORTED_SCHEMA_VERSIONS = [1, 2];
 
 /* Exalted is the unit every PoE 2 price is quoted in, so its own price is 1 by
    construction. Anything else means a conversion ran the wrong way and every
@@ -220,6 +221,17 @@ export async function validatePoe2(dir, { previousDir = null, report = new Quali
     }
     const count = checkPrices(report, `${label}/prices.json`, snapshot);
     const previousSnapshot = previousDir ? await readJsonFile(path.join(previousDir, league.slug, "prices.json")) : null;
+    if (snapshot.schemaVersion >= 2) {
+      const requiredPrefixes = [];
+      const used = new Set(Object.values(snapshot.prices || {}).map((entry) => entry?.source).filter(Boolean));
+      if (used.has("GGG completed trades")) requiredPrefixes.push("ggg.poe2", "repoe.poe2");
+      if ([...used].some((source) => source.startsWith("poe.ninja"))) requiredPrefixes.push("ninja.poe2");
+      if (used.has("PoE2Scout")) requiredPrefixes.push("poe2scout");
+      checkSourceRecords(report, `${label}/prices.json`, snapshot.sources, { requiredPrefixes });
+      checkMetadataCoverage(report, `${label}/prices.json`, snapshot.metadataCoverage, {
+        previous: previousSnapshot?.metadataCoverage,
+      });
+    }
     if (collapsed(count, Object.keys(previousSnapshot?.prices || {}).length)) {
       report.fail("price-collapse", `${label}: priced names fell from ${Object.keys(previousSnapshot.prices).length} to ${count}`);
     }

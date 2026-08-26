@@ -39,7 +39,8 @@ services cannot recreate the accumulated timelines.
 - Do not run a live fetch, reuse deployment, cleanup, history reset or other
   command that can rewrite `public/data/` until the preservation procedure in
   `AGENTS.md` has been followed.
-- Never set `RESET_HISTORY=true`.
+- Do not add a history-reset switch. Deliberate recovery uses the reviewed merge
+  tool, never a fetcher flag.
 - Never let a shorter deployed history replace a richer local or downloaded
   Pages history.
 - Use `scripts/tools/merge-pages-artifact.mjs` for a downloaded Pages artifact

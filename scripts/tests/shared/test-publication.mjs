@@ -110,9 +110,23 @@ assert.equal(manifest.checks.every((check) => check.level !== "ok"), true, "the 
   await mkdir(final, { recursive: true });
   await mkdir(`${final}.staging-999-1`, { recursive: true });
   await mkdir(path.join(root, "unrelated"), { recursive: true });
-  assert.equal(await clearAbandonedStages(final), 1);
+  assert.deepEqual(await clearAbandonedStages(final), { removed: 1, recovered: false });
   const left = (await readdir(root)).sort();
   assert.deepEqual(left, ["poe1", "unrelated"], "only this script's own leftovers are removed");
+}
+
+/* ---- interrupted promotion restores the previous tree before cleanup ---- */
+{
+  const root = await mkdtemp(path.join(tmpdir(), "vs-stage-"));
+  const final = path.join(root, "poe1");
+  const previous = `${final}.previous-999-1`;
+  await write(path.join(previous, "index.json"), { schemaVersion: 1, generatedAt: ago(1), leagues: [{ name: "Recovered" }] });
+  await mkdir(`${final}.staging-999-2`, { recursive: true });
+  const cleanup = await clearAbandonedStages(final);
+  assert.deepEqual(cleanup, { removed: 1, recovered: true });
+  const recovered = JSON.parse(await readFile(path.join(final, "index.json"), "utf8"));
+  assert.equal(recovered.leagues[0].name, "Recovered", "the last good tree is restored after a process dies between renames");
+  assert.deepEqual(await readdir(root), ["poe1"], "all scratch directories are removed after recovery");
 }
 
 /* ---- PoE 1 gates ---- */
@@ -133,6 +147,7 @@ async function poe1Tree(mutate = () => {}) {
       { t: ago(0), values: { Scarab: 12.5 }, rate: 200 },
     ] },
     history: { Scarab: [{ day: 0, value: 11 }, { day: 1, value: 12 }, { day: 2, value: 12.5 }] },
+    sources: null,
   };
   mutate(tree);
   await write(path.join(dir, "index.json"), tree.index);
@@ -140,6 +155,7 @@ async function poe1Tree(mutate = () => {}) {
   await write(path.join(dir, "Allflame", "scarabs.json"), tree.scarabs);
   await write(path.join(dir, "Allflame", "scarabs-selfhistory.json"), tree.self);
   await write(path.join(dir, "Allflame", "scarabs-history.json"), tree.history);
+  if (tree.sources) await write(path.join(dir, "Allflame", "sources.json"), tree.sources);
   return dir;
 }
 const codes = (result) => result.checks.filter((check) => check.level !== "ok").map((check) => check.code);
@@ -167,6 +183,21 @@ assert.ok(codes(await validatePoe1(await poe1Tree((t) => { t.index.leagues[0].st
   .includes("all-stale"), "a run where every league is stale must not pass as fresh");
 assert.ok(codes(await validatePoe1(await poe1Tree((t) => { t.prices.prices.Carried = { c: 5, staleHours: 400 }; })))
   .includes("stale-carry"), "carried official prices cannot outlive their age limit");
+assert.ok(codes(await validatePoe1(await poe1Tree((t) => {
+  t.index.schemaVersion = 2;
+  t.index.leagues[0].files = { prices: "prices.json", sources: "sources.json" };
+}))).includes("index-manifest-missing"), "schema 2 cannot advertise provenance that is absent");
+assert.ok(codes(await validatePoe1(await poe1Tree((t) => {
+  t.index.schemaVersion = 2;
+  t.index.leagues[0].files = { prices: "prices.json", sources: "sources.json" };
+  t.sources = {
+    schemaVersion: 2, generatedAt: ago(0), league: "Allflame",
+    sources: [{ id: "ggg.poe1.currencyExchange", endpointFamily: "ggg", url: "https://example.test/ggg", requestedAt: ago(0), ok: true }],
+    metadataCoverage: [{ family: "scarabs", total: 1, byPath: 1, byName: 0, ambiguous: 0, unmatched: 0 }],
+    classification: [{ family: "scarabs", total: 1, metadata: 1, exception: 0, name: 0 }],
+  };
+  t.prices.priceSource = "poe.ninja";
+}))).includes("selected-source-untracked"), "a selected PoE 1 feed must have successful provenance");
 
 {
   const previous = await poe1Tree((t) => {
@@ -218,8 +249,20 @@ assert.ok(codes(await validatePoe2(await poe2Tree((t) => { t.history.timestamps 
   .includes("history-timestamps"), "out-of-order timestamps fail publication");
 assert.ok(codes(await validatePoe2(await poe2Tree((t) => { delete t.index.leagues[0].files; })))
   .includes("index-files"), "an index the browser cannot follow fails publication");
-assert.ok(codes(await validatePoe2(await poe2Tree((t) => { t.index.schemaVersion = 2; })))
+assert.ok(codes(await validatePoe2(await poe2Tree((t) => { t.index.schemaVersion = 99; })))
   .includes("schema-version"));
+assert.ok(codes(await validatePoe2(await poe2Tree((t) => {
+  t.index.schemaVersion = 2;
+  t.prices.schemaVersion = 2;
+}))).includes("sources-missing"), "schema 2 requires PoE 2 provenance");
+assert.ok(codes(await validatePoe2(await poe2Tree((t) => {
+  t.index.schemaVersion = 2;
+  t.prices.schemaVersion = 2;
+  t.prices.sources = [
+    { id: "ninja.poe2.exchange", endpointFamily: "exchange", url: "https://example.test/ninja", requestedAt: ago(0), ok: true },
+  ];
+  t.prices.metadataCoverage = { total: 2, byPath: 1, byName: 1, ambiguous: 0, unmatched: 0 };
+}))).includes("selected-source-untracked"), "a selected GGG PoE 2 quote must include GGG and RePoE provenance");
 {
   const missingHistory = await validatePoe2(await poe2Tree((t) => { t.history = null; }));
   assert.ok(codes(missingHistory).includes("history-missing"), "missing history is degraded, not invented");

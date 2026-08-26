@@ -173,8 +173,8 @@ Notes:
   loading `?data=live`) goes back to the live `/ninja` proxy. Self-history needs
   the deployed site URL, so locally set
   `PAGES_BASE_URL=https://banomx.github.io/vaal-street` if you want it — same if
-  you later use a custom domain. Never set `RESET_HISTORY=true`: it discards the
-  accumulated timeline, which no source can rebuild.
+  you later use a custom domain. There is intentionally no history-reset input;
+  accumulated timelines can only be repaired through the reviewed merge tool.
 
 ## Production build (for later, e.g. serving from your own box)
 

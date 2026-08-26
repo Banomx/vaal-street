@@ -2,8 +2,9 @@
    hosting (GitHub Pages) without a CORS proxy.
    Run: npm run data:poe1
 
-   Sources, best first: GGG's hourly Currency Exchange digest (completed
-   trades), then poe.ninja, then poe.watch. `getPriceMap` states the full rule.
+   Source trust starts with GGG's hourly Currency Exchange digest (completed
+   trades), then poe.ninja, then poe.watch. Freshness, liquidity, spread and
+   item-state evidence decide the final winner; `getPriceMap` states the rule.
 
    poe.ninja moved its API (docs: https://poe.ninja/docs/api). This script
    adapts at runtime:
@@ -21,7 +22,7 @@
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import {
   watchLeagues, matchWatchLeague, fetchWatchLeague, watchCategoryItems, watchStatus,
-  fetchWatchBeta,
+  betaUrl, fetchWatchBeta,
 } from "./sources/poewatch.mjs";
 import {
   fetchGggExchange, fetchGggPriceLookback, mergeGggLookback,
@@ -51,9 +52,10 @@ import { describeSpreads } from "../../src/games/poe1/features/pricing/priceChec
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
-  QualityReport, USER_AGENT, clearAbandonedStages, createStage, roundPrice, writeJsonFile,
+  QualityReport, USER_AGENT, clearAbandonedStages, createStage, roundPrice, sourceRecord, writeJsonFile,
 } from "../shared/dataset.mjs";
 import { POE1_SCHEMA_VERSION, checkCuratedCoverage, validatePoe1 } from "./validate.mjs";
+import { poe1QuoteScore, poe1StateCompatible } from "./quote.mjs";
 
 const NINJA = "https://poe.ninja";
 /* Where the run publishes to, and where it actually writes.
@@ -70,6 +72,7 @@ const FETCH_TIMEOUT_MS = Math.max(5_000, Number(process.env.FETCH_TIMEOUT_MS) ||
 const HISTORY_LEAGUES = 2;   // ninja backfill only for the first N leagues (politeness)
 const DELAY_MS = 300;
 const GGG_THIN_PRICE_MAX_AGE_HOURS = Math.max(1, Number(process.env.GGG_THIN_PRICE_MAX_AGE_HOURS) || 24);
+let activeSourceRecords = null;
 
 /* Retention windows, the day axis, thinning, merging and the change windows all
    live in ./history.mjs — they are pure, and recovery tools have to reach them
@@ -84,10 +87,42 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const slugify = (s) => s.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+function ninjaSourceMeta(url) {
+  let parsed;
+  try { parsed = new URL(url); } catch { return null; }
+  if (!/poe\.ninja$/i.test(parsed.hostname)) return null;
+  const type = parsed.searchParams.get("type") || undefined;
+  const pathname = parsed.pathname;
+  const family = pathname.includes("/exchange/") ? "exchange"
+    : pathname.includes("/stash/current/item/") ? "stashItem"
+      : pathname.includes("/stash/current/currency/") ? "stashCurrency"
+        : pathname.includes("history") ? "history" : "discovery";
+  return { id: `ninja.poe1.${family}`, endpointFamily: family, requestedType: type };
+}
+
+function rawRowCount(payload) {
+  if (Array.isArray(payload)) return payload.length;
+  for (const key of ["lines", "items", "data"]) if (Array.isArray(payload?.[key])) return payload[key].length;
+  return undefined;
+}
+
 async function getJson(url) {
-  const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.json();
+  const requestedAt = new Date().toISOString();
+  const meta = activeSourceRecords ? ninjaSourceMeta(url) : null;
+  let res;
+  try {
+    res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    const payload = await res.json();
+    if (meta) activeSourceRecords.push(sourceRecord({
+      ...meta, url, requestedAt, observedAt: requestedAt, ok: true,
+      status: res.status, rawRows: rawRowCount(payload),
+    }));
+    return payload;
+  } catch (error) {
+    if (meta) activeSourceRecords.push(sourceRecord({ ...meta, url, requestedAt, ok: false, status: res?.status, warnings: [error.message] }));
+    throw error;
+  }
 }
 async function tryJson(url) { try { return await getJson(url); } catch { return null; } }
 
@@ -180,9 +215,19 @@ function mergeGggCategory(fallbackItems, ggg, key, divineRate) {
    it, which is what settles non-currency items between those two. */
 function mergeGggPriceMap(priceMap, ggg, leagueParam) {
   if (!ggg || !Object.keys(ggg.prices || {}).length) return priceMap;
-  const out = priceMap || { prices: {}, leagueParam, divisor: 1, counts: {}, categories: 0 };
+  const out = priceMap || { prices: {}, leagueParam, divisor: 1, counts: {}, selectedSources: {}, categories: 0 };
+  out.selectedSources = { ...(out.selectedSources || {}) };
+  let selected = 0;
   for (const [name, entry] of Object.entries(ggg.prices)) {
     const previous = out.prices[name];
+    const previousSource = previous?.exchangeSource === "GGG" ? "ggg"
+      : previous?.source === "poe.watch" ? "watch" : "ninja";
+    if (previous && (!poe1StateCompatible(previous, entry)
+      || poe1QuoteScore(entry, "ggg") < poe1QuoteScore(previous, previousSource))) continue;
+    if (previous && previousSource !== "ggg") {
+      const key = previousSource === "watch" ? "watch" : "ninja";
+      out.selectedSources[key] = Math.max(0, (out.selectedSources[key] || 0) - 1);
+    }
     out.prices[name] = {
       ...(previous || {}),
       ...entry,
@@ -191,8 +236,10 @@ function mergeGggPriceMap(priceMap, ggg, leagueParam) {
     // GGG supersedes whatever supplied the name before, so a `source` left over
     // from poe.watch would now be a lie on screen.
     delete out.prices[name].source;
+    if (previousSource !== "ggg") selected += 1;
   }
-  out.counts = { ...(out.counts || {}), "GGG Currency Exchange": Object.keys(ggg.prices).length };
+  out.selectedSources.ggg = (out.selectedSources.ggg || 0) + selected;
+  out.counts = { ...(out.counts || {}), "GGG Currency Exchange": out.selectedSources.ggg };
   out.categories = Object.keys(out.counts).length;
   return out;
 }
@@ -448,6 +495,11 @@ async function getPriceMap(lgParams, ctx, watch = null) {
     for (const key of ["sid", "did", "bt"]) if (out[key] == null && ev[key] != null) out[key] = ev[key];
     if (ev.lc) out.lc = (out.lc || 0) + ev.lc;
     if (ev.cnt) out.cnt = (out.cnt || 0) + ev.cnt;
+    if (ev.n) out.n = (out.n || 0) + ev.n;
+    if (ev.daily && !(out.daily >= ev.daily)) out.daily = ev.daily;
+    if (ev.lo && !(out.lo <= ev.lo)) out.lo = ev.lo;
+    if (ev.hi && !(out.hi >= ev.hi)) out.hi = ev.hi;
+    if (ev.thin) out.thin = true;
     if (ev.vol && !(out.vol >= ev.vol)) {
       out.vol = ev.vol;
       if (ev.mvc) out.mvc = ev.mvc;
@@ -459,8 +511,22 @@ async function getPriceMap(lgParams, ctx, watch = null) {
   const add = (rank, name, chaos, preferred, variant = null, evidence = null) => {
     if (!name || !(chaos > 0)) return;
     const e = acc[name];
-    if (e && e.rank < rank) return;
-    if (!e || e.rank > rank) {
+    const sourceOf = (value) => value === RANK.ninja ? "ninja"
+      : value === RANK.ninjaStashCurrency ? "ninjaStashCurrency"
+        : value === RANK.watch ? "watch" : "legacy";
+    if (e && e.rank !== rank) {
+      const prior = { c: Math.min(...e.all), ...(e.ev || {}) };
+      const candidate = { c: chaos, ...(evidence || {}) };
+      const disagreement = Math.max(prior.c, candidate.c) / Math.min(prior.c, candidate.c);
+      /* A name-only lower-trust quote that disagrees by several multiples is
+         more likely a different item state than a miraculous market insight.
+         Without a shared Metadata identity it may fill gaps, but it cannot
+         displace the better-identified source. */
+      if (disagreement > 3 && rank > e.rank) return;
+      if (!poe1StateCompatible(prior, candidate)
+        || poe1QuoteScore(candidate, sourceOf(rank)) < poe1QuoteScore(prior, sourceOf(e.rank))) return;
+    }
+    if (!e || e.rank !== rank) {
       acc[name] = { rank, all: [chaos], base: preferred ? [chaos] : [], byVariant: {}, ev: mergeEvidence(null, evidence, preferred) };
       if (variant) acc[name].byVariant[variant] = chaos;
       return;
@@ -575,7 +641,13 @@ async function getPriceMap(lgParams, ctx, watch = null) {
     for (const [name, e] of Object.entries(watch.prices)) {
       if (!(e.c > 0)) continue;
       if (!acc[name]) filled++;
-      add(RANK.watch, name, e.c, true);
+      add(RANK.watch, name, e.c, true, null, {
+        n: e.n,
+        daily: e.volume24H || e.daily,
+        lo: e.lo,
+        hi: e.hi,
+        thin: e.thin,
+      });
       n++;
     }
     if (n) counts["poe.watch"] = n;
@@ -640,11 +712,9 @@ async function getPriceMap(lgParams, ctx, watch = null) {
     }
   }
 
-  /* Cross-feed check, for this log only. poe.ninja wins either way now, so a
-     disagreement changes no number and has no business on a price entry —
-     writing `alt` and `spread` into every name only bloated the file the
-     browser downloads. It stays here because a feed that starts pricing a
-     different item state is otherwise invisible for weeks. */
+  /* Cross-feed check, for this log only. The resolver may choose either feed,
+     so disagreements stay visible without copying alternate quotes into every
+     browser download. */
   const pairs = [];
   for (const name of Object.keys(prices)) {
     const wlo = watch?.prices?.[name]?.lo;
@@ -652,7 +722,7 @@ async function getPriceMap(lgParams, ctx, watch = null) {
   }
   const spreads = describeSpreads(pairs);
   if (spreads.length) {
-    console.log(`    feeds disagree on ${spreads.length} name(s) (poe.ninja is used either way):`);
+    console.log(`    feeds disagree on ${spreads.length} name(s) (selection uses trust, freshness and liquidity):`);
     for (const line of spreads) console.log(`      ${line}`);
   }
   if (!prices["Chaos Orb"]) prices["Chaos Orb"] = { c: 1, lo: 1, hi: 1, n: 1 };
@@ -664,7 +734,11 @@ async function getPriceMap(lgParams, ctx, watch = null) {
   if (missed.length) console.log(`    no data for: ${missed.join(", ")}`);
   console.log(`    sources: ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(", ")}`);
 
-  return { prices, leagueParam: p, divisor: div, counts, categories: Object.keys(counts).length };
+  const selectedSources = {
+    watch: Object.values(prices).filter((entry) => entry?.source === "poe.watch").length,
+    ninja: Object.values(prices).filter((entry) => entry?.source !== "poe.watch").length,
+  };
+  return { prices, leagueParam: p, divisor: div, counts, selectedSources, categories: Object.keys(counts).length };
 }
 
 /* Lower-middle median: with an even number of listings (a unique with two
@@ -938,10 +1012,23 @@ async function applyBetaPrices(prices, watchName) {
   for (const name of wanted) {
     const entry = prices[name];
     let beta = null;
+    const requestedAt = new Date().toISOString();
     try {
       beta = await fetchWatchBeta(entry.wid, watchName);
-    } catch {
+      activeSourceRecords?.push(sourceRecord({
+        id: "poewatch.beta", endpointFamily: "beta", requestedType: name,
+        url: betaUrl(entry.wid, watchName), requestedAt,
+        observedAt: beta?.asOf || requestedAt, ok: true,
+        rawRows: 1, accepted: beta ? 1 : 0, rejected: beta ? 0 : 1,
+        ...(!beta ? { rejectedReasons: { no_active_price: 1 } } : {}),
+      }));
+    } catch (error) {
       failed++;
+      activeSourceRecords?.push(sourceRecord({
+        id: "poewatch.beta", endpointFamily: "beta", requestedType: name,
+        url: betaUrl(entry.wid, watchName), requestedAt, ok: false,
+        warnings: [error.message],
+      }));
     }
     await sleep(DELAY_MS);
     if (!beta) continue;
@@ -1047,7 +1134,7 @@ const LEGACY_SELF_HISTORY = { scarabs: "selfhistory.json" };
 
 async function loadSelfHistory(slug, key) {
   const base = pagesBaseUrl();
-  if (!base || process.env.RESET_HISTORY === "true") return { points: [] };
+  if (!base) return { points: [] };
   const names = [`${key}-selfhistory.json`, LEGACY_SELF_HISTORY[key]].filter(Boolean);
   const dropNonPositive = !SIGNED_HISTORY_KEYS.has(key);
   for (const name of names) {
@@ -1161,7 +1248,7 @@ async function getGemVariants(lgParams) {
    backfill fetched last week silently slide a week off the axis. */
 async function loadBackfill(slug, key) {
   const base = pagesBaseUrl();
-  if (!base || process.env.RESET_HISTORY === "true") return null;
+  if (!base) return null;
   const prev = await deployedLeagueJson(base, slug, `${key}-backfill.json`);
   return (prev && prev.series && Object.keys(prev.series).length) ? prev : null;
 }
@@ -1416,12 +1503,22 @@ async function mirrorExisting() {
   }
   if (rebuilt) console.log(`Rebuilt ${rebuilt} derived history file(s) from the merged raw snapshots.`);
   const listed = [];
+  let reuseSchemaVersion = POE1_SCHEMA_VERSION;
   for (const league of kept) {
-    listed.push(JSON.parse(JSON.stringify({ ...league, files: await describeLeagueFiles(path.join(OUT, league.slug)) })));
+    const leagueDir = path.join(OUT, league.slug);
+    const files = await describeLeagueFiles(leagueDir);
+    listed.push(JSON.parse(JSON.stringify({ ...league, files })));
+    const [prices, sources] = await Promise.all([
+      readJson(path.join(leagueDir, files.prices || "prices.json")),
+      files.sources ? readJson(path.join(leagueDir, files.sources)) : null,
+    ]);
+    if (prices?.schemaVersion !== POE1_SCHEMA_VERSION || sources?.schemaVersion !== POE1_SCHEMA_VERSION) {
+      reuseSchemaVersion = 1;
+    }
   }
   await writeFile(path.join(OUT, "index.json"), JSON.stringify({
     ...(idx || local || {}),
-    schemaVersion: POE1_SCHEMA_VERSION,
+    schemaVersion: reuseSchemaVersion,
     generatedAt: new Date().toISOString(),
     leagues: listed,
   }));
@@ -1481,6 +1578,8 @@ async function main() {
   for (const [li, lg] of leagues.entries()) {
     const metadataCoverage = [];
     const classification = [];
+    const ninjaSources = [];
+    activeSourceRecords = ninjaSources;
     try {
       const ggg = gggExchange?.byLeague?.[lg.name] || null;
       if (ggg) {
@@ -1640,9 +1739,9 @@ async function main() {
         if (pm && li === 0 && watchName) await applyBetaPrices(pm.prices, watchName);
         if (pm) {
           const priceSource = sourceLabel({
-            ggg: pm.counts?.["GGG Currency Exchange"] || 0,
-            watch: pm.counts?.["poe.watch"] || 0,
-            ninja: Object.entries(pm.counts || {}).filter(([k]) => k !== "poe.watch" && k !== "GGG Currency Exchange").reduce((n, [, v]) => n + v, 0),
+            ggg: pm.selectedSources?.ggg || 0,
+            watch: pm.selectedSources?.watch || 0,
+            ninja: pm.selectedSources?.ninja || 0,
           });
           await writeFile(path.join(dir, "prices.json"), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate, priceSource, prices: pm.prices }));
           console.log(`  prices: ${Object.keys(pm.prices).length} names across ${pm.categories} sources (league=${pm.leagueParam})`);
@@ -1761,7 +1860,7 @@ async function main() {
         league: lg.name,
         gggHour: ggg ? gggExchange.hourISO : null,
         nextChangeId: ggg ? gggExchange.nextChangeId ?? null : null,
-        sources: gggExchange?.sources || [],
+        sources: [...(gggExchange?.sources || []), ...ninjaSources, ...(watch?.sources || [])],
         metadataCoverage,
         classification,
       }));
@@ -1790,6 +1889,7 @@ async function main() {
       }
     }
   }
+  activeSourceRecords = null;
 
   /* A league the source list stopped naming is not proof the league retired —
      it is far more often one bad response. Retain what it had, flagged, so a
@@ -1820,8 +1920,9 @@ async function main() {
    previous deployment live — GitHub Pages only uploads after a successful
    workflow, so failing loudly is strictly safer than publishing the damage. */
 async function run() {
-  const cleared = await clearAbandonedStages(FINAL_OUT);
-  if (cleared) console.log(`Cleared ${cleared} abandoned staging director(ies).`);
+  const cleanup = await clearAbandonedStages(FINAL_OUT);
+  if (cleanup.recovered) console.log(`Recovered the previous PoE 1 dataset after an interrupted promotion.`);
+  if (cleanup.removed) console.log(`Cleared ${cleanup.removed} abandoned staging director(ies).`);
   const stage = await createStage(FINAL_OUT);
   OUT = stage.dir;
   try {

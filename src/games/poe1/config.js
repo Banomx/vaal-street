@@ -21,7 +21,7 @@ export const POE1_EXCHANGE_BASES = [
    visibly instead of being rendered on a guess. Add the new number here in the
    same change that starts writing it, and keep the old one until no
    deployment can still be serving it. */
-export const POE1_SCHEMA_VERSIONS = [1];
+export const POE1_SCHEMA_VERSIONS = [1, 2];
 
 /* Fallback filenames for a league entry that does not name its own files.
    Current runs always write the `files` map; this covers a deployment

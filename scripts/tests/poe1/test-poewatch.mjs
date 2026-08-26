@@ -220,7 +220,7 @@ ok(near(priced.divineRate, EXCHANGE, 1),
    `rate must come from the exchange ratio (${EXCHANGE}), not the Divine Orb listing (${LISTING}): ${priced.divineRate}`);
 ok(!near(priced.divineRate, LISTING, 5), "the thin Divine Orb listing must not set the rate");
 
-/* ---- precedence: poe.ninja, then poe.watch ---- */
+/* ---- trust prior plus evidence-aware selection ---- */
 ok(near(P["Orb of Intention"]?.c, 26.4),
    `poe.ninja must beat poe.watch where both know an item, even poe.watch's traded 340: ${P["Orb of Intention"]?.c}`);
 // The disagreement is reported in the hourly log and nowhere else: poe.ninja
@@ -228,8 +228,10 @@ ok(near(P["Orb of Intention"]?.c, 26.4),
 ok(P["Orb of Intention"]?.alt === undefined && P["Orb of Intention"]?.volatile === undefined,
    `feed comparison must not reach prices.json: ${JSON.stringify(P["Orb of Intention"])}`);
 ok(P["Orb of Intention"]?.source === undefined, "a poe.ninja price carries no source badge");
-ok(near(P["Horned Scarab of Pandemonium"]?.c, 80),
-   `poe.ninja wins the scarab too: ${P["Horned Scarab of Pandemonium"]?.c}`);
+ok(near(P["Horned Scarab of Pandemonium"]?.c, 111),
+   `the deeper nearby poe.watch scarab market wins on evidence: ${P["Horned Scarab of Pandemonium"]?.c}`);
+ok(P["Horned Scarab of Pandemonium"]?.source === "poe.watch",
+   "an evidence-selected lower-trust source remains explicitly badged");
 ok(near(P["Awakener's Orb"]?.c, 210),
    `poe.ninja prices what poe.watch lacks: ${P["Awakener's Orb"]?.c}`);
 ok(P["Awakener's Orb"]?.c !== 999, "stash currency stays gap-fill only and must not outrank the exchange");

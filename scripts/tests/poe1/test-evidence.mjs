@@ -9,6 +9,7 @@
 */
 
 import assert from "node:assert/strict";
+import { poe1QuoteScore, poe1StateCompatible } from "../../poe1/quote.mjs";
 import {
   changesFromSparkline, chaosDivisor, currencyEvidence, evidenceFrom, exchangeNamesById,
   exchangeRows, isBaseVariant, slugToName,
@@ -157,6 +158,15 @@ assert.equal(items[0].itemClass, "Scarab", "path matches enrich");
 assert.equal(items[1].identity, "name");
 assert.equal(items[2].identity, "name-ambiguous");
 assert.equal(items[2].itemClass, undefined, "an ambiguous match enriches nothing — a wrong class is worse than none");
+
+const scoreNow = Date.now();
+assert.ok(
+  poe1QuoteScore({ c: 20, daily: 100000, asOf: new Date(scoreNow - 3600e3).toISOString() }, "watch", scoreNow)
+    > poe1QuoteScore({ c: 21, volume1H: 1, marketHour: new Date(scoreNow - 72 * 3600e3).toISOString() }, "ggg", scoreNow),
+  "fresh liquid evidence can beat a stale official observation",
+);
+assert.equal(poe1StateCompatible({ cor: false, gl: 20 }, { cor: true, gl: 20 }), false,
+  "different item states cannot replace each other");
 
 /* ---- endpoint registry ---- */
 assert.ok(EXCHANGE_TYPES.includes("Currency") && EXCHANGE_TYPES.includes("Scarab"));

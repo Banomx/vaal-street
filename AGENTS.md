@@ -28,7 +28,8 @@ Before any fetch, reuse-mode deployment, cleanup, or command that rewrites
 2. Compare what is checked in against what is deployed, by timestamp and point count.
 3. Keep the richest valid union. A one-point deployed file must never overwrite a
    fuller local one.
-4. Never run with `RESET_HISTORY=true`.
+4. Do not add a history-reset switch. Deliberate recovery uses a reviewed merge,
+   never a fetcher flag.
 5. Say what you are about to run before any live fetch.
 
 `scripts/tools/merge-pages-artifact.mjs` is the reviewable way to merge a
@@ -36,55 +37,95 @@ downloaded Pages artifact back into the tree.
 
 ## Documentation
 
-Treat documentation as part of the implementation.
+Treat documentation as part of the implementation. Update what is affected,
+replace outdated information, remove what is no longer correct, and merge
+duplicates. Documentation describes the current system, not a diary of changes.
 
-When a change affects existing documentation:
+- `README.md` — setup and basic usage.
+- `docs/architecture.md` — how the system works and why.
+- `docs/daily-recap/YYYY-MM-DD.md` — short dated notes on important changes.
 
-* update the relevant documentation
-* replace outdated information
-* remove information that is no longer correct
-* merge duplicate information where appropriate
+Write for a technical person who needs to operate, troubleshoot or reproduce the
+setup. Keep it practical, concise and precise. Prefer commands, paths and short
+explanations over filler. Do not document assumptions as facts; mark anything
+that was not verified. Do not create progress-summary files unless they are
+actually needed. If documentation would expose sensitive infrastructure, prefix
+the filename and add it to `.gitignore`.
 
-Do not simply append new sections after every change.
-Before creating a new documentation file, check whether the information belongs in an existing one.
-Documentation should primarily describe the **current state** of the system or project, not the history of individual changes.
-Do not automatically create files such as `SUMMARY.md`, `CHANGES.md`, `IMPLEMENTATION.md`, or similar unless they are actually needed.
+Keep each daily note relevant: edit the current day's entry when an implementation
+changes during the day instead of appending stale iterations.
 
-## Documentation Style
+# Project navigation
 
-Write documentation for another technical person who needs to understand, operate, troubleshoot, or reproduce the setup.
+Use this map before changing code. Keep game-specific rules inside that game's
+directory; share only infrastructure that is genuinely game-neutral.
 
-Keep it:
+## Application
 
-* practical
-* concise
-* technically precise
-* easy to follow
-* human-written in tone
+- `src/app/` — bootstrapping and game selection only.
+- `src/shared/` — game-neutral UI, data-path, snapshot-contract and storage
+  infrastructure. `src/shared/data/snapshot.js` decides whether a downloaded
+  file may be rendered.
+- `src/games/poe1/Poe1App.jsx` — PoE 1 shell, navigation and data loading.
+- `src/games/poe1/config.js` — readable schema versions, file contracts and data mode.
+- `src/games/poe1/catalogue/` — PoE 1 market-family and scarab catalogues.
+- `src/games/poe1/features/<feature>/` — feature UI, calculations and curated data.
+- `src/games/poe2/Poe2App.jsx` — PoE 2 shell, navigation and data loading.
+- `src/games/poe2/features/<feature>/` — PoE 2 features. Do not import PoE 1 feature code.
 
-Prefer concrete commands, paths, configuration examples, and short explanations over lengthy prose.
-Avoid overly polished corporate or AI-style language, unnecessary introductions, conclusions, filler, and exaggerated wording.
-Explain non-obvious decisions when they would help someone understand why something was implemented a certain way.
-For troubleshooting information, document the useful result rather than a chronological diary of everything attempted.
+If both games need the same behaviour, extract the smallest game-neutral part to
+`src/shared/`. Do not put game names, leagues, endpoints or formulas in shared
+code merely because they currently look similar.
 
-## Accuracy
+## Data and scripts
 
-Do not document assumptions as facts.
-Make sure documented commands, paths, configuration, and behavior match the actual implementation.
-If something was not verified, make that clear.
+- `public/data/<game>/index.json` — leagues, schema version and each league's file map.
+- `public/data/<game>/quality.json` — the last publication-gate report.
+- `public/data/<game>/<league>/` — generated feature-split snapshots and history.
+- `scripts/shared/` — staging, quality gates, source provenance and RePoE metadata.
+- `scripts/poe1/fetch-data.mjs`, `scripts/poe2/fetch-data.mjs` — snapshot orchestrators.
+- `scripts/poe1/endpoints.mjs`, `scripts/poe2/endpoints.mjs` — requested endpoint registries.
+- `scripts/poe1/validate.mjs`, `scripts/poe2/validate.mjs` — publication gates.
+- `scripts/poe1/sources/` — PoE 1 feed adapters.
+- `scripts/poe1/tools/`, `scripts/tools/` — diagnostics and history recovery.
+- `scripts/tests/{shared,poe1,poe2}/` — fixture-backed tests mirroring ownership.
 
-## Documentation
+Use `src/shared/storage/jsonStore.js` only for small settings and saved inputs.
+Bulk timelines belong in generated JSON; large mutable client-only data belongs
+in IndexedDB, and shared/queryable data belongs behind an API or database.
 
-Main documentation is in `docs/`.
-Keep `README.md` limited to setup and basic usage.
-Archtiecture decision belong in `docs/architecture.md`.
-If documentation exposes infrastructure or sensitive information, prefix it and add it to .gitignore.
-Keep documentation relevant and updated, not only append to it.
+## Data contract and source rules
 
-## Daily Notes
+- Normalize and validate external responses at their adapter boundary.
+- Record a `sourceRecord` for every selected external feed, including request
+  time, endpoint/type, success, row counts, rejection reasons and observation
+  time when available.
+- Prefer Metadata paths for identity. Source-scoped IDs and name fallbacks must
+  retain their scope/confidence and must not silently prove a rename.
+- Use the game-specific quality resolver for prices. Source trust is a prior;
+  freshness, liquidity, spread and item-state compatibility must be evaluated
+  before one observation replaces another.
+- Missing data is unknown, never zero. Never invent a flat or one-point history.
+- Production UI renders validated static snapshots. Live and demo data remain
+  explicit development modes.
 
-Write Daily (timestamped) notes in markdown under docs/daily-recap
-Be concise and not overly formal.
-Only put the important info in a daily.
-If you iterate over something, remove stale info from todays daily.
-Keep dailys relevant and updatet, not only appended to.
+## Change rules
+
+- Website shell or game selector: change `src/app/` or `src/shared/`.
+- PoE 1 feature: stay inside `src/games/poe1/features/<feature>/`, changing
+  `Poe1App.jsx` only for navigation or shared orchestration.
+- PoE 2 feature: stay inside `src/games/poe2/features/<feature>/` and its own
+  pipeline/tests; keep persisted keys game-scoped.
+- Adding a PoE 1 market family: update `src/games/poe1/catalogue/categories.js`
+  and navigation. Do not duplicate the family list in the fetcher.
+- Changing a published shape: bump `POE*_SCHEMA_VERSION` in the validator and
+  add it to `POE*_SCHEMA_VERSIONS` in the app config. Keep the previous version
+  readable until no deployment still serves it.
+- New external feed: use the shared `USER_AGENT`, bound requests with a timeout,
+  add provenance and rejection accounting, and cover the response with a fixture.
+- Update `docs/architecture.md`, current README commands/paths and today's daily
+  note when structure or behaviour changes.
+
+Run `npm test`, `npm run build` and `npm run validate` after structural,
+cross-feature or data-contract changes. Data-generation tests use fixtures,
+never live APIs.

@@ -10,7 +10,7 @@ PoE 1 cadence matches the source: GGG
 publishes one digest per completed hour and the run asks for the last completed
 one, so a skipped hour is a price that cannot be recovered afterwards.
 
-Price precedence is:
+Price selection starts with this trust order:
 
 1. GGG's public Currency Exchange hourly digest for completed exchange trades.
 2. poe.ninja — the exchange overview for everything fungible, the stash item
@@ -24,6 +24,13 @@ Price precedence is:
    current GGG market data recognizes the item.
 5. Explicit, dated fallback values in the boss/Delve datasets when all market
    sources lack the item.
+
+That order is a prior, not an unconditional overwrite. Each game scores a quote
+using retained liquidity, listing depth, spread, freshness and thin-market
+flags, and refuses to compare explicitly incompatible item states. A deeply
+traded fresh lower-priority observation can therefore beat a stale or extremely
+thin higher-priority one. Descriptive metadata is merged only after the quote
+winner is known.
 
 `scripts/poe1/sources/ggg-exchange.mjs` requests the previous completed UTC hour from
 `https://web.poecdn.com/api/currency-exchange/<timestamp>`. If that hour has not
@@ -67,7 +74,10 @@ promoted over the published tree by an atomic rename. A run that fails discards
 its staging directory, exits non-zero and leaves the previous deployment live —
 GitHub Pages only uploads after a successful workflow, so failing loudly is
 strictly safer than publishing damage. Abandoned staging directories from a
-killed run are cleared at the start of the next one.
+killed run are cleared at the start of the next one. If a process died after
+moving the live tree to `.previous-*` but before installing staging, the newest
+previous tree is restored first; it is never deleted as ordinary scratch data
+while the final tree is absent.
 
 The gates are `scripts/poe1/validate.mjs` and `scripts/poe2/validate.mjs`, both
 runnable on their own against the checked-in tree:
@@ -113,10 +123,18 @@ exempt because it stores signed levelling profit. Every run logs what it
 cleaned. Absent means unknown; zero would mean free.
 
 Every run also records where its numbers came from. `sourceRecord()` captures a
-feed's URL, fetch time, ETag/Last-Modified and a content hash — RePoE publishes
-no version or manifest, so a content hash is the only way to notice its
-dictionary changed. PoE 1 writes one `sources.json` per league holding those
-records plus the Metadata coverage and classification confidence for the run.
+feed's URL, fetch time, endpoint family/type, success, row/rejection counts and,
+where available, ETag/Last-Modified, observation time and a content hash. RePoE
+publishes no version or manifest, so a content hash is the only way to notice
+its dictionary changed. PoE 1 writes one `sources.json` per league; PoE 2 keeps
+the records in `prices.json`. Both include Metadata coverage. Publication fails
+when a selected source has no successful matching provenance record; coverage
+accounting, high ambiguity/name-fallback rates and rejection spikes are also
+surfaced in `quality.json`.
+
+New snapshots use schema version 2 for these stronger provenance contracts.
+Readers and validators continue accepting version 1 while checked-in and older
+deployed snapshots age out naturally.
 
 ## Snapshot contract in the browser
 
@@ -440,9 +458,9 @@ PoE 2 history is accumulated by `scripts/poe2/history.mjs`. A fresh run merges
 the checked-in file with the deployed `price-history.json`, lets the deployed
 copy win an overlapping timestamp, and appends the new snapshot. The most recent
 7 days remain at hourly resolution; older data keeps the latest snapshot per
-UTC day and expires after 430 days. `RESET_HISTORY=true` starts a new timeline
-and must not be used: the accumulated points are the only copy of what the
-market did, and no upstream feed can rebuild them. Code-only deployments reuse
+UTC day and expires after 430 days. There is no history-reset switch: the
+accumulated points are the only copy of what the market did, and no upstream
+feed can rebuild them. Code-only deployments reuse
 all four current/history files, so a push does not erase accumulated data; a
 reuse run that would publish fewer points than it read throws instead of
 promoting. `src/games/poe2/shared/MarketBrowser.jsx` projects the

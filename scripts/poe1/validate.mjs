@@ -17,12 +17,13 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  QualityReport, collapsed, isFinitePositive, isIsoTimestamp, isNotFuture, orderedUnique, readJsonFile, writeJsonFile,
+  QualityReport, checkMetadataCoverage, checkSourceRecords, collapsed, isFinitePositive, isIsoTimestamp, isNotFuture,
+  orderedUnique, readJsonFile, writeJsonFile,
 } from "../shared/dataset.mjs";
 import { CATEGORIES } from "../../src/games/poe1/catalogue/categories.js";
 
-export const POE1_SCHEMA_VERSION = 1;
-export const SUPPORTED_SCHEMA_VERSIONS = [1];
+export const POE1_SCHEMA_VERSION = 2;
+export const SUPPORTED_SCHEMA_VERSIONS = [1, 2];
 
 const FAMILY_KEYS = CATEGORIES.map((category) => category.key);
 /* A price this far from parity means the exchange calibration is wrong, and
@@ -216,6 +217,13 @@ export async function validatePoe1(dir, { previousDir = null, report = new Quali
       continue;
     }
     const leagueDir = path.join(dir, league.slug);
+    const claimedSources = new Set();
+    const noteClaims = (value) => {
+      const labelText = String(value || "");
+      if (labelText.includes("GGG")) claimedSources.add("ggg.poe1");
+      if (labelText.includes("poe.ninja")) claimedSources.add("ninja.poe1");
+      if (labelText.includes("poe.watch")) claimedSources.add("poewatch");
+    };
 
     /* The index is the browser's map of the tree: it names every file the app
        is allowed to ask for. A manifest that names a file which is not there
@@ -241,6 +249,7 @@ export async function validatePoe1(dir, { previousDir = null, report = new Quali
     if (!broad) {
       report.fail("prices-missing", `${label}: prices.json is missing or unparseable`);
     } else if (checkSnapshotEnvelope(report, `${label}/prices.json`, broad)) {
+      noteClaims(broad.priceSource);
       const count = checkPrices(report, `${label}/prices.json`, broad.prices);
       checkStaleCarry(report, `${label}/prices.json`, broad.prices);
       const chaos = broad.prices?.["Chaos Orb"]?.c;
@@ -274,6 +283,7 @@ export async function validatePoe1(dir, { previousDir = null, report = new Quali
         report.fail("price-not-positive", `${label}/${key}.json holds ${badValues.length} non-positive chaosValue(s)`, badValues.slice(0, 8));
       }
       checkSourceLabel(report, `${label}/${key}.json`, snapshot);
+      noteClaims(snapshot.priceSource);
 
       const self = await readJsonFile(path.join(leagueDir, `${key}-selfhistory.json`));
       const { rated } = checkSelfHistory(report, `${label}/${key}-selfhistory.json`, self);
@@ -297,7 +307,31 @@ export async function validatePoe1(dir, { previousDir = null, report = new Quali
     }
 
     const gems = await readJsonFile(path.join(leagueDir, "gems.json"));
-    if (gems) checkSnapshotEnvelope(report, `${label}/gems.json`, gems);
+    if (gems) {
+      checkSnapshotEnvelope(report, `${label}/gems.json`, gems);
+      noteClaims(gems.priceSource);
+    }
+
+    if (manifest?.sources) {
+      const provenance = await readJsonFile(path.join(leagueDir, manifest.sources));
+      if (!provenance) {
+        report.fail("sources-missing", `${label}: index advertises ${manifest.sources} but it is missing or unparseable`);
+      } else {
+        checkSnapshotEnvelope(report, `${label}/${manifest.sources}`, provenance);
+        checkSourceRecords(report, `${label}/${manifest.sources}`, provenance.sources, {
+          requiredPrefixes: [...claimedSources],
+        });
+        const previousProvenance = previousDir
+          ? await readJsonFile(path.join(previousDir, league.slug, manifest.sources))
+          : null;
+        checkMetadataCoverage(report, `${label}/${manifest.sources}`, provenance.metadataCoverage, {
+          classifications: provenance.classification,
+          previous: previousProvenance?.metadataCoverage,
+        });
+      }
+    } else if (index.schemaVersion >= 2 && !league.stale) {
+      report.fail("sources-missing", `${label}: schema ${index.schemaVersion} requires a sources manifest`);
+    }
   }
 
   return report;
