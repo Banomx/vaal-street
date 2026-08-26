@@ -18,8 +18,12 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readJsonFile } from "../../shared/dataset.mjs";
-import { POE1_FILE_CONTRACTS, POE1_LEAGUE_FILES } from "../../../src/games/poe1/config.js";
-import { POE2_FILE_CONTRACTS, POE2_LEAGUE_FILES } from "../../../src/games/poe2/config.js";
+import {
+  POE1_FILE_CONTRACTS, POE1_LEAGUE_FILES, POE1_SCHEMA_VERSIONS,
+} from "../../../src/games/poe1/config.js";
+import {
+  POE2_FILE_CONTRACTS, POE2_LEAGUE_FILES, POE2_SCHEMA_VERSIONS,
+} from "../../../src/games/poe2/config.js";
 import { checkDocument, READY } from "../../../src/shared/data/snapshot.js";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -77,11 +81,18 @@ async function checkManifests(game) {
 }
 
 const poe1 = await checkGame({
-  game: "poe1", contracts: POE1_FILE_CONTRACTS, files: POE1_LEAGUE_FILES, supported: [1],
+  game: "poe1", contracts: POE1_FILE_CONTRACTS, files: POE1_LEAGUE_FILES, supported: POE1_SCHEMA_VERSIONS,
 });
 const poe2 = await checkGame({
-  game: "poe2", contracts: POE2_FILE_CONTRACTS, files: POE2_LEAGUE_FILES, supported: [1],
+  game: "poe2", contracts: POE2_FILE_CONTRACTS, files: POE2_LEAGUE_FILES, supported: POE2_SCHEMA_VERSIONS,
 });
+
+assert.equal(checkDocument({ schemaVersion: 2, generatedAt: new Date().toISOString(), prices: {} }, {
+  supported: POE1_SCHEMA_VERSIONS, required: POE1_FILE_CONTRACTS.prices,
+}).state, READY, "PoE 1's app contract reads schema 2 during the v1/v2 migration");
+assert.equal(checkDocument({ schemaVersion: 2, generatedAt: new Date().toISOString(), prices: {} }, {
+  supported: POE2_SCHEMA_VERSIONS, required: POE2_FILE_CONTRACTS.prices,
+}).state, READY, "PoE 2's app contract reads schema 2 during the v1/v2 migration");
 
 /* The exact regression: `gems.json` holds `gems`, and the tab that reads it
    must ask for that. Spelled out so a future edit to the contract map cannot
