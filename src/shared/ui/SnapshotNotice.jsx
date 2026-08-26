@@ -9,7 +9,7 @@ import { SourceStrip } from "./AppShell.jsx";
    numbers as if they were fine. */
 
 const HEADLINE = {
-  notice: "Some data is incomplete",
+  notice: "Data quality note",
   warning: "This data may be out of date",
   error: "This page cannot show current data",
 };

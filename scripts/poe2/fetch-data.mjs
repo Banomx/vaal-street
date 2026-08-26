@@ -226,6 +226,7 @@ async function fetchLeague(name, ggg) {
     id: "poe2scout.items", endpointFamily: "scout", url: scoutUrl, requestedAt: scoutRequestedAt,
     observedAt: scoutRequestedAt, ok: !!scoutPayload, rawRows: scoutParse.rawRows ?? 0, accepted: scoutParse.accepted ?? 0,
     rejected: scoutParse.rejected ?? 0, rejectedReasons: scoutParse.rejectedReasons,
+    skipped: scoutParse.skipped ?? 0, skippedReasons: scoutParse.skippedReasons,
   }));
 
   const ninjaPrices = {};

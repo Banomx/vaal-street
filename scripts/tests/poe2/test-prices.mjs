@@ -255,10 +255,11 @@ const scoutRows = scoutToPrices([
   { Name: "Real Item", CurrentPrice: 0 },
   { Name: "Another Item", CurrentPrice: 3, CurrentQuantity: 7 },
 ]);
-assert.deepEqual(Object.keys(scoutRows), ["Another Item"], "placeholders and invalid prices are rejected");
-assert.equal(scoutRows.__parse.rejected, 4);
+assert.deepEqual(Object.keys(scoutRows), ["Another Item"], "placeholders are rejected and unpriced markets are skipped");
+assert.equal(scoutRows.__parse.rejected, 3);
 assert.equal(scoutRows.__parse.rejectedReasons.placeholder_name, 3);
-assert.equal(scoutRows.__parse.rejectedReasons.invalid_price, 1);
+assert.equal(scoutRows.__parse.skipped, 1);
+assert.equal(scoutRows.__parse.skippedReasons.unpriced, 1);
 
 /* ---- the credit line is derived from what answered ---- */
 assert.equal(describePriceSources({ a: { source: "GGG completed trades" } }), "GGG completed trades");

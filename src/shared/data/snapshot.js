@@ -216,13 +216,9 @@ export function qualityNotes(quality, { game } = {}) {
   for (const check of checks) {
     if (check?.level === "failure") notes.push({ level: "error", text: `${label}${check.code}: ${check.message}` });
     else if (check?.level === "degraded") notes.push({ level: "warning", text: `${label}${check.code}: ${check.message}` });
+    else if (check?.level === "warning") notes.push({ level: "notice", text: `${label}${check.message}` });
   }
-  const degraded = checks.filter((check) => check?.level === "degraded").length;
-  const warnings = checks.filter((check) => check?.level === "warning").length;
-  if (!notes.length && warnings) {
-    notes.push({ level: "notice", text: `${warnings} data quality warning${warnings > 1 ? "s" : ""} in the last run.` });
-  }
-  if (degraded && notes.length > 3) notes.length = 3; // the banner is a summary, not the report
+  if (notes.length > 3) notes.length = 3; // the banner is a summary, not the report
   return notes;
 }
 

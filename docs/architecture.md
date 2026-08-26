@@ -123,14 +123,20 @@ exempt because it stores signed levelling profit. Every run logs what it
 cleaned. Absent means unknown; zero would mean free.
 
 Every run also records where its numbers came from. `sourceRecord()` captures a
-feed's URL, fetch time, endpoint family/type, success, row/rejection counts and,
-where available, ETag/Last-Modified, observation time and a content hash. RePoE
+feed's URL, fetch time, endpoint family/type, success, accepted/rejected/skipped
+row counts and, where available, ETag/Last-Modified, observation time and a content hash.
+An expected omission is not a parser rejection: PoE2Scout enumerates its whole
+catalogue for every league, so entries without a positive Standard price are
+recorded as `skipped: unpriced`. Placeholder names and malformed priced rows
+remain rejected. RePoE
 publishes no version or manifest, so a content hash is the only way to notice
 its dictionary changed. PoE 1 writes one `sources.json` per league; PoE 2 keeps
 the records in `prices.json`. Both include Metadata coverage. Publication fails
 when a selected source has no successful matching provenance record; coverage
-accounting, high ambiguity/name-fallback rates and rejection spikes are also
-surfaced in `quality.json`.
+accounting, meaningful ambiguity/unmatched rates, path-coverage regressions and
+true rejection spikes are surfaced in `quality.json`. A unique display-name
+match is lower-confidence provenance and stays counted, but is not itself an
+incomplete dataset when ambiguity and unmatched coverage remain low.
 
 New snapshots use schema version 2 for these stronger provenance contracts.
 Readers and validators continue accepting version 1 while checked-in and older
@@ -153,7 +159,9 @@ or yielding `null`:
 The distinctions matter: an absent history is ordinary for a league in its first
 hour, while an unreadable one means the build is older than the data and drawing
 it would be a guess. `summarize()` folds a league's documents, its freshness and
-`quality.json` into one verdict, which `SnapshotNotice.jsx` renders. Bare maps
+`quality.json` into one verdict, which `SnapshotNotice.jsx` renders. Non-fatal
+warnings are shown by their actual message under “Data quality note” rather
+than as an unexplained count. Bare maps
 with no envelope — the derived `<key>-history.json` files — are read with
 `versioned: false` so they are not reported as pre-contract forever.
 

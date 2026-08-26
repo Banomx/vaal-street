@@ -13,8 +13,8 @@ import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  QualityReport, clearAbandonedStages, collapsed, contentHash, createStage,
-  isNotFuture, orderedUnique, roundPrice, sourceRecord, writeJsonFile,
+  QualityReport, checkMetadataCoverage, checkSourceRecords, clearAbandonedStages, collapsed,
+  contentHash, createStage, isNotFuture, orderedUnique, roundPrice, sourceRecord, writeJsonFile,
 } from "../../shared/dataset.mjs";
 import { validatePoe1 } from "../../poe1/validate.mjs";
 import { validatePoe2 } from "../../poe2/validate.mjs";
@@ -48,12 +48,29 @@ assert.notEqual(contentHash({ a: 1 }), contentHash({ a: 2 }));
 const record = sourceRecord({
   id: "poe.ninja", endpointFamily: "exchange", requestedType: "Scarab",
   requestedAt: ago(0.1), observedAt: ago(2), rawRows: 130, accepted: 125, rejected: 5,
-  rejectedReasons: { invalid_price: 5 }, ok: true, status: 200,
+  rejectedReasons: { invalid_price: 5 }, skipped: 3, skippedReasons: { unpriced: 3 }, ok: true, status: 200,
 });
 assert.equal(record.accepted, 125);
 assert.equal(record.rejectedReasons.invalid_price, 5);
+assert.equal(record.skippedReasons.unpriced, 3);
 assert.ok(record.freshnessMinutes >= 119 && record.freshnessMinutes <= 121, "freshness is derived from the observation time");
 assert.equal("etag" in record, false, "absent fields are dropped rather than published as null");
+
+const legacyScout = new QualityReport({ game: "poe2" });
+checkSourceRecords(legacyScout, "Standard/prices.json", [{
+  id: "poe2scout.items", endpointFamily: "scout", url: "https://example.test/scout",
+  requestedAt: ago(0), ok: true, rawRows: 1270, accepted: 521, rejected: 749,
+  rejectedReasons: { invalid_price: 748, placeholder_name: 1 },
+}]);
+assert.ok(!legacyScout.checks.some((check) => check.code === "source-rejections"),
+  "legacy Scout rows with no Standard price are expected omissions, not a broken source");
+
+const nameResolved = new QualityReport({ game: "poe2" });
+checkMetadataCoverage(nameResolved, "Standard/prices.json", {
+  total: 525, byPath: 23, byName: 493, ambiguous: 8, unmatched: 1,
+});
+assert.ok(!nameResolved.checks.some((check) => check.code === "metadata-name-fallback"),
+  "high unique-name coverage is not incomplete when ambiguity and unmatched identity stay low");
 
 /* ---- quality report ---- */
 const report = new QualityReport({ game: "poe1" });

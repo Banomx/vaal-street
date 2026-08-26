@@ -274,6 +274,7 @@ export function stashToPrices(payload, fallbackType = null) {
 export function scoutToPrices(payload) {
   const prices = {};
   const rejected = rejectionLog();
+  const skipped = rejectionLog();
   let rawRows = 0;
   for (const item of Array.isArray(payload) ? payload : []) {
     rawRows += 1;
@@ -283,7 +284,7 @@ export function scoutToPrices(payload) {
        is not an item, or a price that is not a number, is dropped rather than
        carried in the hope that something downstream notices. */
     if (isPlaceholderName(name)) { rejected.reject("placeholder_name"); continue; }
-    if (!Number.isFinite(exalted) || exalted <= 0) { rejected.reject("invalid_price"); continue; }
+    if (!Number.isFinite(exalted) || exalted <= 0) { skipped.reject("unpriced"); continue; }
     const observedAt = item?.LastUpdated || item?.lastUpdated || item?.UpdatedAt || item?.updatedAt || null;
     const candidate = {
       exalted,
@@ -300,7 +301,11 @@ export function scoutToPrices(payload) {
     if (!existing || candidate.exalted < existing.exalted) prices[name] = candidate;
   }
   Object.defineProperty(prices, "__parse", {
-    value: { rawRows, accepted: Object.keys(prices).length, rejected: rejected.total, rejectedReasons: rejected.reasons },
+    value: {
+      rawRows, accepted: Object.keys(prices).length,
+      rejected: rejected.total, rejectedReasons: rejected.reasons,
+      skipped: skipped.total, skippedReasons: skipped.reasons,
+    },
     enumerable: false,
   });
   return prices;

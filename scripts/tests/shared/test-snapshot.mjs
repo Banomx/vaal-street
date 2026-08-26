@@ -110,11 +110,13 @@ const published = JSON.parse(JSON.stringify(report.toJSON()));
 assert.equal(published.state, "failure");
 assert.equal(published.counts.failure, 1);
 const notes = qualityNotes(published);
-assert.equal(notes.length, 2, "only degradations and failures are worth a banner");
+assert.equal(notes.length, 3, "the banner names failures, degradations and notable warnings");
 assert.equal(notes[0].level, "error");
 assert.ok(/price-collapse/.test(notes[0].text), "the check code reaches the reader");
 assert.equal(notes[1].level, "warning");
 assert.ok(/stale-leagues/.test(notes[1].text));
+assert.equal(notes[2].level, "notice");
+assert.ok(/fine/.test(notes[2].text), "a warning is explained instead of reduced to an opaque count");
 assert.deepEqual(qualityNotes(null), []);
 
 /* ---- the whole verdict ---- */

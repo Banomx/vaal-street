@@ -178,6 +178,8 @@ export function sourceRecord({
   accepted = null,
   rejected = null,
   rejectedReasons = null,
+  skipped = null,
+  skippedReasons = null,
   warnings = null,
 } = {}) {
   const record = {
@@ -197,6 +199,8 @@ export function sourceRecord({
     accepted,
     rejected,
     rejectedReasons: rejectedReasons && Object.keys(rejectedReasons).length ? rejectedReasons : null,
+    skipped,
+    skippedReasons: skippedReasons && Object.keys(skippedReasons).length ? skippedReasons : null,
     warnings: warnings?.length ? warnings : null,
   };
   if (observedAt) {
@@ -229,11 +233,24 @@ export function checkSourceRecords(report, label, records, { requiredPrefixes = 
     const raw = Number(record.rawRows);
     const rejected = Number(record.rejected);
     const accepted = Number(record.accepted);
-    if (Number.isFinite(raw) && raw < 0 || Number.isFinite(rejected) && rejected < 0 || Number.isFinite(accepted) && accepted < 0) {
+    const skipped = Number(record.skipped);
+    if (Number.isFinite(raw) && raw < 0 || Number.isFinite(rejected) && rejected < 0
+      || Number.isFinite(accepted) && accepted < 0 || Number.isFinite(skipped) && skipped < 0) {
       malformed.push(record.id);
     }
     if (Number.isFinite(raw) && Number.isFinite(rejected) && rejected > raw) malformed.push(record.id);
-    if (raw >= 20 && rejected / raw > 0.5) rejectionHeavy.push(`${record.id} ${rejected}/${raw}`);
+    if (Number.isFinite(raw) && Number.isFinite(skipped) && skipped > raw) malformed.push(record.id);
+    /* PoE2Scout enumerates the whole item catalogue for every league. A row
+       with no positive price is an expected unpriced market, especially in
+       Standard, not a malformed row. Schema-2 snapshots written before the
+       dedicated `skipped` field recorded those rows as `invalid_price`, so the
+       compatibility subtraction also lets code-only reuse assess them fairly. */
+    const legacyScoutUnpriced = record.id === "poe2scout.items"
+      ? Number(record.rejectedReasons?.invalid_price) || 0 : 0;
+    const concerningRejected = Math.max(0, rejected - legacyScoutUnpriced);
+    if (raw >= 20 && concerningRejected / raw > 0.5) {
+      rejectionHeavy.push(`${record.id} ${concerningRejected}/${raw}`);
+    }
   }
   if (malformed.length) report.fail("sources-shape", `${label} has ${malformed.length} malformed source record(s)`, malformed.slice(0, 12));
   if (failed.length) report.warn("source-request-failed", `${label} records ${failed.length} failed request(s)`, failed.slice(0, 12));
@@ -264,10 +281,8 @@ export function checkMetadataCoverage(report, label, coverage, { classifications
     }
     if (total >= 10) {
       const unresolved = ((Number(row.ambiguous) || 0) + (Number(row.unmatched) || 0)) / total;
-      const nameOnly = ((Number(row.byName) || 0) + (Number(row.ambiguous) || 0)) / total;
       if (unresolved > 0.5) report.degrade("metadata-unresolved", `${label}/${family}: ${Math.round(unresolved * 100)}% of identities are ambiguous or unmatched`);
       else if (unresolved > 0.1) report.warn("metadata-unresolved", `${label}/${family}: ${Math.round(unresolved * 100)}% of identities are ambiguous or unmatched`);
-      if (nameOnly > 0.8) report.warn("metadata-name-fallback", `${label}/${family}: ${Math.round(nameOnly * 100)}% of identities rely on display-name matching`);
       const before = previousByFamily.get(family);
       const beforeTotal = Number(before?.total) || 0;
       if (beforeTotal >= 10) {
