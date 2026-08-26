@@ -19,8 +19,8 @@
 
 import assert from "node:assert/strict";
 import {
-  COMPETING, ENTRY_DUAL_ROLE, NEUTRAL, SLOTS, curatedCoverage, entrySource, hasOutputPool,
-  mechanicFor, mechanicPools, resolveEntry,
+  COMPETING, ENTRY_DUAL_ROLE, NEUTRAL, POOL_CAVEATS, SLOTS, curatedCoverage, entrySource,
+  hasOutputPool, mechanicFor, mechanicPools, resolveEntry,
 } from "../../../src/games/poe2/features/farms/mechanics.js";
 import {
   MIN_MEMBERS, buildBasketIndex, concentration, liquidity, poolContributions, poolFlow,
@@ -43,6 +43,15 @@ const stash = (marketFamily, extra = {}) => ({
 
 ok(mechanicFor("Sibilant Catalyst", ggg("Breach")) === "breach", "a GGG Breach row is Breach output");
 ok(mechanicFor("Omen of Chance", ggg("Ritual")) === "ritual", "a GGG Ritual row is Ritual output");
+ok(mechanicFor("Omen of Light", ggg("Ritual", {
+  metadataPath: "Metadata/Items/Currency/OmenOnAnnulRemoveAbyssMod",
+})) === "abyss", "an Abyss Omen's RePoE path overrides GGG's broad Ritual trading family");
+ok(mechanicFor("Omen of Abyssal Echoes", {
+  source: "PoE2Scout", marketFamily: "ritual", exalted: 5,
+  metadataPath: "Metadata/Items/Currency/OmenOnAbyssRerollOptions",
+}) === "abyss", "Abyss Omen identity survives when the selected quote is a gap-fill source");
+ok(/metadata paths/.test(POOL_CAVEATS.abyss) && /reassigned/.test(POOL_CAVEATS.ritual),
+  "both cards explain why the exchange family and farm ownership differ");
 
 /* PoE2Scout reuses the field with its own vocabulary. */
 ok(mechanicFor("Emergent Vigour", { source: "PoE2Scout", marketFamily: "expedition", exalted: 5 }) === null,
@@ -75,6 +84,9 @@ const prices = {
   "Xoph's Blood": stash("UniqueAccessories", { exalted: 2, listingCount: 1381 }),
   Nightfall: stash("UniqueArmours", { exalted: 45, listingCount: 3416 }),
   "Emergent Vigour": { source: "PoE2Scout", marketFamily: "expedition", exalted: 2705 },
+  "Omen of Light": ggg("Ritual", {
+    exalted: 2808, volume1H: 12, metadataPath: "Metadata/Items/Currency/OmenOnAnnulRemoveAbyssMod",
+  }),
 };
 
 const pools = mechanicPools(prices);
@@ -90,6 +102,9 @@ ok(breach.chase.map((item) => item.name).sort().join() === "Nightfall,Xoph's Blo
   "stash-quoted uniques surface as chase items");
 ok(!Object.values(pools).some((pool) => pool.members.some((member) => member.name === "Emergent Vigour")),
   "a PoE2Scout family never places an item in a mechanic pool");
+ok(pools.abyss.members.some((member) => member.name === "Omen of Light")
+  && !pools.ritual.members.some((member) => member.name === "Omen of Light"),
+"an Abyss Omen appears once, in Abyss rather than Ritual");
 
 const seen = new Map();
 for (const pool of Object.values(pools)) {

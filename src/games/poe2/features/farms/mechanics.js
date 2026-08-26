@@ -126,7 +126,12 @@ const MECHANIC_POOLS = {
   /* Simulacrum and its splinter trade under the generic Fragments family, so
      the affliction tags are what puts them back with Delirium. */
   delirium: { family: "Delirium", tag: /^affliction_(splinter|orb)$/ },
-  abyss: { family: "Abyss" },
+  /* GGG's exchange puts every Omen in Ritual. RePoE's stable metadata paths
+     distinguish the Abyss crafting omens, so this specific rule must win over
+     the broader exchange family below. The eight current paths use both
+     `OmenOnAbyss...` and forms such as `OmenOnAnnulRemoveAbyssMod`, so Abyss
+     is matched anywhere in the stable Omen path rather than in the name. */
+  abyss: { family: "Abyss", paths: [/^Metadata\/Items\/Currency\/OmenOn[^/]*Abyss/] },
   expedition: { family: "Expedition" },
   /* Incursion has no GGG family of its own; the metadata path is the whole
      pool, Vaal currencies plus the four Theses. */
@@ -169,27 +174,33 @@ const CURATED = {
   vaal: [],
 };
 
-/* Omens are one known imprecision worth naming: GGG groups every Omen under the
-   Ritual exchange family, and poe2db lists several Abyss-themed Omens as Abyss
-   drops. Nothing available splits the supply between the two mechanics, so the
-   trading family is kept as the assignment and this note carries the caveat
-   rather than a made-up split. */
+/* GGG groups every Omen under Ritual for trading. RePoE's metadata paths and
+   poe2db's Abyss related-item list provide the narrower drop-source identity,
+   so Abyss-specific omens are reassigned without double counting. */
 export const POOL_CAVEATS = {
-  ritual: "Every Omen trades under GGG's Ritual family, including Abyss-themed Omens that also drop from Abyss. No source splits that supply, so they are counted here.",
+  ritual: "GGG's exchange groups every Omen under Ritual. Abyss-specific Omens are reassigned from their RePoE metadata paths, so this basket keeps the remaining Ritual markets.",
+  abyss: "Abyss-specific Omens are assigned here from their RePoE metadata paths even though GGG's exchange lists every Omen under Ritual.",
 };
 
-function matches(rule, entry) {
+function matchesSpecific(rule, entry) {
   if (!rule) return false;
-  if (rule.family && entry?.source === GGG_SOURCE && entry?.marketFamily === rule.family) return true;
   if (rule.tag && (entry?.tags || []).some((tag) => rule.tag.test(tag))) return true;
   if (rule.paths?.some((path) => path.test(String(entry?.metadataPath || "")))) return true;
   return false;
 }
 
+function matchesFamily(rule, entry) {
+  return !!rule?.family && entry?.source === GGG_SOURCE && entry?.marketFamily === rule.family;
+}
+
 /* Structural identity only. A name reaches a mechanic through curation instead
    when nothing in its metadata connects it. */
 export function mechanicFor(name, entry) {
-  for (const id of COMPETING) if (matches(MECHANIC_POOLS[id], entry)) return id;
+  /* Specific tags and paths take precedence over GGG's broad trading family.
+     This is what keeps an Abyss Omen out of Ritual while leaving ordinary
+     Ritual Omens there. */
+  for (const id of COMPETING) if (matchesSpecific(MECHANIC_POOLS[id], entry)) return id;
+  for (const id of COMPETING) if (matchesFamily(MECHANIC_POOLS[id], entry)) return id;
   return null;
 }
 
