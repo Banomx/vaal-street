@@ -199,6 +199,14 @@ assert.ok(codes(await validatePoe1(await poe1Tree((t) => {
   t.prices.priceSource = "poe.ninja";
 }))).includes("selected-source-untracked"), "a selected PoE 1 feed must have successful provenance");
 
+assert.equal((await validatePoe1(await poe1Tree((t) => {
+  t.index.leagues[0].files = { prices: "prices.json", sources: "sources.json" };
+  t.sources = {
+    schemaVersion: 1, generatedAt: ago(0), league: "Allflame",
+    metadataCoverage: [{ family: "scarabs", total: 1, byPath: 0, byName: 1, ambiguous: 0, unmatched: 0 }],
+  };
+}))).publishable, true, "schema 1 reuse accepts an early sources manifest without request-level provenance");
+
 {
   const previous = await poe1Tree((t) => {
     for (let index = 0; index < 60; index += 1) t.prices.prices[`Item ${index}`] = { c: 1 + index };

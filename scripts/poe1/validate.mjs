@@ -318,16 +318,22 @@ export async function validatePoe1(dir, { previousDir = null, report = new Quali
         report.fail("sources-missing", `${label}: index advertises ${manifest.sources} but it is missing or unparseable`);
       } else {
         checkSnapshotEnvelope(report, `${label}/${manifest.sources}`, provenance);
-        checkSourceRecords(report, `${label}/${manifest.sources}`, provenance.sources, {
-          requiredPrefixes: [...claimedSources],
-        });
-        const previousProvenance = previousDir
-          ? await readJsonFile(path.join(previousDir, league.slug, manifest.sources))
-          : null;
-        checkMetadataCoverage(report, `${label}/${manifest.sources}`, provenance.metadataCoverage, {
-          classifications: provenance.classification,
-          previous: previousProvenance?.metadataCoverage,
-        });
+        /* Schema 1 snapshots may contain an early sources.json with coverage
+           summaries but no request-level records. Code-only deployments must
+           keep those snapshots readable; schema 2 is the explicit boundary
+           where complete provenance becomes a publication requirement. */
+        if (index.schemaVersion >= 2) {
+          checkSourceRecords(report, `${label}/${manifest.sources}`, provenance.sources, {
+            requiredPrefixes: [...claimedSources],
+          });
+          const previousProvenance = previousDir
+            ? await readJsonFile(path.join(previousDir, league.slug, manifest.sources))
+            : null;
+          checkMetadataCoverage(report, `${label}/${manifest.sources}`, provenance.metadataCoverage, {
+            classifications: provenance.classification,
+            previous: previousProvenance?.metadataCoverage,
+          });
+        }
       }
     } else if (index.schemaVersion >= 2 && !league.stale) {
       report.fail("sources-missing", `${label}: schema ${index.schemaVersion} requires a sources manifest`);
