@@ -515,8 +515,8 @@ Buy mode sorts normalized means ascending and sell mode descending; sell is the
 default. These are labelled as the lowest and highest **observed** routes rather
 than live recommendations because pair means within an hour need not have been
 executable simultaneously. The selected route floors apply to both legs. The
-editable defaults are 1,000 Exalted/hour, 10 completed units/hour, and an
-accessible-flow assumption of 10%; all expose presets but accept custom values. Planned
+editable defaults are 1,000 Exalted/hour, 10 completed units/hour, and a 25%
+assumed personal share of the observed flow; all expose presets but accept custom values. Planned
 quantity starts at one item and applies to both recommendation cards and the
 route table.
 The route table initially renders 10 rows and
@@ -538,7 +538,9 @@ pinned comparisons when those completed pairs exist.
 History is decoded once into indexed pair maps; the resulting movement map is
 reused by the market catalogue. Route confidence combines the selected unit and
 turnover floors with completed-range width and cross-route disagreement; extreme
-gaps are marked low confidence instead of styled as profit. The bottom Route
+gaps are marked low confidence instead of styled as profit. The best-observed
+card shows those inputs as separate numeric tags, while every route row carries
+its own compact confidence badge based on that route's depth and range. The bottom Route
 opportunity scanner defaults to 1,000 Exalted/hour and 10 units/hour and renders
 20 rows at a time; search, sort, and filter
 changes reset it to the first batch. Its turnover floor filters both the item's
