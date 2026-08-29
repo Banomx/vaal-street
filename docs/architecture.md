@@ -949,7 +949,9 @@ labels, controls, tabs and source text all use shared `--ui-*` tokens. New
 game sections should compose these components instead of copying shell CSS.
 Game-specific header artwork and feature layouts remain in the game workspace,
 so PoE 2 can keep its dense boss ranking/detail layout without diverging from
-PoE 1's outer scale.
+PoE 1's outer scale. The PoE 2 shell also owns its Ardura background treatment
+and the visible Grinding Gear Games artwork credit; neither is applied to the
+shared shell or PoE 1.
 
 `src/games/poe1/Poe1App.jsx` owns the PoE 1 market state, scarab views and tab
 mounts. Its feature styles still live in the `css` string at the bottom of that

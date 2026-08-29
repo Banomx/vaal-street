@@ -188,6 +188,9 @@ export default function Poe2App({ activeGame, onGameChange }) {
       {tab === "bosses" && <BossProfit league={league || "Standard"} priceData={prices} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "exchange" && <CurrencyExchange league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} history={exchangeHistory} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "prices" && <PriceTracker league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency} rateSummary={rates.summary} />}
+      <footer className="p2-art-credit" aria-label="Artwork credit">
+        Background artwork <strong>© Grinding Gear Games</strong>
+      </footer>
     </div>
   );
 }
@@ -197,8 +200,42 @@ const css = `
 * { box-sizing:border-box; }
 body { margin:0; background:#090605; }
 button,select,input { font-family:inherit; }
-.p2-head { border-bottom-color:#632b17; background:linear-gradient(110deg,#0d0908,#25100b 72%,#0b0807); }
+.p2-root {
+  position:relative;
+  isolation:isolate;
+  background-color:#090605;
+  background-image:
+    linear-gradient(180deg,rgba(9,6,5,.3) 0,rgba(9,6,5,.76) 54vh,#090605 108vh),
+    url("${import.meta.env.BASE_URL}assets/poe2-ardura-caravan.jpg");
+  background-position:center top;
+  background-repeat:no-repeat;
+  background-size:100% 110vh,cover;
+  background-attachment:fixed;
+}
+.p2-head {
+  border-bottom-color:#632b17;
+  background:linear-gradient(110deg,rgba(13,9,8,.88),rgba(37,16,11,.76) 72%,rgba(11,8,7,.9));
+  box-shadow:0 18px 44px rgba(0,0,0,.24);
+  backdrop-filter:blur(3px);
+}
+.p2-tabs { background:rgba(16,10,8,.88); backdrop-filter:blur(3px); }
 .p2-notices { margin:0 auto; max-width:1180px; padding:0 18px; }
 .p2-notices:empty { display:none; }
 .p2-boss-page { margin-top:0; }
+.p2-art-credit {
+  max-width:1180px;
+  margin:28px auto -20px;
+  padding:13px 18px 0;
+  border-top:1px solid rgba(150,86,61,.28);
+  color:#79655d;
+  font-size:10px;
+  letter-spacing:.08em;
+  text-align:right;
+  text-transform:uppercase;
+}
+.p2-art-credit strong { color:#a88d81; font-weight:500; }
+@media (max-width:720px) {
+  .p2-root { background-position:58% top; background-size:100% 100vh,auto 100vh; }
+  .p2-art-credit { text-align:center; }
+}
 `;
