@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { appendExchangeSnapshot } from "../../poe2/exchange-history.mjs";
 import { buildGggExchangeSnapshot, DIVINE_ID, EXALTED_ID } from "../../poe2/ggg-exchange.mjs";
-import { buildExchangeOverview, buildExchangeRouteOptions, buildExchangeRows, buildExchangeTimeline, CHAOS_ID, estimateExchangeExecution, filterExchangeRowsByTurnover, findTriangleChecks } from "../../../src/games/poe2/features/exchange/exchangeDesk.js";
+import { assessExchangeRoute, buildExchangeOverview, buildExchangeRouteOptions, buildExchangeRouteTimeline, buildExchangeRows, buildExchangeTimeline, CHAOS_ID, estimateExchangeExecution, filterExchangeRowsByTurnover, findTriangleChecks } from "../../../src/games/poe2/features/exchange/exchangeDesk.js";
 
 const ITEM = "Metadata/Items/Test/Item";
 const MIDDLE = "Metadata/Items/Test/Middle";
@@ -69,6 +69,9 @@ assert.equal(stricterTurnoverFiltered[0].bestBuy.quoteName, "Liquid sell route",
 assert.equal(stricterTurnoverFiltered[0].bestSell.quoteName, "Liquid sell route");
 assert.equal(stricterTurnoverFiltered[0].routeGap, 0);
 assert.equal(filterExchangeRowsByTurnover(turnoverFiltered, 6000).length, 0, "the overall market turnover must also pass the floor");
+assert.equal(filterExchangeRowsByTurnover([{ ...turnoverFiltered[0], itemVolume: 4,
+  routeOptions: turnoverFiltered[0].routeOptions.map((route) => ({ ...route, itemVolume: 4 })) }], 1000, { minItemVolume: 5 }).length, 0,
+"an expensive but rarely completed item does not pass the unit-volume floor");
 assert.equal(buildExchangeRouteOptions(current, ITEM, { minTurnoverExalted: 1000 }).length, 0,
   "route choices can suppress a path when either leg lacks enough completed turnover");
 const divineQuotedRow = rows.find((entry) => entry.itemId === DIVINE_QUOTED);
@@ -94,6 +97,10 @@ assert.deepEqual(timeline.points.map((point) => point.chaosExalted), [2, 2], "ex
 assert.ok(Math.abs(timeline.change - .2) < 1e-12);
 assert.ok(Math.abs(timeline.divineAdjustedChange - (12 / 440 / (10 / 400) - 1)) < 1e-12);
 assert.equal(timeline.canDivineAdjust, true);
+const middleRouteTimeline = buildExchangeRouteTimeline(history, ITEM, MIDDLE);
+assert.deepEqual(middleRouteTimeline.points.map((point) => point.price), [12, 12],
+  "route history follows the selected item/quote pair and its same-hour Exalted normalization leg");
+assert.equal(middleRouteTimeline.change, 0);
 const divineQuotedTimeline = buildExchangeTimeline(history, DIVINE_QUOTED);
 assert.deepEqual(divineQuotedTimeline.points.map((point) => point.price), [80, 88]);
 assert.ok(Math.abs(divineQuotedTimeline.divineAdjustedChange) < 1e-12,
@@ -121,5 +128,18 @@ const routedExecution = estimateExchangeExecution(routeOptions[1], 20, { partici
 assert.equal(routedExecution.limitingTurnoverExalted, 120);
 assert.equal(routedExecution.hoursToClear, 4,
   "route timing respects both completed item units and the limiting normalized leg");
+const cautiousExecution = estimateExchangeExecution(row, 1, { participation: .001 });
+assert.equal(cautiousExecution.participation, .001, "the model honors the UI's 0.1% minimum instead of silently clamping it to 1%");
+assert.equal(cautiousExecution.hoursToClear, 100);
+
+assert.equal(assessExchangeRoute({ itemVolume: 100, limitingTurnoverExalted: 10000, rangePercent: .1 }, {
+  minItemVolume: 10, minTurnoverExalted: 1000, routeGap: .05,
+}).level, "high");
+assert.equal(assessExchangeRoute({ itemVolume: 20, limitingTurnoverExalted: 2000, rangePercent: .25 }, {
+  minItemVolume: 10, minTurnoverExalted: 1000, routeGap: .1,
+}).level, "medium");
+assert.equal(assessExchangeRoute({ itemVolume: 100, limitingTurnoverExalted: 10000, rangePercent: .1 }, {
+  minItemVolume: 10, minTurnoverExalted: 1000, routeGap: .75,
+}).level, "low", "extreme cross-route disagreement is surfaced as low confidence rather than green profit");
 
 console.log("PoE 2 Currency Exchange desk passed.");

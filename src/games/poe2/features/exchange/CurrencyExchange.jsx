@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import MarketBrowser from "../../shared/MarketBrowser.jsx";
-import { buildExchangeOverview, buildExchangeRows, buildExchangeTimeline, CHAOS_ID, DIVINE_ID, EXALTED_ID, estimateExchangeExecution, filterExchangeRowsByTurnover } from "./exchangeDesk.js";
+import { assessExchangeRoute, buildExchangeOverview, buildExchangeRouteTimeline, buildExchangeRows, CHAOS_ID, DIVINE_ID, EXALTED_ID, estimateExchangeExecution, filterExchangeRowsByTurnover } from "./exchangeDesk.js";
 
 const RANGES = [[24, "24h"], [168, "7d"], [720, "30d"], [null, "All"]];
 const ROUTE_PAGE_SIZE = 10;
@@ -56,19 +56,22 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("routes");
   const [minimum, setMinimum] = useState(1000);
+  const [minimumUnits, setMinimumUnits] = useState(10);
   const [rangeHours, setRangeHours] = useState(168);
   const [divineAdjusted, setDivineAdjusted] = useState(false);
   const [plannedUnits, setPlannedUnits] = useState(1);
-  const [participation, setParticipation] = useState(.9);
+  const [participation, setParticipation] = useState(.1);
   const [tradeSide, setTradeSide] = useState("sell");
   const [routeMinimum, setRouteMinimum] = useState(1000);
+  const [routeMinimumUnits, setRouteMinimumUnits] = useState(10);
   const [visibleRouteCount, setVisibleRouteCount] = useState(ROUTE_PAGE_SIZE);
   const [visibleMarketCount, setVisibleMarketCount] = useState(MARKET_PAGE_SIZE);
   const [comparisonRouteId, setComparisonRouteId] = useState("");
+  const [pickerCollapsed, setPickerCollapsed] = useState(false);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered = filterExchangeRowsByTurnover(rows, minimum)
+    const filtered = filterExchangeRowsByTurnover(rows, minimum, { minItemVolume: minimumUnits })
       .filter((row) => !needle || row.name.toLowerCase().includes(needle));
     const compare = sort === "volume" ? (a, b) => b.itemVolume - a.itemVolume
       : sort === "spread" ? (a, b) => Math.abs(b.quoteGap || 0) - Math.abs(a.quoteGap || 0)
@@ -77,7 +80,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
             : sort === "routes" ? (a, b) => b.routeGap - a.routeGap
           : (a, b) => b.turnoverExalted - a.turnoverExalted;
     return [...filtered].sort(compare);
-  }, [minimum, overview.movementByItem, query, rows, sort]);
+  }, [minimum, minimumUnits, overview.movementByItem, query, rows, sort]);
   const shownMarkets = visible.slice(0, visibleMarketCount);
   const remainingMarkets = visible.length - shownMarkets.length;
 
@@ -90,7 +93,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   const selected = rows.find((row) => row.itemId === selectedId) || null;
   const sortedRoutes = useMemo(() => [...(selected?.routeOptions || [])]
     .sort((left, right) => tradeSide === "buy" ? left.priceExalted - right.priceExalted : right.priceExalted - left.priceExalted), [selected, tradeSide]);
-  const viableRoutes = useMemo(() => sortedRoutes.filter((route) => route.limitingTurnoverExalted >= routeMinimum), [routeMinimum, sortedRoutes]);
+  const viableRoutes = useMemo(() => sortedRoutes.filter((route) => route.limitingTurnoverExalted >= routeMinimum && route.itemVolume >= routeMinimumUnits), [routeMinimum, routeMinimumUnits, sortedRoutes]);
   const recommendedRoute = viableRoutes[0] || null;
   const availableRoutes = useMemo(() => {
     const included = new Set(viableRoutes.map((route) => route.quoteId));
@@ -113,6 +116,14 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   const remainingRoutes = availableRoutes.length - shownRoutes.length;
   const comparisonRoute = availableRoutes.find((route) => route.quoteId === comparisonRouteId) || null;
   const directExaltedRoute = selected?.routeOptions?.find((route) => route.quoteId === EXALTED_ID) || null;
+  const viableRoutePrices = viableRoutes.map((route) => route.priceExalted).filter((value) => value > 0);
+  const viableRouteGap = viableRoutePrices.length > 1
+    ? Math.max(...viableRoutePrices) / Math.min(...viableRoutePrices) - 1 : 0;
+  const confidence = useMemo(() => assessExchangeRoute(recommendedRoute, {
+    minTurnoverExalted: routeMinimum,
+    minItemVolume: routeMinimumUnits,
+    routeGap: viableRouteGap,
+  }), [recommendedRoute, routeMinimum, routeMinimumUnits, viableRouteGap]);
   const execution = useMemo(() => estimateExchangeExecution(recommendedRoute, plannedUnits, { participation }), [participation, plannedUnits, recommendedRoute]);
   const comparisonExecution = useMemo(() => estimateExchangeExecution(comparisonRoute, plannedUnits, { participation }), [comparisonRoute, participation, plannedUnits]);
   const comparisonDifference = comparisonRoute && recommendedRoute ? comparisonRoute.priceExalted / recommendedRoute.priceExalted - 1 : null;
@@ -121,9 +132,9 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   const routeImprovement = recommendedRoute && directExaltedRoute ? (tradeSide === "buy"
     ? 1 - recommendedRoute.priceExalted / directExaltedRoute.priceExalted
     : recommendedRoute.priceExalted / directExaltedRoute.priceExalted - 1) : null;
-  const routeLeaders = useMemo(() => filterExchangeRowsByTurnover(rows, routeMinimum)
+  const routeLeaders = useMemo(() => filterExchangeRowsByTurnover(rows, routeMinimum, { minItemVolume: routeMinimumUnits })
     .filter((row) => row.routeCount > 1 && row.routeGap > .005)
-    .sort((left, right) => right.routeGap - left.routeGap).slice(0, 8), [routeMinimum, rows]);
+    .sort((left, right) => right.routeGap - left.routeGap).slice(0, 8), [routeMinimum, routeMinimumUnits, rows]);
   const marketNames = useMemo(() => rows.map((row) => row.name).sort((left, right) => left.localeCompare(right)), [rows]);
   const marketEntries = useMemo(() => Object.fromEntries(rows.map((row) => [row.name, {
     itemClass: row.type,
@@ -133,9 +144,10 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   }])), [exchange, rows]);
   const rowByName = useMemo(() => new Map(rows.map((row) => [row.name, row])), [rows]);
   const preferredMarket = rows.find((row) => row.itemId !== DIVINE_ID)?.name || rows[0]?.name;
-  const timeline = useMemo(() => buildExchangeTimeline(history, selectedId, { rangeHours }), [history, rangeHours, selectedId]);
+  const trackedRoute = comparisonRoute || recommendedRoute;
+  const timeline = useMemo(() => buildExchangeRouteTimeline(history, selectedId, trackedRoute?.quoteId, { rangeHours }), [history, rangeHours, selectedId, trackedRoute?.quoteId]);
   const divineRate = priceData && priceData !== "missing" ? priceData.divineExalted || 0 : 0;
-  const unit = displayMode(currency, selected?.priceExalted || 0, divineRate);
+  const unit = displayMode(currency, trackedRoute?.priceExalted || selected?.priceExalted || 0, divineRate);
   const chartPoints = timeline.points.map((point) => ({
     ...point,
     shownPrice: unit === "Divine" ? (point.divineExalted ? point.price / point.divineExalted : null) : unit === "Chaos" ? (point.chaosExalted ? point.price / point.chaosExalted : null) : point.price,
@@ -146,7 +158,16 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
 
   function inspectMarket(itemId) {
     setSelectedId(itemId);
+    setPickerCollapsed(true);
     requestAnimationFrame(() => workbenchRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function selectFromBrowser(itemId) {
+    setSelectedId(itemId);
+    if (window.matchMedia?.("(max-width: 780px)").matches) {
+      setPickerCollapsed(true);
+      requestAnimationFrame(() => workbenchRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
   }
 
   useEffect(() => {
@@ -155,11 +176,11 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
 
   useEffect(() => {
     setVisibleRouteCount(ROUTE_PAGE_SIZE);
-  }, [routeMinimum, selectedId, tradeSide]);
+  }, [routeMinimum, routeMinimumUnits, selectedId, tradeSide]);
 
   useEffect(() => {
     setVisibleMarketCount(MARKET_PAGE_SIZE);
-  }, [minimum, query, rows, sort]);
+  }, [minimum, minimumUnits, query, rows, sort]);
 
   useEffect(() => {
     setComparisonRouteId("");
@@ -177,10 +198,10 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
         : `Completed PoE 2 Currency Exchange data is not available yet · ${league}`}</SourceStrip>
 
       <header className="p2ex-head">
-        <div><span>Official completed trades</span><h2>Exchange route finder</h2><p>Find whether Exalted, Divine, Chaos, or another completed quote currency produced the better normalized route for buying or selling an item.</p></div>
+        <div><span>Official completed trades</span><h2>Exchange route finder</h2><p>Compare observed Exalted, Divine, Chaos, and alternate quote routes with explicit depth and confidence checks. Results describe the completed market hour—not live offers.</p></div>
         <div className="p2ex-kpis">
           <div><span>Exchange markets</span><strong>{rows.length || "—"}</strong></div>
-          <div><span>Cleared turnover</span><strong>{rows.length ? `${number(overview.totalTurnoverExalted, 0)} ex` : "—"}</strong></div>
+          <div><span>Cleared turnover</span><strong>{rows.length ? `${number(overview.totalTurnoverExalted, 0)} ex/h` : "—"}</strong></div>
           <div><span>Multi-route items</span><strong>{rows.filter((row) => row.routeCount > 1).length || "—"}</strong></div>
           <div><span>Stored points</span><strong>{overview.historySnapshots || "Building"}</strong></div>
         </div>
@@ -188,41 +209,45 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
 
       {!exchange ? <section className="p2ex-empty">The next scheduled market fetch will create the full-pair snapshot and start its history.</section> : <>
         <div className="p2ex-route-workspace">
-        <MarketBrowser names={marketNames} entries={marketEntries} selectedName={selected?.name || ""} preferredName={preferredMarket}
-          onSelect={(name) => setSelectedId(rowByName.get(name)?.itemId || "")} sticky />
+        <section className={`p2ex-market-picker ${pickerCollapsed ? "collapsed" : ""}`}>
+          <div className="p2ex-market-picker-toggle"><span>Selected market</span><strong>{selected?.name || "Select an item"}</strong><button type="button" onClick={() => setPickerCollapsed((value) => !value)}>{pickerCollapsed ? "Change item" : "Hide picker"}</button></div>
+          <div className="p2ex-market-picker-body"><MarketBrowser names={marketNames} entries={marketEntries} selectedName={selected?.name || ""} preferredName={preferredMarket}
+            onSelect={(name) => selectFromBrowser(rowByName.get(name)?.itemId || "")} /></div>
+        </section>
         <section className="p2ex-router" ref={workbenchRef}>
           <header className="p2ex-router-head">
-            <div><span>Exchange route finder</span><h2>{selected?.name || "Select an item"}</h2><p>Compare every completed item pair that can be converted through Exalted. Buy mode finds the lowest normalized cost; sell mode finds the highest normalized return.</p></div>
+            <div><span>Observed route comparison</span><h2>{selected?.name || "Select an item"}</h2><p>Compare same-hour completed averages after normalizing each quote currency through Exalted. These are historical route signals, not live offers.</p></div>
             <div className="p2ex-side-switch" aria-label="Trade direction"><button type="button" className={tradeSide === "buy" ? "on" : ""} onClick={() => setTradeSide("buy")}>I want to buy</button><button type="button" className={tradeSide === "sell" ? "on" : ""} onClick={() => setTradeSide("sell")}>I want to sell</button></div>
           </header>
           <div className="p2ex-router-controls">
             <label><span>Units</span><input type="number" min="1" step="1" value={plannedUnits} onChange={(event) => setPlannedUnits(Math.max(1, Number(event.target.value) || 1))} /><small>Starts at one item · enter a bulk amount when needed</small></label>
             <label><span>Minimum hourly route turnover</span><input type="number" min="0" step="100" list="p2ex-turnover-presets" value={routeMinimum} onChange={(event) => setRouteMinimum(Math.max(0, Number(event.target.value) || 0))} /><small>Exalted/hour · custom value allowed</small><datalist id="p2ex-turnover-presets"><option value="500" /><option value="1000" /><option value="2500" /><option value="5000" /><option value="10000" /><option value="25000" /><option value="50000" /></datalist></label>
+            <label><span>Minimum hourly units</span><input type="number" min="0" step="1" list="p2ex-unit-presets" value={routeMinimumUnits} onChange={(event) => setRouteMinimumUnits(Math.max(0, Number(event.target.value) || 0))} /><small>Completed units/hour · protects against one-sale markets</small><datalist id="p2ex-unit-presets"><option value="1" /><option value="5" /><option value="10" /><option value="25" /><option value="50" /><option value="100" /></datalist></label>
             <label><span>Expected accessible hourly flow</span><input type="number" min="0.1" max="100" step="0.1" list="p2ex-flow-presets" value={Number((participation * 100).toFixed(2))} onChange={(event) => setParticipation(Math.min(1, Math.max(.001, (Number(event.target.value) || .1) / 100)))} /><small>Percent of completed flow · custom value allowed</small><datalist id="p2ex-flow-presets"><option value="1" /><option value="5" /><option value="10" /><option value="25" /><option value="50" /><option value="75" /><option value="90" /><option value="100" /></datalist></label>
           </div>
           {recommendedRoute ? <>
             <div className="p2ex-recommendation">
-              <div><span>Recommended completed route</span><strong>{tradeSide === "buy" ? "Pay" : "Receive"} {number(recommendedRoute.rateQuotePerItem * plannedUnits)} {recommendedRoute.quoteName}</strong><small>{number(recommendedRoute.rateQuotePerItem)} per item · {number(execution.completedValue, 0)} Exalted equivalent</small></div>
-              <dl><div><dt>Versus direct Exalted</dt><dd className={routeImprovement > 0 ? "gain" : ""}>{routeImprovement == null ? "No direct pair" : routeImprovement > .0005 ? `${percent(routeImprovement)} better` : "Same route"}</dd></div><div><dt>Estimated clear time</dt><dd>{duration(execution.hoursToClear)}</dd></div><div><dt>Observed value range</dt><dd>{number(execution.lowValue, 0)}–{number(execution.highValue, 0)} ex</dd></div></dl>
+              <div><span>Best observed route</span><strong>{tradeSide === "buy" ? "Pay" : "Receive"} {number(recommendedRoute.rateQuotePerItem * plannedUnits)} {recommendedRoute.quoteName}</strong><small>{number(recommendedRoute.rateQuotePerItem)} per item · {number(execution.completedValue, 0)} Exalted equivalent</small><em className={`p2ex-confidence ${confidence.level}`}>{confidence.label} · {confidence.reasons.join(" · ")}</em></div>
+              <dl><div><dt>Versus direct Exalted</dt><dd className={routeImprovement > 0 ? "gain" : ""}>{routeImprovement == null ? "No direct pair" : routeImprovement > .0005 ? `${percent(routeImprovement)} observed edge` : "Same observed route"}</dd></div><div><dt>Estimated clear time</dt><dd>{duration(execution.hoursToClear)}</dd></div><div><dt>Observed value range</dt><dd>{number(execution.lowValue, 0)}–{number(execution.highValue, 0)} ex</dd></div></dl>
             </div>
             {comparisonRoute && <div className="p2ex-recommendation p2ex-comparison">
               <div><span>Selected comparison route</span><strong>{tradeSide === "buy" ? "Pay" : "Receive"} {number(comparisonRoute.rateQuotePerItem * plannedUnits)} {comparisonRoute.quoteName}</strong><small>{number(comparisonRoute.rateQuotePerItem)} per item · {number(comparisonExecution.completedValue, 0)} Exalted equivalent{comparisonRoute.limitingTurnoverExalted < routeMinimum ? " · below turnover floor" : ""}</small></div>
-              <dl><div><dt>Versus recommendation</dt><dd className={comparisonBetter ? "gain" : comparisonWorse ? "loss" : ""}>{Math.abs(comparisonDifference) <= .0005 ? "Same route" : tradeSide === "buy" ? `${unsignedPercent(Math.abs(comparisonDifference))} ${comparisonDifference < 0 ? "cheaper" : "more expensive"}` : `${unsignedPercent(Math.abs(comparisonDifference))} ${comparisonDifference > 0 ? "higher return" : "lower return"}`}</dd></div><div><dt>Estimated clear time</dt><dd>{duration(comparisonExecution.hoursToClear)}</dd></div><div><dt>Observed value range</dt><dd>{number(comparisonExecution.lowValue, 0)}–{number(comparisonExecution.highValue, 0)} ex</dd></div></dl>
+              <dl><div><dt>Versus best observed</dt><dd className={comparisonBetter ? "gain" : comparisonWorse ? "loss" : ""}>{Math.abs(comparisonDifference) <= .0005 ? "Same route" : tradeSide === "buy" ? `${unsignedPercent(Math.abs(comparisonDifference))} ${comparisonDifference < 0 ? "cheaper" : "more expensive"}` : `${unsignedPercent(Math.abs(comparisonDifference))} ${comparisonDifference > 0 ? "higher return" : "lower return"}`}</dd></div><div><dt>Estimated clear time</dt><dd>{duration(comparisonExecution.hoursToClear)}</dd></div><div><dt>Observed value range</dt><dd>{number(comparisonExecution.lowValue, 0)}–{number(comparisonExecution.highValue, 0)} ex</dd></div></dl>
               <button type="button" className="p2ex-comparison-clear" onClick={() => setComparisonRouteId("")}>Clear comparison</button>
             </div>}
-            <div className="p2ex-route-legend"><span>Pinned comparisons</span><p>Exalted, Chaos, and Divine are always shown when a completed route exists—even when one is also the recommendation.</p></div>
+            <div className="p2ex-route-legend"><span>Pinned comparisons</span><p>Exalted, Chaos, and Divine remain visible when completed evidence exists. Selecting a row also switches the history chart to that route.</p></div>
             <div className="p2ex-route-layout">
-              <div className="p2ex-route-table p2ex-table-wrap"><table><thead><tr><th>{tradeSide === "buy" ? "Pay with" : "Receive"}</th><th>Rate per item</th><th>Total for {number(plannedUnits, 0)}</th><th>Exalted equivalent</th><th>Completed range</th><th>Limiting turnover</th></tr></thead><tbody>{shownRoutes.map((route) => { const recommended = route.quoteId === recommendedRoute.quoteId; const core = CORE_ROUTE_IDS.includes(route.quoteId); const comparing = route.quoteId === comparisonRouteId; return <tr key={route.quoteId} className={`${recommended ? "recommended" : ""} ${core ? "core" : ""} ${comparing ? "comparison" : ""}`}><td><button type="button" className="p2ex-route-pick" aria-pressed={comparing} title={`Compare ${route.quoteName} with the recommendation`} onClick={() => setComparisonRouteId((current) => current === route.quoteId ? "" : route.quoteId)}><span className="p2ex-route-name"><strong>{route.quoteName}</strong>{core && <em>Pinned</em>}</span><small>{recommended ? core ? "Recommended · Always shown" : "Recommended" : core ? `${route.routeLabel} · Always shown` : route.routeLabel}</small></button></td><td>{number(route.rateQuotePerItem)} {route.quoteName}</td><td>{number(route.rateQuotePerItem * plannedUnits)} {route.quoteName}</td><td>{number(route.priceExalted)} ex/item</td><td>{number(route.lowExalted)}–{number(route.highExalted)} ex<small>{unsignedPercent(route.rangePercent)} spread</small></td><td>{number(route.limitingTurnoverExalted, 0)} ex</td></tr>; })}</tbody></table>{remainingRoutes > 0 && <button type="button" className="p2ex-route-more" onClick={() => setVisibleRouteCount((count) => count + ROUTE_PAGE_SIZE)}>View {Math.min(ROUTE_PAGE_SIZE, remainingRoutes)} more <span>· {remainingRoutes} remaining</span></button>}</div>
+              <div className="p2ex-route-table p2ex-table-wrap"><table><thead><tr><th>{tradeSide === "buy" ? "Pay with" : "Receive"}</th><th>Rate per item</th><th>Total for {number(plannedUnits, 0)}</th><th>Exalted equivalent</th><th>Completed range</th><th>Route depth</th></tr></thead><tbody>{shownRoutes.map((route) => { const recommended = route.quoteId === recommendedRoute.quoteId; const core = CORE_ROUTE_IDS.includes(route.quoteId); const comparing = route.quoteId === comparisonRouteId; return <tr key={route.quoteId} className={`${recommended ? "recommended" : ""} ${core ? "core" : ""} ${comparing ? "comparison" : ""}`}><td><button type="button" className="p2ex-route-pick" aria-pressed={comparing} title={`Compare ${route.quoteName} with the best observed route`} onClick={() => setComparisonRouteId((current) => current === route.quoteId ? "" : route.quoteId)}><span className="p2ex-route-name"><strong>{route.quoteName}</strong>{core && <em>Pinned</em>}</span><small>{recommended ? core ? "Best observed · Always shown" : "Best observed" : core ? `${route.routeLabel} · Always shown` : route.routeLabel}</small></button></td><td>{number(route.rateQuotePerItem)} {route.quoteName}</td><td>{number(route.rateQuotePerItem * plannedUnits)} {route.quoteName}</td><td>{number(route.priceExalted)} ex/item</td><td>{number(route.lowExalted)}–{number(route.highExalted)} ex<small>{unsignedPercent(route.rangePercent)} spread</small></td><td>{number(route.itemVolume, 0)} units/h<small>{number(route.limitingTurnoverExalted, 0)} ex/h limiting</small></td></tr>; })}</tbody></table>{remainingRoutes > 0 && <button type="button" className="p2ex-route-more" onClick={() => setVisibleRouteCount((count) => count + ROUTE_PAGE_SIZE)}>View {Math.min(ROUTE_PAGE_SIZE, remainingRoutes)} more <span>· {remainingRoutes} remaining</span></button>}</div>
             </div>
-            <p className="p2ex-router-note">“Better” compares completed hourly means after normalizing the quote currency through its own Exalted pair. Both legs must pass the selected turnover floor. Ranges are combined observations, not guaranteed simultaneous fills.</p>
-            <aside className="p2ex-route-leaders"><span>Largest route differences</span><p>The eight largest value differences among routes above the selected hourly turnover floor.</p>{routeLeaders.length ? routeLeaders.map((row) => <button type="button" key={row.itemId} onClick={() => inspectMarket(row.itemId)}><span><strong>{row.name}</strong><small>{row.routeCount} usable quote currencies</small></span><b>{unsignedPercent(row.routeGap)}</b></button>) : <div>No qualifying multi-route differences.</div>}</aside>
-          </> : <div className="p2ex-no-rows">No route for this item passes the selected turnover floor.</div>}
+            <p className="p2ex-router-note"><strong>Not a live arbitrage quote.</strong> Routes compare same-hour completed means, and their legs may have cleared at different moments. Both legs must pass the selected turnover and unit floors; wide ranges and extreme disagreement reduce confidence.</p>
+            <aside className="p2ex-route-leaders"><span>Largest observed route disagreements</span><p>Outliers worth checking manually—not guaranteed opportunities—after applying both depth floors.</p>{routeLeaders.length ? routeLeaders.map((row) => <button type="button" key={row.itemId} onClick={() => inspectMarket(row.itemId)}><span><strong>{row.name}</strong><small>{row.routeCount} eligible routes · {number(row.itemVolume, 0)} units/h</small></span><b>{unsignedPercent(row.routeGap)}</b></button>) : <div>No qualifying multi-route differences.</div>}</aside>
+          </> : <div className="p2ex-no-rows">No route for this item passes both the selected turnover and unit floors.</div>}
         </section>
         </div>
 
         <section className="p2ex-chart-card" ref={detailRef}>
           <div className="p2ex-chart-head">
-            <div><span>Selected exchange market</span><h3>{selected?.name || "Select a market"}</h3><p>{selected ? `${selected.quoteRoute} · ${number(selected.itemVolume, 0)} units cleared · ${number(selected.turnoverExalted, 0)} Exalted turnover in the completed hour` : ""}</p></div>
+            <div><span>{comparisonRoute ? "Comparison route history" : "Best observed route history"}</span><h3>{selected?.name || "Select a market"}</h3><p>{trackedRoute ? `${trackedRoute.routeLabel} · ${number(trackedRoute.itemVolume, 0)} units/h · ${number(trackedRoute.limitingTurnoverExalted, 0)} ex/h limiting turnover` : "Select an eligible route above to chart its stored completed-trade history."}</p></div>
             <div className="p2ex-move"><span>{divineAdjusted ? "Divine-adjusted move" : "Selected move"}</span><strong className={move > 0 ? "gain" : move < 0 ? "loss" : ""}>{percent(move)}</strong></div>
           </div>
           <div className="p2ex-tools">
@@ -243,26 +268,28 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
                 <Line dataKey="shownPrice" name="Completed mean" stroke="#e36f3f" strokeWidth={2.2} dot={chartPoints.length < 30} animationDuration={1000} />
                 {divineAdjusted && <Line yAxisId="divine" dataKey="divineExalted" name="Divine rate" stroke="#8f7eaf" strokeDasharray="5 4" strokeWidth={1.5} dot={false} animationDuration={1000} />}
               </LineChart>
-            </ResponsiveContainer> : <div className="p2ex-chart-empty">This market’s history starts with its first stored official hour.</div>}
+            </ResponsiveContainer> : <div className="p2ex-chart-empty">This exact route’s history starts when both completed legs are stored in the same market hour.</div>}
           </div>
         </section>
 
         <section className="p2ex-market-card">
+          <header className="p2ex-scanner-head"><div><span>Route opportunity scanner</span><h3>Compare qualified exchange markets</h3><p>Rank completed-route disagreements after applying turnover and unit-volume safeguards. Large gaps are investigation signals, not promised profit.</p></div><strong>{visible.length} qualified</strong></header>
           <div className="p2ex-filters">
-            <label><span>Find market</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search currencies" /></label>
-            <label><span>Sort by</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="routes">Largest route difference</option><option value="turnover">Exalted turnover</option><option value="volume">Units cleared</option><option value="move">Largest 24h move</option><option value="spread">Largest poe.ninja gap</option><option value="range">Widest traded range</option></select></label>
+            <label><span>Find market</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all exchange items" /></label>
+            <label><span>Sort by</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="routes">Largest observed route gap</option><option value="turnover">Exalted turnover</option><option value="volume">Units cleared</option><option value="move">Largest 24h move</option><option value="spread">Largest poe.ninja gap</option><option value="range">Widest traded range</option></select></label>
             <label><span>Minimum route turnover</span><select value={minimum} onChange={(event) => setMinimum(Number(event.target.value))}><option value="0">Any completed route</option><option value="100">100 Exalted / route</option><option value="500">500 Exalted / route</option><option value="1000">1,000 Exalted / route</option><option value="5000">5,000 Exalted / route</option><option value="10000">10,000 Exalted / route</option></select></label>
+            <label><span>Minimum units cleared</span><select value={minimumUnits} onChange={(event) => setMinimumUnits(Number(event.target.value))}><option value="0">Any completed units</option><option value="1">1 unit / hour</option><option value="5">5 units / hour</option><option value="10">10 units / hour</option><option value="25">25 units / hour</option><option value="50">50 units / hour</option><option value="100">100 units / hour</option></select></label>
           </div>
-          <div className="p2ex-table-wrap"><table><thead><tr><th>Market</th><th>Cheapest buy route</th><th>Best sell route</th><th>Route difference</th><th>24h move</th><th>Completed range</th><th>Turnover</th></tr></thead><tbody>
-            {shownMarkets.map((row) => <tr key={row.itemId} className={row.itemId === selectedId ? "selected" : ""} onClick={() => inspectMarket(row.itemId)}>
+          <div className="p2ex-table-wrap"><table><thead><tr><th>Market</th><th>Lowest observed buy</th><th>Highest observed sell</th><th>Observed gap</th><th>24h move</th><th>Completed range</th><th>Depth / hour</th></tr></thead><tbody>
+            {shownMarkets.map((row) => { const rowConfidence = assessExchangeRoute(row.bestBuy, { minTurnoverExalted: minimum, minItemVolume: minimumUnits, routeGap: row.routeGap }); return <tr key={row.itemId} className={row.itemId === selectedId ? "selected" : ""} onClick={() => inspectMarket(row.itemId)}>
               <td><strong>{row.name}</strong><small>{row.type || "Currency Exchange item"} · {row.routeCount} eligible quote {row.routeCount === 1 ? "currency" : "currencies"}{row.totalRouteCount > row.routeCount ? ` of ${row.totalRouteCount} total` : ""}</small></td>
-              <td><strong>{row.bestBuy.quoteName}</strong><small>{number(row.bestBuy.priceExalted)} ex/item · {number(row.bestBuy.limitingTurnoverExalted, 0)} ex route</small></td>
-              <td><strong>{row.bestSell.quoteName}</strong><small>{number(row.bestSell.priceExalted)} ex/item · {number(row.bestSell.limitingTurnoverExalted, 0)} ex route</small></td>
-              <td className={row.routeGap > .005 ? "gain" : ""}>{row.routeCount > 1 ? unsignedPercent(row.routeGap) : "—"}</td>
+              <td><strong>{row.bestBuy.quoteName}</strong><small>{number(row.bestBuy.priceExalted)} ex/item · {number(row.bestBuy.limitingTurnoverExalted, 0)} ex/h</small></td>
+              <td><strong>{row.bestSell.quoteName}</strong><small>{number(row.bestSell.priceExalted)} ex/item · {number(row.bestSell.limitingTurnoverExalted, 0)} ex/h</small></td>
+              <td className={`p2ex-gap ${rowConfidence.level}`}>{row.routeCount > 1 ? unsignedPercent(row.routeGap) : "—"}<small>{rowConfidence.label}</small></td>
               <td className={overview.movementByItem[row.itemId]?.change > 0 ? "gain" : overview.movementByItem[row.itemId]?.change < 0 ? "loss" : ""}>{percent(overview.movementByItem[row.itemId]?.change)}<small>Div {percent(overview.movementByItem[row.itemId]?.divineAdjustedChange)}</small></td>
               <td>{displayPrice(row.lowExalted, unit, divineRate, chaosExalted)}–{displayPrice(row.highExalted, unit, divineRate, chaosExalted)}</td>
-              <td>{number(row.turnoverExalted, 0)} ex</td>
-            </tr>)}
+              <td>{number(row.itemVolume, 0)} units/h<small>{number(row.turnoverExalted, 0)} ex/h</small></td>
+            </tr>; })}
           </tbody></table>{!visible.length && <div className="p2ex-no-rows">No completed exchange markets match these filters.</div>}{remainingMarkets > 0 && <button type="button" className="p2ex-route-more" onClick={() => setVisibleMarketCount((count) => count + MARKET_PAGE_SIZE)}>Show {Math.min(MARKET_PAGE_SIZE, remainingMarkets)} more markets <span>· {remainingMarkets} remaining</span></button>}</div>
         </section>
 
@@ -287,4 +314,8 @@ const css = `
 .p2ex-route-leaders{grid-template-columns:repeat(2,minmax(0,1fr))}
 .p2ex-route-leaders>span,.p2ex-route-leaders>p{grid-column:1/-1}
 @media(max-width:720px){.p2ex-route-leaders{grid-template-columns:1fr}.p2ex-route-leaders>span,.p2ex-route-leaders>p{grid-column:auto}}
+.p2ex-market-picker{position:sticky;top:12px;min-width:0}.p2ex-market-picker-toggle{display:none}.p2ex-market-picker-body>.p2mb-browser{width:100%}.p2ex-router-controls{grid-template-columns:repeat(4,minmax(120px,1fr))}.p2ex-confidence{display:block;width:max-content;max-width:100%;margin-top:4px;padding:4px 7px;border:1px solid #3d503a;border-radius:4px;color:#91c98b;font-size:9px;font-style:normal;line-height:1.3}.p2ex-confidence.medium{border-color:#6b522d;color:#d0a565}.p2ex-confidence.low{border-color:#71372f;color:#de756b}.p2ex-router-note strong{color:#d2a563}.p2ex-scanner-head{display:flex;align-items:end;justify-content:space-between;gap:18px}.p2ex-scanner-head>div>span{color:#d56e44;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.p2ex-scanner-head h3{margin:4px 0;color:#ead5cb;font-size:20px}.p2ex-scanner-head p{max-width:760px;margin:0;color:#8e776d;font-size:11px}.p2ex-scanner-head>strong{flex:0 0 auto;color:#d9b6a5;font-size:13px}.p2ex-filters{grid-template-columns:minmax(180px,1fr) repeat(3,minmax(150px,190px))}.p2ex-gap.high{color:#79bd72}.p2ex-gap.medium{color:#d2a563}.p2ex-gap.low{color:#dc716c}.p2ex-gap small{font-weight:400}.p2ex-table-wrap th:last-child,.p2ex-table-wrap td:last-child{padding-right:14px}
+@media(max-width:1100px){.p2ex-router-controls,.p2ex-filters{grid-template-columns:1fr 1fr}.p2ex-filters label:first-child{grid-column:1/-1}}
+@media(max-width:780px){.p2ex-market-picker{position:static}.p2ex-market-picker.collapsed{position:sticky;top:0;z-index:5}.p2ex-market-picker-toggle{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 12px;padding:11px 12px;border:1px solid #4a2b20;border-radius:7px;background:rgba(17,12,10,.96);box-shadow:0 9px 24px #0008;backdrop-filter:blur(4px)}.p2ex-market-picker-toggle span{color:#9b6b56;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase}.p2ex-market-picker-toggle strong{overflow:hidden;color:#dfc9be;font-size:13px;text-overflow:ellipsis;white-space:nowrap}.p2ex-market-picker-toggle button{grid-column:2;grid-row:1/3;padding:7px 9px;border:1px solid #633b29;border-radius:4px;background:#21130e;color:#d99b80;cursor:pointer}.p2ex-market-picker-body{margin-top:7px}.p2ex-market-picker.collapsed .p2ex-market-picker-body{display:none}.p2ex-router{scroll-margin-top:62px}}
+@media(max-width:680px){.p2ex-router-controls,.p2ex-filters{grid-template-columns:1fr}.p2ex-filters label:first-child{grid-column:auto}.p2ex-scanner-head{align-items:flex-start;flex-direction:column}.p2ex-scanner-head>strong{align-self:flex-start}}
 `;

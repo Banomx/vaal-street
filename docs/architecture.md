@@ -512,9 +512,11 @@ completed bounds of both legs. Route liquidity is the lower Exalted-equivalent
 turnover of the item/quote and quote/Exalted legs.
 
 Buy mode sorts normalized means ascending and sell mode descending; sell is the
-default. The selected route floor applies to both legs. The editable floor defaults to 1,000
-Exalted/hour and the editable participation assumption defaults to 90% of
-completed hourly flow; both expose presets but accept custom values. Planned
+default. These are labelled as the lowest and highest **observed** routes rather
+than live recommendations because pair means within an hour need not have been
+executable simultaneously. The selected route floors apply to both legs. The
+editable defaults are 1,000 Exalted/hour, 10 completed units/hour, and an
+accessible-flow assumption of 10%; all expose presets but accept custom values. Planned
 quantity starts at one item and applies to both recommendation cards and the
 route table.
 The route table initially renders 10 rows and
@@ -526,19 +528,25 @@ can become the recommendation. Changing the item,
 direction, or route floor resets the table to the first batch. Quantity
 estimates take the slower of the
 selected share of completed item units on the first leg and the same share of
-limiting normalized route turnover. They do not model a live order book,
-and combined bounds do not assert that both extremes were simultaneously
-executable. Selecting a route row keeps the recommendation in place and adds a
-second card comparing that route's cost or return, clear time, and observed
-range against the recommendation. Direct Exalted, Chaos, and Divine pairs
-remain the stable chart and display-rate basis.
+limiting normalized route turnover. The model accepts the UI's full 0.1%–100%
+range without silently raising low assumptions. It does not model a live order
+book, and combined bounds do not assert that both extremes were simultaneously
+executable. Selecting a route row keeps the best-observed card in place, adds a
+comparison, and switches the chart to the exact item/quote pair plus its
+same-hour quote/Exalted normalization leg. Exalted, Chaos, and Divine remain
+pinned comparisons when those completed pairs exist.
 History is decoded once into indexed pair maps; the resulting movement map is
-reused by the market catalogue. The bottom market catalogue defaults to a 1,000
-Exalted turnover filter and renders 20 rows at a time; search, sort, and filter
+reused by the market catalogue. Route confidence combines the selected unit and
+turnover floors with completed-range width and cross-route disagreement; extreme
+gaps are marked low confidence instead of styled as profit. The bottom Route
+opportunity scanner defaults to 1,000 Exalted/hour and 10 units/hour and renders
+20 rows at a time; search, sort, and filter
 changes reset it to the first batch. Its turnover floor filters both the item's
 overall turnover and every route's limiting turnover, then recalculates best
 buy, best sell, eligible route count, and route difference before sorting.
-Each displayed buy/sell route includes its limiting turnover for verification.
+Each displayed route includes units/hour and limiting Exalted/hour. On narrow
+screens, choosing an item collapses the market browser into a sticky change-item
+bar and moves directly to the route result.
 The Exchange picker uses the same metadata-driven category and subcategory rules
 as Price Tracker rather than maintaining an exchange-only taxonomy. Specific
 GGG tags such as catalysts take precedence over broad structural classes, and

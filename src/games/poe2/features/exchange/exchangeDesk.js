@@ -123,12 +123,13 @@ export function buildExchangeRows(exchange, priceData) {
   return rows.sort((left, right) => right.turnoverExalted - left.turnoverExalted);
 }
 
-export function filterExchangeRowsByTurnover(rows, minimumTurnoverExalted = 0) {
+export function filterExchangeRowsByTurnover(rows, minimumTurnoverExalted = 0, { minItemVolume = 0 } = {}) {
   const floor = Math.max(0, Number(minimumTurnoverExalted) || 0);
+  const unitFloor = Math.max(0, Number(minItemVolume) || 0);
   return (rows || []).flatMap((row) => {
-    if (row.turnoverExalted < floor) return [];
+    if (row.turnoverExalted < floor || (unitFloor > 0 && (Number(row.itemVolume) || 0) < unitFloor)) return [];
     const routeOptions = (row.routeOptions || [])
-      .filter((route) => route.limitingTurnoverExalted >= floor)
+      .filter((route) => route.limitingTurnoverExalted >= floor && (unitFloor <= 0 || (Number(route.itemVolume) || 0) >= unitFloor))
       .sort((left, right) => left.priceExalted - right.priceExalted);
     if (!routeOptions.length) return [];
     const bestBuy = routeOptions[0];
@@ -143,6 +144,39 @@ export function filterExchangeRowsByTurnover(rows, minimumTurnoverExalted = 0) {
       routeGap: bestBuy.priceExalted ? bestSell.priceExalted / bestBuy.priceExalted - 1 : 0,
     }];
   });
+}
+
+export function assessExchangeRoute(route, {
+  minTurnoverExalted = 1000,
+  minItemVolume = 10,
+  routeGap = 0,
+} = {}) {
+  if (!route) return { level: "unknown", label: "No evidence", reasons: ["No completed route"] };
+  const turnoverFloor = Math.max(0, Number(minTurnoverExalted) || 0);
+  const unitFloor = Math.max(0, Number(minItemVolume) || 0);
+  const turnover = Number(route.limitingTurnoverExalted) || 0;
+  const units = Number(route.itemVolume) || 0;
+  const range = Number(route.rangePercent) || 0;
+  const gap = Math.max(0, Number(routeGap) || 0);
+  const reasons = [];
+  let level = "high";
+
+  if (units < unitFloor) reasons.push("below the selected unit floor");
+  else if (unitFloor && units < unitFloor * 5) reasons.push("modest completed unit count");
+  if (turnover < turnoverFloor) reasons.push("below the selected turnover floor");
+  else if (turnoverFloor && turnover < turnoverFloor * 5) reasons.push("modest limiting turnover");
+  if (range > .5) reasons.push("very wide completed range");
+  else if (range > .2) reasons.push("wide completed range");
+  if (gap > .5) reasons.push("extreme cross-route disagreement");
+  else if (gap > .2) reasons.push("large cross-route disagreement");
+
+  if (units < unitFloor || turnover < turnoverFloor || range > .5 || gap > .5) level = "low";
+  else if (reasons.length) level = "medium";
+  return {
+    level,
+    label: level === "high" ? "High confidence" : level === "medium" ? "Use caution" : "Low confidence",
+    reasons: reasons.length ? reasons : ["deep completed flow and a contained traded range"],
+  };
 }
 
 function compactQuote(values, key, itemId, quoteId) {
@@ -172,40 +206,48 @@ function prepareExchangeHistory(history) {
   };
 }
 
-function exchangeTimelineFromPrepared(prepared, itemId, rangeHours) {
-  const directKey = canonicalPairKey(itemId, EXALTED_ID);
-  const divineQuoteKey = canonicalPairKey(itemId, DIVINE_ID);
-  const directIndex = prepared.indexByKey.get(directKey) ?? -1;
-  const divineQuoteIndex = prepared.indexByKey.get(divineQuoteKey) ?? -1;
+function emptyTimeline() {
+  return { points: [], change: null, divineAdjustedChange: null, canDivineAdjust: false };
+}
+
+function exchangeRouteTimelineFromPrepared(prepared, itemId, quoteId, rangeHours) {
+  if (!itemId || !quoteId || itemId === quoteId) return emptyTimeline();
+  const itemQuoteKey = canonicalPairKey(itemId, quoteId);
+  const itemQuoteIndex = prepared.indexByKey.get(itemQuoteKey) ?? -1;
+  const quoteExaltedKey = canonicalPairKey(quoteId, EXALTED_ID);
+  const quoteExaltedIndex = quoteId === EXALTED_ID ? -1 : prepared.indexByKey.get(quoteExaltedKey) ?? -1;
   const divineKey = canonicalPairKey(DIVINE_ID, EXALTED_ID);
   const divineIndex = prepared.indexByKey.get(divineKey) ?? -1;
   const chaosKey = canonicalPairKey(CHAOS_ID, EXALTED_ID);
   const chaosIndex = prepared.indexByKey.get(chaosKey) ?? -1;
-  if (directIndex < 0 && divineQuoteIndex < 0) return { points: [], change: null, divineAdjustedChange: null, canDivineAdjust: false };
+  if (itemQuoteIndex < 0 || (quoteId !== EXALTED_ID && quoteExaltedIndex < 0)) return emptyTimeline();
   let points = prepared.snapshots.map((snapshot) => {
     const at = snapshot.atMs;
     const divineValues = snapshot.pairs.get(divineIndex);
     const divine = compactQuote(divineValues, divineKey, DIVINE_ID, EXALTED_ID);
     const chaosValues = snapshot.pairs.get(chaosIndex);
     const chaos = compactQuote(chaosValues, chaosKey, CHAOS_ID, EXALTED_ID);
-    const directValues = snapshot.pairs.get(directIndex);
-    const divineQuoteValues = snapshot.pairs.get(divineQuoteIndex);
-    const direct = compactQuote(directValues, directKey, itemId, EXALTED_ID);
-    const quotedInDivine = direct ? null : compactQuote(divineQuoteValues, divineQuoteKey, itemId, DIVINE_ID);
-    const multiplier = direct ? 1 : divine?.rate;
-    const item = direct || quotedInDivine;
-    if (!Number.isFinite(at) || !item?.rate || !multiplier) return null;
+    const itemValues = snapshot.pairs.get(itemQuoteIndex);
+    const item = compactQuote(itemValues, itemQuoteKey, itemId, quoteId);
+    const quoteExalted = quoteId === EXALTED_ID
+      ? { rate: 1, low: 1, high: 1, quoteVolume: item?.quoteVolume }
+      : compactQuote(snapshot.pairs.get(quoteExaltedIndex), quoteExaltedKey, quoteId, EXALTED_ID);
+    if (!Number.isFinite(at) || !item?.rate || !quoteExalted?.rate) return null;
+    const price = item.rate * quoteExalted.rate;
+    const firstLegTurnover = (item.quoteVolume || 0) * quoteExalted.rate;
+    const normalizationTurnover = quoteId === EXALTED_ID ? firstLegTurnover : quoteExalted.quoteVolume || 0;
     return {
       at,
       timestamp: snapshot.at,
-      price: item.rate * multiplier,
-      low: item.low * multiplier,
-      high: item.high * multiplier,
+      price,
+      low: (item.low || item.rate) * (quoteExalted.low || quoteExalted.rate),
+      high: (item.high || item.rate) * (quoteExalted.high || quoteExalted.rate),
       itemVolume: item.itemVolume,
-      turnoverExalted: item.quoteVolume * multiplier,
+      turnoverExalted: firstLegTurnover,
+      limitingTurnoverExalted: Math.min(firstLegTurnover, normalizationTurnover),
       divineExalted: divine?.rate || null,
       chaosExalted: chaos?.rate || null,
-      adjustedPrice: divine?.rate ? (item.rate * multiplier) / divine.rate : null,
+      adjustedPrice: divine?.rate ? price / divine.rate : null,
     };
   }).filter(Boolean);
   const latest = points[points.length - 1];
@@ -221,8 +263,20 @@ function exchangeTimelineFromPrepared(prepared, itemId, rangeHours) {
   };
 }
 
+function exchangeTimelineFromPrepared(prepared, itemId, rangeHours) {
+  const directKey = canonicalPairKey(itemId, EXALTED_ID);
+  if (prepared.indexByKey.has(directKey)) return exchangeRouteTimelineFromPrepared(prepared, itemId, EXALTED_ID, rangeHours);
+  const divineQuoteKey = canonicalPairKey(itemId, DIVINE_ID);
+  if (prepared.indexByKey.has(divineQuoteKey)) return exchangeRouteTimelineFromPrepared(prepared, itemId, DIVINE_ID, rangeHours);
+  return emptyTimeline();
+}
+
 export function buildExchangeTimeline(history, itemId, { rangeHours = null } = {}) {
   return exchangeTimelineFromPrepared(prepareExchangeHistory(history), itemId, rangeHours);
+}
+
+export function buildExchangeRouteTimeline(history, itemId, quoteId, { rangeHours = null } = {}) {
+  return exchangeRouteTimelineFromPrepared(prepareExchangeHistory(history), itemId, quoteId, rangeHours);
 }
 
 function median(values) {
@@ -276,7 +330,7 @@ export function buildExchangeOverview(rows, history, {
 
 export function estimateExchangeExecution(row, amount, { participation = .25 } = {}) {
   const units = Math.max(0, Number(amount) || 0);
-  const share = Math.min(1, Math.max(.01, Number(participation) || .25));
+  const share = Math.min(1, Math.max(.001, Number(participation) || .25));
   const observedHourlyUnits = Math.max(0, Number(row?.itemVolume) || 0);
   const plannedHourlyUnits = observedHourlyUnits * share;
   const completedValue = units * (Number(row?.priceExalted) || 0);
