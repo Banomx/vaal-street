@@ -379,6 +379,10 @@ Traded supply is a market measurement used as the closest observable stand-in
 for how often an item is produced. It is labelled as such and is **not** a drop
 rate; no drop rate appears anywhere in this feature.
 
+The chart window can be set to 1, 2, 4, 8, 12 or 24 hours, 7 or 30 days, or the
+full stored history. Four hours is the default so the view opens on recent
+market movement while retaining longer windows for comparison.
+
 The three rules that keep a summed basket honest are the ones
 `poe1/features/strategies/stratHistory.js` already documents: a member with no
 stored history is excluded and named rather than back-filled, the plotted window
