@@ -71,10 +71,27 @@ export function liquidity(entry) {
     const label = volume < 10 ? "Barely trades" : volume < 100 ? "Light trade" : volume < 1000 ? "Active trade" : "Heavy trade";
     return { basis: "volume", count: volume, label, tone: volume < 10 ? "thin" : volume < 100 ? "limited" : "active", unit: "traded/h" };
   }
+  const turnover = Number(entry?.volumeExalted) || 0;
+  if (turnover > 0) {
+    const label = turnover < 100 ? "Low turnover" : turnover < 1000 ? "Light turnover" : turnover < 10000 ? "Active turnover" : "Heavy turnover";
+    return { basis: "turnover", count: turnover, label, tone: turnover < 100 ? "thin" : turnover < 1000 ? "limited" : "active", unit: "ex/h" };
+  }
   const listings = Number(entry?.listingCount) || 0;
-  if (!listings) return { basis: "none", count: 0, label: "Liquidity unknown", tone: "unknown", unit: "" };
+  if (!listings) {
+    const source = entry?.source === "PoE2Scout" ? "PoE2Scout"
+      : entry?.source === "poe.ninja stash" ? "poe.ninja stash"
+        : entry?.source === "poe.ninja exchange" ? "poe.ninja exchange" : null;
+    return { basis: "none", count: 0, label: source ? `No depth from ${source}` : "No market depth data", tone: "unknown", unit: "" };
+  }
   const label = listings < 100 ? "Thin market" : listings < 1000 ? "Limited listings" : listings < 5000 ? "Active market" : "Deep market";
   return { basis: "listings", count: listings, label, tone: listings < 100 ? "thin" : listings < 1000 ? "limited" : "active", unit: "listed" };
+}
+
+export function farmSignal(spread) {
+  if (spread == null || !Number.isFinite(spread)) return { label: "Needs history", detail: "Entry and output history required", tone: "unknown" };
+  if (spread >= .05) return { label: "Outputs outpacing entry", detail: "Favourable market pressure", tone: "gain" };
+  if (spread <= -.05) return { label: "Entry outpacing outputs", detail: "Unfavourable market pressure", tone: "loss" };
+  return { label: "Near balance", detail: "Entry and outputs moved together", tone: "flat" };
 }
 
 function seriesFor(history, name) {

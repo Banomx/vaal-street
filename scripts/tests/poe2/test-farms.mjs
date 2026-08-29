@@ -23,7 +23,7 @@ import {
   hasOutputPool, mechanicFor, mechanicPools, resolveEntry,
 } from "../../../src/games/poe2/features/farms/mechanics.js";
 import {
-  MIN_MEMBERS, buildBasketIndex, concentration, liquidity, poolContributions, poolFlow,
+  MIN_MEMBERS, buildBasketIndex, concentration, farmSignal, liquidity, poolContributions, poolFlow,
   poolMovers, poolWeights, topOfPool,
 } from "../../../src/games/poe2/features/farms/farmIndex.js";
 
@@ -148,9 +148,16 @@ near(poolFlow(members), 10 * 60 + 100 * 30 + 1000 * 10, "flow is cleared value p
 /* ---- liquidity evidence ---- */
 
 ok(liquidity({ volume1H: 200 }).basis === "volume", "cleared volume is preferred evidence");
+ok(liquidity({ volume1H: 20, volumeExalted: 5000 }).basis === "volume", "cleared units win when both trade measurements exist");
+ok(liquidity({ volumeExalted: 2500 }).basis === "turnover" && liquidity({ volumeExalted: 2500 }).unit === "ex/h",
+  "poe.ninja exchange turnover is visible when unit volume is unavailable");
 ok(liquidity({ listingCount: 3000 }).basis === "listings", "listings are used when nothing cleared");
-ok(liquidity({}).basis === "none" && liquidity({}).label === "Liquidity unknown",
-  "no evidence reads as unknown rather than as zero");
+ok(liquidity({ source: "PoE2Scout" }).basis === "none" && liquidity({ source: "PoE2Scout" }).label === "No depth from PoE2Scout",
+  "a quote source without depth evidence is named rather than reported as unexplained unknown liquidity");
+
+ok(farmSignal(.2).tone === "gain" && /Outputs/.test(farmSignal(.2).label), "positive spread gets a glanceable favourable signal");
+ok(farmSignal(-.2).tone === "loss" && /Entry/.test(farmSignal(-.2).label), "negative spread gets a glanceable unfavourable signal");
+ok(farmSignal(.01).tone === "flat" && farmSignal(null).tone === "unknown", "small spreads and missing history are not overstated");
 
 /* ---- the index ---- */
 

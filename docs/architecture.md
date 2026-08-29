@@ -396,6 +396,18 @@ not as a difference of two percentages. Subtracting breaks down as soon as
 either side is large: a tablet up 486% against a basket down 6% is not
 -492%.
 
+Every card leads with the four values needed to read that ratio: current entry
+price and its window move, output-basket move, return versus entry, and cleared
+output turnover. A short market-pressure verdict summarizes the spread but
+never calls it profit; the feature still has no per-map yield or drop-rate
+model.
+
+Liquidity retains its measurement unit. GGG observations show units cleared in
+the completed hour, poe.ninja exchange observations show Exalted-equivalent
+turnover, and stash observations show current listings. A selected quote with
+none of those fields names the source that supplied no depth evidence instead
+of reporting unexplained "unknown" liquidity.
+
 A card is drawn whenever either half exists. A mechanic with an output pool and
 no tablet quote still renders, with the entry cost stated as unknown — Runes of
 Aldur prices no Expedition Tablet while Expedition clears more than any other
