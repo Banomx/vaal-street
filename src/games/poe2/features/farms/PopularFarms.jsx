@@ -9,7 +9,7 @@ import { farmSignal, liquidity, poolContributions, poolFlow, poolMovers, topOfPo
 
 const RANGES = [
   [1, "1h"], [2, "2h"], [4, "4h"], [8, "8h"], [12, "12h"],
-  [24, "24h"], [168, "7d"], [720, "30d"], [null, "All"],
+  [24, "24h"], [48, "48h"], [168, "7d"], [720, "30d"], [null, "All"],
 ];
 
 function number(value, digits = 2) {

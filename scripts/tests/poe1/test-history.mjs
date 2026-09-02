@@ -234,12 +234,17 @@ ok(near(frozen[0].change24, 25), `finished-league change uses the final stored p
 ok(near(frozen[0].change24R, 13.636, 0.01), `finished-league divine change uses the final stored rate: ${frozen[0].change24R}`);
 
 /* 7) the pure pieces, directly */
+/* Pin this case to the scheduled run that used to fail: 23:10 UTC is 01:10 in
+   Berlin during summer. Building the two old points from `NOW - 5 days` and
+   then adding an hour crossed UTC midnight at that one run, so the fixture
+   accidentally described two days while asserting that it described one. */
+const THIN_NOW = Date.parse("2026-09-01T23:10:00.000Z");
 const thinned = mod.thinPoints([
-  { t: new Date(NOW - 500 * 86400e3).toISOString(), values: {} },
-  { t: new Date(NOW - 5 * 86400e3).toISOString(), values: {} },
-  { t: new Date(NOW - 5 * 86400e3 + 3600e3).toISOString(), values: {} },
-  { t: ago(1), values: {} },
-], { nowMs: NOW });
+  { t: new Date(THIN_NOW - 500 * 86400e3).toISOString(), values: {} },
+  { t: "2026-08-27T01:00:00.000Z", values: {} },
+  { t: "2026-08-27T02:00:00.000Z", values: {} },
+  { t: new Date(THIN_NOW - 3600e3).toISOString(), values: {} },
+], { nowMs: THIN_NOW });
 ok(thinned.length === 2, `thinPoints kept ${thinned.length}, expected 2 (one old day + one recent)`);
 
 const origin = mod.historyOrigin({ leagueStart: new Date(2013, 0, 1).toISOString(), self: { points: [{ t: ago(1), values: {} }] } });
