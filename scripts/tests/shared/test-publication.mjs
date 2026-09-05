@@ -268,6 +268,18 @@ assert.ok(codes(await validatePoe2(await poe2Tree((t) => { t.prices.prices.Broke
   .includes("price-not-positive"));
 assert.ok(codes(await validatePoe2(await poe2Tree((t) => { t.prices.prices["Exalted Orb"] = { exalted: 400 }; })))
   .includes("exalted-self-check"), "Exalted must price itself at 1, or every number is scaled wrongly");
+{
+  const warmingUp = await validatePoe2(await poe2Tree((t) => {
+    delete t.prices.divineExalted;
+    t.history.divineExalted = [null, null, null];
+  }));
+  assert.ok(codes(warmingUp).includes("divine-rate-missing"),
+    "a new league without a completed Divine pair is marked as warming up");
+  assert.equal(warmingUp.publishable, true,
+    "usable Exalted prices publish while a new league's Divine conversion warms up");
+}
+assert.ok(codes(await validatePoe2(await poe2Tree((t) => { t.prices.divineExalted = 0; })))
+  .includes("divine-rate"), "a recorded zero remains a hard failure rather than being treated as missing");
 assert.ok(codes(await validatePoe2(await poe2Tree((t) => { t.history.series["Chaos Orb"] = [0.04, 0.05]; })))
   .includes("history-alignment"), "a series shorter than the timestamp axis fails publication");
 assert.ok(codes(await validatePoe2(await poe2Tree((t) => { t.history.timestamps = [ago(1), ago(2), ago(0)]; })))

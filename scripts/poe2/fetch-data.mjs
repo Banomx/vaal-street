@@ -269,7 +269,10 @@ async function fetchLeague(name, ggg) {
     generatedAt: new Date().toISOString(),
     league: name,
     priceSource: describePriceSources(prices),
-    divineExalted,
+    // A brand-new league can have usable Exalted trades before anyone has
+    // completed the Divine/Exalted pair. Missing means "not observed yet";
+    // writing zero would instead claim a free Divine and fail publication.
+    ...(divineExalted > 0 ? { divineExalted } : {}),
     sources: [...(ggg?.sources || []), ...sources],
     metadataCoverage: coverage,
     prices,

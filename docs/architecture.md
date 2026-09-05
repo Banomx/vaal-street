@@ -253,6 +253,11 @@ history file is column-oriented: every item series is aligned to one timestamp
 array, so item names and times are not repeated for every quote. A missing quote
 is stored as `null`, not carried forward as a stale price. The current
 `prices.json` entry remains the source of descriptive and liquidity metadata.
+When a newly started league has completed Exalted trades but no completed
+Divine/Exalted pair, `prices.json` omits `divineExalted` and the quality report
+marks the snapshot degraded. The league still publishes and remains usable in
+Exalted; Divine conversion appears only after a positive observed rate exists.
+A recorded zero or implausible conversion remains a publication failure.
 Normalization keeps the upstream market family separate from GGG's item class,
 tags, Metadata path, inheritance path, and base type. The RePoE dictionary
 enriches every merged source by Metadata id or base type; poe.ninja's stash

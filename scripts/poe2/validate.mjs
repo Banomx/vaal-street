@@ -57,7 +57,10 @@ function checkPrices(report, label, snapshot) {
   if (exalted !== undefined && Math.abs(exalted - 1) > EXALTED_SELF_CHECK_TOLERANCE) {
     report.fail("exalted-self-check", `${label}: Exalted Orb prices itself at ${exalted} — the conversion is inverted`);
   }
-  if (snapshot.divineExalted !== undefined) {
+  if (snapshot.divineExalted === undefined || snapshot.divineExalted === null) {
+    report.degrade("divine-rate-missing",
+      `${label}: no completed Divine/Exalted rate yet; Exalted prices remain usable`);
+  } else {
     const rate = snapshot.divineExalted;
     if (!(isFinitePositive(rate) && rate >= DIVINE_EXALTED_BOUNDS[0] && rate <= DIVINE_EXALTED_BOUNDS[1])) {
       report.fail("divine-rate", `${label}: divineExalted ${rate} is outside the plausible band`);
