@@ -330,5 +330,33 @@ ok(topOfPool(moverRows, 2).length === 2, "top of pool respects its limit");
 ok(moverRows.length === moverMembers.length,
   "every pool member has a row, so the full table hides nothing");
 
+const changingRate = { ...moverHistory, divineExalted: [100, 120, 150, 200] };
+const adjusted = poolContributions(changingRate, moverMembers, { divineAdjusted: true });
+near(adjusted.rows.reduce((sum, row) => sum + (row.contribution || 0), 0), adjusted.index.change,
+  "Divine-adjusted contributions add up to the adjusted basket move");
+const entryHistory = { ...changingRate, series: { ...changingRate.series,
+  Entry: [null, null, 20, 40], Deep: [1, 2, 10, 15],
+} };
+const aligned = poolContributions(entryHistory, moverMembers, { entryName: "Entry" });
+ok(aligned.index.points.length === 2, "entry and basket use their common observed window");
+near(aligned.index.entryChange, 1, "entry change uses those same endpoints");
+near(aligned.rows.reduce((sum, row) => sum + (row.contribution || 0), 0), aligned.index.change,
+  "member contributions use the basket endpoints even when histories begin earlier");
+const alignedDivine = poolContributions(entryHistory, moverMembers, { entryName: "Entry", divineAdjusted: true });
+near((1 + aligned.index.change) / (1 + aligned.index.entryChange),
+  (1 + alignedDivine.index.change) / (1 + alignedDivine.index.entryChange),
+  "return versus entry is currency-invariant when both sides use the same timestamps");
+const dominant = buildBasketIndex({ ...flat, series: { A: [1000, 1000, 1000, 1000], B: [1, 1, 1, 1], C: [1, 1, 1, 1] } }, members, { mode: "equal" });
+ok(dominant.concentration.top > .99 && dominant.dominant[0] === "A",
+  "concentration shows economic influence, even when nominal item weights are equal");
+const unweightedLate = buildBasketIndex({ ...flat, series: { ...flat.series, D: [null, null, null, 5] } },
+  [...members, { name: "D", entry: { exalted: 5 } }]);
+ok(unweightedLate.points.length === 4 && unweightedLate.excluded.includes("D"),
+  "an unweighted market cannot shorten the whole basket's history");
+const longGap = { timestamps: [at(0), at(5), at(10)], divineExalted: [100, 100, 100],
+  series: { A: [10, null, 10], B: [10, 10, 10], C: [10, 10, 10] } };
+ok(buildBasketIndex(longGap, members).points.length === 2,
+  "a multi-hour quote gap is not silently filled with a remote observation");
+
 console.log(fails ? `${fails} failing assertion(s)` : "test-farms: all assertions passed");
 process.exit(fails ? 1 : 0);

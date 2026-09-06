@@ -109,34 +109,37 @@ function seriesFor(history, name) {
 
 /* Nearest sample rather than interpolation: an hourly feed that missed a beat
    has not told us the price moved, only that it did not report. */
-function nearest(series, index) {
+function nearest(series, index, timestamps) {
   const direct = finite(series.values[index]);
   if (direct != null) return direct;
   for (let step = 1; step < series.values.length; step += 1) {
-    const before = index - step >= series.first ? finite(series.values[index - step]) : null;
+    const close = (other) => Math.abs(Date.parse(timestamps[other]) - Date.parse(timestamps[index])) <= 2 * 3600e3;
+    const before = index - step >= series.first && close(index - step) ? finite(series.values[index - step]) : null;
     if (before != null) return before;
-    const after = index + step <= series.last ? finite(series.values[index + step]) : null;
+    const after = index + step <= series.last && close(index + step) ? finite(series.values[index + step]) : null;
     if (after != null) return after;
   }
   return null;
 }
 
-export function buildBasketIndex(history, members = [], { mode = "supply", rangeHours = null, divineAdjusted = false } = {}) {
+export function buildBasketIndex(history, members = [], { mode = "supply", rangeHours = null, divineAdjusted = false, entryName = null } = {}) {
   const timestamps = Array.isArray(history?.timestamps) ? history.timestamps : [];
   const rates = Array.isArray(history?.divineExalted) ? history.divineExalted : [];
   const weights = poolWeights(members, mode);
+  const equalFallback = mode !== "equal" && !members.some(({ entry }) => Number(entry?.volume1H) > 0);
+  const entrySeries = entryName ? seriesFor(history, entryName) : null;
   const excluded = [];
   const included = [];
 
   for (const member of members) {
     const series = seriesFor(history, member.name);
-    if (!series) { excluded.push(member.name); continue; }
+    if (!series || !(weights.get(member.name) > 0)) { excluded.push(member.name); continue; }
     included.push({ ...member, series, weight: weights.get(member.name) || 0 });
   }
 
   const empty = (reason) => ({
     points: [], change: null, unit: "Index", included: included.map((item) => item.name),
-    excluded, weights, concentration: concentration(weights), reason,
+    excluded, weights, concentration: concentration(weights), reason, equalFallback, entryChange: null,
   });
   if (!timestamps.length) return empty("no stored history yet");
   if (included.length < MIN_MEMBERS) {
@@ -144,13 +147,14 @@ export function buildBasketIndex(history, members = [], { mode = "supply", range
   }
 
   /* The overlap, so the basket holds the same members from end to end. */
-  let start = Math.max(...included.map((item) => item.series.first));
-  const end = Math.min(...included.map((item) => item.series.last));
+  let start = Math.max(...included.map((item) => item.series.first), entrySeries?.first ?? 0);
+  const end = Math.min(...included.map((item) => item.series.last), entrySeries?.last ?? Infinity);
   if (start > end) return empty("the members' histories do not overlap");
 
   if (rangeHours) {
-    const cutoff = Date.parse(timestamps[end]) - rangeHours * 3600e3;
+    const cutoff = Date.parse(timestamps.at(-1)) - rangeHours * 3600e3;
     while (start < end && Date.parse(timestamps[start]) < cutoff) start += 1;
+    if (Date.parse(timestamps[start]) < cutoff) return empty("no recent overlapping observations in this window");
   }
 
   /* Weights are renormalized across the members that survived, so excluding an
@@ -164,17 +168,26 @@ export function buildBasketIndex(history, members = [], { mode = "supply", range
     if (divineAdjusted && rate == null) continue;
     let value = 0;
     let complete = true;
+    const values = {};
+    let estimated = false;
     for (const item of included) {
-      const price = nearest(item.series, index);
+      const price = nearest(item.series, index, timestamps);
       if (price == null) { complete = false; break; }
-      value += share(item) * (divineAdjusted ? price / rate : price);
+      values[item.name] = divineAdjusted ? price / rate : price;
+      estimated ||= finite(item.series.values[index]) == null;
+      value += share(item) * values[item.name];
     }
-    if (complete && value > 0) raw.push({ at: Date.parse(timestamps[index]), timestamp: timestamps[index], basket: value });
+    const entry = entrySeries ? finite(entrySeries.values[index]) : null;
+    if (entrySeries && entry == null) continue;
+    if (complete && value > 0) raw.push({ at: Date.parse(timestamps[index]), timestamp: timestamps[index], basket: value,
+      values, estimated, entryValue: entry == null ? null : divineAdjusted ? entry / rate : entry });
   }
   if (raw.length < 2) return empty("not enough overlapping snapshots to compare");
 
   const base = raw[0].basket;
   const points = raw.map((point) => ({ ...point, value: (point.basket / base) * 100 }));
+  const exposures = new Map(included.map((item) => [item.name, share(item) * raw[0].values[item.name] / base]));
+  const dominant = [...exposures].sort((a, b) => b[1] - a[1])[0];
   return {
     points,
     change: points[points.length - 1].value / 100 - 1,
@@ -182,7 +195,11 @@ export function buildBasketIndex(history, members = [], { mode = "supply", range
     included: included.map((item) => item.name),
     excluded,
     weights,
-    concentration: concentration(weights),
+    concentration: concentration(exposures),
+    dominant,
+    equalFallback,
+    estimatedSamples: points.filter((point) => point.estimated).length,
+    entryChange: raw[0].entryValue > 0 ? raw.at(-1).entryValue / raw[0].entryValue - 1 : null,
     reason: null,
   };
 }
@@ -209,8 +226,8 @@ const MOVER_LISTINGS = 50;
    number the card already shows. Note this is not weight * percentage change,
    which is not additive in a price index — that version summed to 38 points
    against a 2.88% move. */
-export function poolContributions(history, members = [], { mode = "supply", rangeHours = null, divineAdjusted = false } = {}) {
-  const index = buildBasketIndex(history, members, { mode, rangeHours, divineAdjusted });
+export function poolContributions(history, members = [], { mode = "supply", rangeHours = null, divineAdjusted = false, entryName = null } = {}) {
+  const index = buildBasketIndex(history, members, { mode, rangeHours, divineAdjusted, entryName });
   const included = new Set(index.included);
   const surviving = members.reduce((sum, member) => sum + (included.has(member.name) ? index.weights.get(member.name) || 0 : 0), 0);
 
@@ -219,9 +236,10 @@ export function poolContributions(history, members = [], { mode = "supply", rang
       ? (surviving > 0 ? (index.weights.get(member.name) || 0) / surviving : 1 / (included.size || 1))
       : 0;
     const timeline = buildPriceTimeline(history, member.name, { currency: "exalted", rangeHours });
-    const change = divineAdjusted ? timeline.divineAdjustedChange : timeline.change;
-    const first = timeline.points[0]?.exalted ?? null;
-    const last = timeline.points[timeline.points.length - 1]?.exalted ?? null;
+    const first = included.has(member.name) ? index.points[0]?.values[member.name] ?? null : null;
+    const last = included.has(member.name) ? index.points.at(-1)?.values[member.name] ?? null : null;
+    const change = first > 0 && last != null ? last / first - 1
+      : divineAdjusted ? timeline.divineAdjustedChange : timeline.change;
     return {
       ...member,
       market: liquidity(member.entry),

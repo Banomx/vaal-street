@@ -2,15 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import MarketBrowser from "../../shared/MarketBrowser.jsx";
+import { windowEvidence } from "../../shared/marketWindow.js";
+import { assessExchangeMarket, strongestEvidenceRoute } from "./exchangeDesk.js";
 import { assessExchangeRoute, buildExchangeOverview, buildExchangeRouteTimeline, buildExchangeRows, CHAOS_ID, DIVINE_ID, EXALTED_ID, estimateExchangeExecution, filterExchangeRowsByTurnover } from "./exchangeDesk.js";
 
-const RANGES = [[24, "24h"], [168, "7d"], [720, "30d"], [null, "All"]];
+const RANGES = [[1, "1h"], [2, "2h"], [4, "4h"], [8, "8h"], [12, "12h"], [24, "24h"], [48, "48h"], [168, "7d"], [720, "30d"], [null, "All"]];
 const ROUTE_PAGE_SIZE = 10;
 const MARKET_PAGE_SIZE = 20;
 const CORE_ROUTE_IDS = [EXALTED_ID, CHAOS_ID, DIVINE_ID];
 
 function number(value, digits = 2) {
-  return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
+  const n = Number(value || 0);
+  return n !== 0 && Math.abs(n) < 10 ** -digits
+    ? n.toLocaleString(undefined, { maximumSignificantDigits: 2 })
+    : n.toLocaleString(undefined, { maximumFractionDigits: digits });
 }
 
 function percent(value) {
@@ -53,6 +58,8 @@ function shortConfidence(level) {
 
 function routeEvidence(route, { minTurnoverExalted, minItemVolume, routeGap = 0 }) {
   if (!route) return [];
+  minItemVolume = Math.max(5, Number(minItemVolume) || 0);
+  minTurnoverExalted = Math.max(100, Number(minTurnoverExalted) || 0);
   const unitTone = route.itemVolume < minItemVolume ? "low" : route.itemVolume < minItemVolume * 5 ? "medium" : "high";
   const turnoverTone = route.limitingTurnoverExalted < minTurnoverExalted ? "low" : route.limitingTurnoverExalted < minTurnoverExalted * 5 ? "medium" : "high";
   const rangeTone = route.rangePercent > .5 ? "low" : route.rangePercent > .2 ? "medium" : "high";
@@ -72,10 +79,10 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   const workbenchRef = useRef(null);
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState("routes");
+  const [sort, setSort] = useState("turnover");
   const [minimum, setMinimum] = useState(1000);
   const [minimumUnits, setMinimumUnits] = useState(10);
-  const [rangeHours, setRangeHours] = useState(168);
+  const [rangeHours, setRangeHours] = useState(4);
   const [divineAdjusted, setDivineAdjusted] = useState(false);
   const [plannedUnits, setPlannedUnits] = useState(1);
   const [participation, setParticipation] = useState(.25);
@@ -113,6 +120,9 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
     .sort((left, right) => tradeSide === "buy" ? left.priceExalted - right.priceExalted : right.priceExalted - left.priceExalted), [selected, tradeSide]);
   const viableRoutes = useMemo(() => sortedRoutes.filter((route) => route.limitingTurnoverExalted >= routeMinimum && route.itemVolume >= routeMinimumUnits), [routeMinimum, routeMinimumUnits, sortedRoutes]);
   const recommendedRoute = viableRoutes[0] || null;
+  const evidenceRoute = useMemo(() => strongestEvidenceRoute(viableRoutes, {
+    minTurnoverExalted: routeMinimum, minItemVolume: routeMinimumUnits,
+  }), [viableRoutes, routeMinimum, routeMinimumUnits]);
   const availableRoutes = useMemo(() => {
     const included = new Set(viableRoutes.map((route) => route.quoteId));
     CORE_ROUTE_IDS.forEach((quoteId) => {
@@ -167,7 +177,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   }])), [exchange, rows]);
   const rowByName = useMemo(() => new Map(rows.map((row) => [row.name, row])), [rows]);
   const preferredMarket = rows.find((row) => row.itemId !== DIVINE_ID)?.name || rows[0]?.name;
-  const trackedRoute = comparisonRoute || recommendedRoute;
+  const trackedRoute = comparisonRoute || recommendedRoute || directExaltedRoute || sortedRoutes[0];
   const timeline = useMemo(() => buildExchangeRouteTimeline(history, selectedId, trackedRoute?.quoteId, { rangeHours }), [history, rangeHours, selectedId, trackedRoute?.quoteId]);
   const divineRate = priceData && priceData !== "missing" ? priceData.divineExalted || 0 : 0;
   const unit = displayMode(currency, trackedRoute?.priceExalted || selected?.priceExalted || 0, divineRate);
@@ -178,6 +188,13 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
     shownHigh: unit === "Divine" ? (point.divineExalted ? point.high / point.divineExalted : null) : unit === "Chaos" ? (point.chaosExalted ? point.high / point.chaosExalted : null) : point.high,
   }));
   const move = divineAdjusted ? timeline.divineAdjustedChange : timeline.change;
+  const evidence = timeline.evidence || windowEvidence([], rangeHours);
+  const storedEvidence = windowEvidence((history?.snapshots || []).map((point) => ({ at: Date.parse(point.at) })));
+
+  function applyDepthPreset(turnover, units) {
+    setRouteMinimum(turnover); setRouteMinimumUnits(units);
+    setMinimum(turnover); setMinimumUnits(units);
+  }
 
   function inspectMarket(itemId) {
     setSelectedId(itemId);
@@ -224,11 +241,19 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
         <div><span>Official completed trades</span><h2>Exchange route finder</h2><p>Compare observed Exalted, Divine, Chaos, and alternate quote routes with explicit depth and confidence checks. Results describe the completed market hour—not live offers.</p></div>
         <div className="p2ex-kpis">
           <div><span>Exchange markets</span><strong>{rows.length || "—"}</strong></div>
-          <div><span>Cleared turnover</span><strong>{rows.length ? `${number(overview.totalTurnoverExalted, 0)} ex/h` : "—"}</strong></div>
+          <div><span>Tracked-route turnover</span><strong>{rows.length ? `${number(overview.totalTurnoverExalted, 0)} ex/h` : "—"}</strong></div>
           <div><span>Multi-route items</span><strong>{rows.filter((row) => row.routeCount > 1).length || "—"}</strong></div>
           <div><span>Stored points</span><strong>{overview.historySnapshots || "Building"}</strong></div>
         </div>
       </header>
+      <div className="p2ex-evidence-bar">
+        <span>{storedEvidence.label}. Filters currently show {visible.length}/{rows.length} markets.</span>
+        <div aria-label="Exchange depth presets">
+          <button type="button" onClick={() => applyDepthPreset(1000, 10)}>Standard depth</button>
+          <button type="button" onClick={() => applyDepthPreset(100, 5)}>Small-market discovery</button>
+        </div>
+        <small>Discovery uses 100 ex/h and 5 units/h. Lower filters expose more markets; confidence still checks actual depth and range.</small>
+      </div>
 
       {!exchange ? <section className="p2ex-empty">The next scheduled market fetch will create the full-pair snapshot and start its history.</section> : <>
         <div className="p2ex-route-workspace">
@@ -248,23 +273,34 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
             <label><span>Minimum hourly units</span><input type="number" min="0" step="1" list="p2ex-unit-presets" value={routeMinimumUnits} onChange={(event) => setRouteMinimumUnits(Math.max(0, Number(event.target.value) || 0))} /><small>Completed units/hour · protects against one-sale markets</small><datalist id="p2ex-unit-presets"><option value="1" /><option value="5" /><option value="10" /><option value="25" /><option value="50" /><option value="100" /></datalist></label>
             <label><span>Your assumed share of hourly flow</span><input type="number" min="0.1" max="100" step="0.1" list="p2ex-flow-presets" value={Number((participation * 100).toFixed(2))} onChange={(event) => setParticipation(Math.min(1, Math.max(.001, (Number(event.target.value) || .1) / 100)))} /><small>Clear-time assumption only · units/h and ex/h show the full observed market</small><datalist id="p2ex-flow-presets"><option value="1" /><option value="5" /><option value="10" /><option value="25" /><option value="50" /><option value="75" /><option value="90" /><option value="100" /></datalist></label>
           </div>
-          {recommendedRoute ? <>
-            <div className="p2ex-recommendation">
-              <div><span>Best observed route</span><strong>{tradeSide === "buy" ? "Pay" : "Receive"} {number(recommendedRoute.rateQuotePerItem * plannedUnits)} {recommendedRoute.quoteName}</strong><small>{number(recommendedRoute.rateQuotePerItem)} per item · {number(execution.completedValue, 0)} Exalted equivalent</small><div className="p2ex-confidence-tags"><em className={`p2ex-confidence ${confidence.level}`}>{confidence.label}</em>{bestRouteEvidence.map((tag) => <span className={tag.tone} title={tag.title} key={tag.title}>{tag.text}</span>)}</div></div>
+          {selected ? <>
+            {recommendedRoute ? <div className={`p2ex-recommendation evidence-${confidence.level}`}>
+              <div><span>Best observed route</span><strong>{tradeSide === "buy" ? "Pay" : "Receive"} {number(recommendedRoute.rateQuotePerItem * plannedUnits)} {recommendedRoute.quoteName}</strong><small>{number(recommendedRoute.rateQuotePerItem)} per item · {number(execution.completedValue, 0)} Exalted equivalent</small><div className="p2ex-confidence-tags"><em className={`p2ex-confidence ${confidence.level}`}>Overall: {shortConfidence(confidence.level)}</em>{bestRouteEvidence.map((tag) => <span className={tag.tone} title={tag.title} key={tag.title}>{tag.text}</span>)}</div></div>
               <dl><div><dt>Versus direct Exalted</dt><dd className={routeImprovement > 0 ? "gain" : ""}>{routeImprovement == null ? "No direct pair" : routeImprovement > .0005 ? `${percent(routeImprovement)} observed edge` : "Same observed route"}</dd></div><div><dt>Clear time at {number(participation * 100, 1)}% share</dt><dd>{duration(execution.hoursToClear)}</dd></div><div><dt>Observed value range</dt><dd>{number(execution.lowValue, 0)}–{number(execution.highValue, 0)} ex</dd></div></dl>
-            </div>
-            {comparisonRoute && <div className="p2ex-recommendation p2ex-comparison">
+            </div> : <div className="p2ex-no-rows">No route passes both depth floors. Core comparisons and stored history remain available; try Small-market discovery to inspect thinner markets.</div>}
+            {evidenceRoute && recommendedRoute && evidenceRoute.quoteId !== recommendedRoute.quoteId &&
+              <div className="p2ex-evidence-bar">
+                <span>Depth/range comparison: <strong>{evidenceRoute.quoteName}</strong> · {number(evidenceRoute.itemVolume, 0)} units/h · {unsignedPercent(evidenceRoute.rangePercent)} range</span>
+                <button type="button" onClick={() => setComparisonRouteId(evidenceRoute.quoteId)}>Compare strongest evidence</button>
+                <small>This route ranks by observed depth and range, independently of the highest return or lowest cost.</small>
+              </div>}
+            {recommendedRoute && <p className="p2ex-router-note">
+              Your amount is {unsignedPercent(execution.shareOfObservedHour)} of this route's observed hourly item volume.
+              {execution.shareOfObservedHour > 1 ? " It exceeds a full observed hour of trades." : ""}
+              {confidence.level === "low" ? " Clear time is especially uncertain with this evidence." : " Clear time assumes the same pace continues."}
+            </p>}
+            {comparisonRoute && recommendedRoute && <div className="p2ex-recommendation p2ex-comparison">
               <div><span>Selected comparison route</span><strong>{tradeSide === "buy" ? "Pay" : "Receive"} {number(comparisonRoute.rateQuotePerItem * plannedUnits)} {comparisonRoute.quoteName}</strong><small>{number(comparisonRoute.rateQuotePerItem)} per item · {number(comparisonExecution.completedValue, 0)} Exalted equivalent{comparisonRoute.limitingTurnoverExalted < routeMinimum ? " · below turnover floor" : ""}</small></div>
               <dl><div><dt>Versus best observed</dt><dd className={comparisonBetter ? "gain" : comparisonWorse ? "loss" : ""}>{Math.abs(comparisonDifference) <= .0005 ? "Same route" : tradeSide === "buy" ? `${unsignedPercent(Math.abs(comparisonDifference))} ${comparisonDifference < 0 ? "cheaper" : "more expensive"}` : `${unsignedPercent(Math.abs(comparisonDifference))} ${comparisonDifference > 0 ? "higher return" : "lower return"}`}</dd></div><div><dt>Clear time at {number(participation * 100, 1)}% share</dt><dd>{duration(comparisonExecution.hoursToClear)}</dd></div><div><dt>Observed value range</dt><dd>{number(comparisonExecution.lowValue, 0)}–{number(comparisonExecution.highValue, 0)} ex</dd></div></dl>
               <button type="button" className="p2ex-comparison-clear" onClick={() => setComparisonRouteId("")}>Clear comparison</button>
             </div>}
             <div className="p2ex-route-legend"><span>Pinned comparisons</span><p>Exalted, Chaos, and Divine remain visible when completed evidence exists. Selecting a row also switches the history chart to that route.</p></div>
             <div className="p2ex-route-layout">
-              <div className="p2ex-route-table p2ex-table-wrap"><table><thead><tr><th>{tradeSide === "buy" ? "Pay with" : "Receive"}</th><th>Rate per item</th><th>Total for {number(plannedUnits, 0)}</th><th>Exalted equivalent</th><th>Completed range</th><th>Route depth</th></tr></thead><tbody>{shownRoutes.map((route) => { const recommended = route.quoteId === recommendedRoute.quoteId; const core = CORE_ROUTE_IDS.includes(route.quoteId); const comparing = route.quoteId === comparisonRouteId; const routeConfidence = assessExchangeRoute(route, { minTurnoverExalted: routeMinimum, minItemVolume: routeMinimumUnits }); return <tr key={route.quoteId} className={`${recommended ? "recommended" : ""} ${core ? "core" : ""} ${comparing ? "comparison" : ""}`}><td><button type="button" className="p2ex-route-pick" aria-pressed={comparing} title={`Compare ${route.quoteName} with the best observed route`} onClick={() => setComparisonRouteId((current) => current === route.quoteId ? "" : route.quoteId)}><span className="p2ex-route-name"><strong>{route.quoteName}</strong><em className={`p2ex-route-confidence ${routeConfidence.level}`} title={routeConfidence.reasons.join(" · ")}>{shortConfidence(routeConfidence.level)}</em>{core && <em className="p2ex-pinned">Pinned</em>}</span><small>{recommended ? core ? "Best observed · Always shown" : "Best observed" : core ? `${route.routeLabel} · Always shown` : route.routeLabel}</small></button></td><td>{number(route.rateQuotePerItem)} {route.quoteName}</td><td>{number(route.rateQuotePerItem * plannedUnits)} {route.quoteName}</td><td>{number(route.priceExalted)} ex/item</td><td>{number(route.lowExalted)}–{number(route.highExalted)} ex<small>{unsignedPercent(route.rangePercent)} spread</small></td><td>{number(route.itemVolume, 0)} units/h<small>{number(route.limitingTurnoverExalted, 0)} ex/h limiting</small></td></tr>; })}</tbody></table>{remainingRoutes > 0 && <button type="button" className="p2ex-route-more" onClick={() => setVisibleRouteCount((count) => count + ROUTE_PAGE_SIZE)}>View {Math.min(ROUTE_PAGE_SIZE, remainingRoutes)} more <span>· {remainingRoutes} remaining</span></button>}</div>
+              <div className="p2ex-route-table p2ex-table-wrap"><table><thead><tr><th>{tradeSide === "buy" ? "Pay with" : "Receive"}</th><th>Rate per item</th><th>Total for {number(plannedUnits, 0)}</th><th>Exalted equivalent</th><th>Completed range</th><th>Route depth</th></tr></thead><tbody>{shownRoutes.map((route) => { const recommended = route.quoteId === recommendedRoute?.quoteId; const core = CORE_ROUTE_IDS.includes(route.quoteId); const comparing = route.quoteId === comparisonRouteId; const routeConfidence = assessExchangeRoute(route, { minTurnoverExalted: routeMinimum, minItemVolume: routeMinimumUnits }); return <tr key={route.quoteId} className={`${recommended ? "recommended" : ""} ${core ? "core" : ""} ${comparing ? "comparison" : ""}`}><td><button type="button" className="p2ex-route-pick" aria-pressed={comparing} title={`Compare ${route.quoteName} with the best observed route`} onClick={() => setComparisonRouteId((current) => current === route.quoteId ? "" : route.quoteId)}><span className="p2ex-route-name"><strong>{route.quoteName}</strong><em className={`p2ex-route-confidence ${routeConfidence.level}`} title={routeConfidence.reasons.join(" · ")}>Depth: {shortConfidence(routeConfidence.level)}</em>{core && <em className="p2ex-pinned">Pinned</em>}</span><small>{recommended ? core ? "Best observed · Always shown" : "Best observed" : core ? `${route.routeLabel} · Always shown` : route.routeLabel}</small></button></td><td>{number(route.rateQuotePerItem)} {route.quoteName}</td><td>{number(route.rateQuotePerItem * plannedUnits)} {route.quoteName}</td><td>{number(route.priceExalted)} ex/item</td><td>{number(route.lowExalted)}–{number(route.highExalted)} ex<small>{unsignedPercent(route.rangePercent)} spread</small></td><td>{number(route.itemVolume, 0)} units/h<small>{number(route.limitingTurnoverExalted, 0)} ex/h limiting</small></td></tr>; })}</tbody></table>{remainingRoutes > 0 && <button type="button" className="p2ex-route-more" onClick={() => setVisibleRouteCount((count) => count + ROUTE_PAGE_SIZE)}>View {Math.min(ROUTE_PAGE_SIZE, remainingRoutes)} more <span>· {remainingRoutes} remaining</span></button>}</div>
             </div>
             <p className="p2ex-router-note"><strong>Not a live arbitrage quote.</strong> Routes compare same-hour completed means, and their legs may have cleared at different moments. Both legs must pass the selected turnover and unit floors; wide ranges and extreme disagreement reduce confidence.</p>
             <aside className="p2ex-route-leaders"><span>Largest observed route disagreements</span><p>Outliers worth checking manually—not guaranteed opportunities—after applying both depth floors.</p>{routeLeaders.length ? routeLeaders.map((row) => <button type="button" key={row.itemId} onClick={() => inspectMarket(row.itemId)}><span><strong>{row.name}</strong><small>{row.routeCount} eligible routes · {number(row.itemVolume, 0)} units/h</small></span><b>{unsignedPercent(row.routeGap)}</b></button>) : <div>No qualifying multi-route differences.</div>}</aside>
-          </> : <div className="p2ex-no-rows">No route for this item passes both the selected turnover and unit floors.</div>}
+          </> : <div className="p2ex-no-rows">Select a completed exchange market.</div>}
         </section>
         </div>
 
@@ -293,6 +329,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
               </LineChart>
             </ResponsiveContainer> : <div className="p2ex-chart-empty">This exact route’s history starts when both completed legs are stored in the same market hour.</div>}
           </div>
+          <p className="p2ex-history-evidence">{evidence.label}. Movement uses the first and last observed prices shown here.</p>
         </section>
 
         <section className="p2ex-market-card">
@@ -304,12 +341,12 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
             <label><span>Minimum units cleared</span><select value={minimumUnits} onChange={(event) => setMinimumUnits(Number(event.target.value))}><option value="0">Any completed units</option><option value="1">1 unit / hour</option><option value="5">5 units / hour</option><option value="10">10 units / hour</option><option value="25">25 units / hour</option><option value="50">50 units / hour</option><option value="100">100 units / hour</option></select></label>
           </div>
           <div className="p2ex-table-wrap"><table><thead><tr><th>Market</th><th>Lowest observed buy</th><th>Highest observed sell</th><th>Observed gap</th><th>24h move</th><th>Completed range</th><th>Depth / hour</th></tr></thead><tbody>
-            {shownMarkets.map((row) => { const rowConfidence = assessExchangeRoute(row.bestBuy, { minTurnoverExalted: minimum, minItemVolume: minimumUnits, routeGap: row.routeGap }); return <tr key={row.itemId} className={row.itemId === selectedId ? "selected" : ""} onClick={() => inspectMarket(row.itemId)}>
+            {shownMarkets.map((row) => { const rowConfidence = assessExchangeMarket(row, { minTurnoverExalted: minimum, minItemVolume: minimumUnits }); return <tr key={row.itemId} className={row.itemId === selectedId ? "selected" : ""} onClick={() => inspectMarket(row.itemId)}>
               <td><strong>{row.name}</strong><small>{row.type || "Currency Exchange item"} · {row.routeCount} eligible quote {row.routeCount === 1 ? "currency" : "currencies"}{row.totalRouteCount > row.routeCount ? ` of ${row.totalRouteCount} total` : ""}</small></td>
               <td><strong>{row.bestBuy.quoteName}</strong><small>{number(row.bestBuy.priceExalted)} ex/item · {number(row.bestBuy.limitingTurnoverExalted, 0)} ex/h</small></td>
               <td><strong>{row.bestSell.quoteName}</strong><small>{number(row.bestSell.priceExalted)} ex/item · {number(row.bestSell.limitingTurnoverExalted, 0)} ex/h</small></td>
               <td className={`p2ex-gap ${rowConfidence.level}`}>{row.routeCount > 1 ? unsignedPercent(row.routeGap) : "—"}<small>{rowConfidence.label}</small></td>
-              <td className={overview.movementByItem[row.itemId]?.change > 0 ? "gain" : overview.movementByItem[row.itemId]?.change < 0 ? "loss" : ""}>{percent(overview.movementByItem[row.itemId]?.change)}<small>Div {percent(overview.movementByItem[row.itemId]?.divineAdjustedChange)}</small></td>
+              <td className={overview.movementByItem[row.itemId]?.change > 0 ? "gain" : overview.movementByItem[row.itemId]?.change < 0 ? "loss" : ""}>{percent(overview.movementByItem[row.itemId]?.change)}<small>{overview.movementByItem[row.itemId]?.evidence?.partial ? "Less than 24h observed" : overview.movementByItem[row.itemId]?.evidence?.stale ? "No recent trade" : `Div ${percent(overview.movementByItem[row.itemId]?.divineAdjustedChange)}`}</small></td>
               <td>{displayPrice(row.lowExalted, unit, divineRate, chaosExalted)}–{displayPrice(row.highExalted, unit, divineRate, chaosExalted)}</td>
               <td>{number(row.itemVolume, 0)} units/h<small>{number(row.turnoverExalted, 0)} ex/h</small></td>
             </tr>; })}
@@ -322,6 +359,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
 }
 
 const css = `
+.p2ex-evidence-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:12px 15px;border:1px solid #654629;border-radius:7px;background:#19120d;color:#d6b995;font-size:12px}.p2ex-evidence-bar>div{display:flex;gap:7px;flex-wrap:wrap}.p2ex-evidence-bar button{padding:7px 10px;border:1px solid #805237;border-radius:4px;background:#25170f;color:#efc5a5;cursor:pointer}.p2ex-evidence-bar small{flex-basis:100%;color:#a28a78;font-size:11px}.p2ex-history-evidence{margin:0;color:#c2a584;font-size:12px}.p2ex-ranges{flex-wrap:wrap}.p2ex-recommendation.evidence-low{border-color:#7b4832;background:linear-gradient(100deg,#24170f,#100c09)}.p2ex-recommendation.evidence-low>div>strong{color:#e3b185}.p2ex-recommendation.evidence-medium{border-color:#796133}
 .p2ex-main{display:grid;gap:14px}.p2ex-head{display:flex;align-items:end;justify-content:space-between;gap:24px;padding:20px 22px;border:1px solid #3e281e;border-radius:8px;background:linear-gradient(105deg,#17100d,#0d0908)}.p2ex-head>div:first-child>span,.p2ex-chart-head span,.p2ex-routes header span,.p2ex-filters span,.p2ex-move span{color:#bd6846;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.p2ex-head h2{margin:4px 0;color:#f0ded5;font-size:27px}.p2ex-head p{max-width:690px;margin:0;color:#9c867c;font-size:13px}.p2ex-kpis{display:grid;grid-template-columns:repeat(2,minmax(110px,1fr));gap:8px}.p2ex-kpis div{display:grid;gap:3px;padding:9px 11px;border:1px solid #3e281e;border-radius:5px;background:#100b09}.p2ex-kpis span{color:#846f66;font-size:9.5px;text-transform:uppercase}.p2ex-kpis strong{color:#e1ccc2;font-size:16px}.p2ex-chart-card,.p2ex-market-card,.p2ex-routes{display:grid;gap:12px;padding:18px;border:1px solid #452b20;border-radius:8px;background:#110c0a}.p2ex-chart-head{display:flex;justify-content:space-between;gap:18px}.p2ex-chart-head h3,.p2ex-routes h3{margin:4px 0;color:#ead5cb;font-size:20px}.p2ex-chart-head p,.p2ex-routes header p{margin:0;color:#8e776d;font-size:12px}.p2ex-move{display:grid;align-content:start;gap:4px;text-align:right}.p2ex-move strong{font-size:20px}.p2ex-tools{display:flex;align-items:center;justify-content:space-between;gap:12px}.p2ex-ranges{display:flex;gap:5px}.p2ex-ranges button{padding:6px 10px;border:1px solid #45291f;border-radius:4px;background:#160e0b;color:#9c8277;cursor:pointer}.p2ex-ranges button.on{border-color:#a44e2d;background:#2a140d;color:#efb59d}.p2ex-tools label{color:#c7ada1;font-size:12px;cursor:pointer}.p2ex-tools label.disabled{opacity:.45;cursor:not-allowed}.p2ex-tools input{accent-color:#a44e2d}.p2ex-chart{min-height:280px;border-top:1px solid #302019;border-bottom:1px solid #302019}.p2ex-chart-empty,.p2ex-empty{display:grid;min-height:240px;place-items:center;color:#806d64;font-size:13px}.p2ex-filters{display:grid;grid-template-columns:minmax(180px,1fr) 190px 190px;gap:8px}.p2ex-filters label{display:grid;gap:5px}.p2ex-filters input,.p2ex-filters select{min-width:0;padding:8px;border:1px solid #513022;border-radius:5px;background:#110b09;color:#e1ccc2}.p2ex-table-wrap{overflow:auto;border:1px solid #302019;border-radius:5px}.p2ex-table-wrap table{width:100%;border-collapse:collapse;white-space:nowrap}.p2ex-table-wrap th{padding:8px 10px;background:#160f0c;color:#8f786e;font-size:10px;letter-spacing:.08em;text-align:right;text-transform:uppercase}.p2ex-table-wrap th:first-child,.p2ex-table-wrap td:first-child{text-align:left}.p2ex-table-wrap td{padding:9px 10px;border-top:1px solid #2b1d17;color:#d5beb3;font-size:12px;text-align:right}.p2ex-table-wrap tbody tr{cursor:pointer}.p2ex-table-wrap tbody tr:hover,.p2ex-table-wrap tbody tr.selected{background:#21130e}.p2ex-table-wrap td strong{display:block;color:#e5d1c7}.p2ex-table-wrap td small{display:block;margin-top:2px;color:#78675f;font-size:10px}.p2ex-routes header{display:flex;align-items:end;justify-content:space-between;gap:18px}.p2ex-routes header p{max-width:620px;text-align:right}.p2ex-no-rows{padding:24px;color:#806d64;font-size:12px;text-align:center}.gain{color:#79bd72!important}.loss{color:#dc716c!important}@media(max-width:980px){.p2ex-head{align-items:stretch;flex-direction:column}.p2ex-kpis{grid-template-columns:repeat(4,1fr)}.p2ex-filters{grid-template-columns:1fr 1fr}.p2ex-filters label:first-child{grid-column:1/-1}}@media(max-width:680px){.p2ex-kpis{grid-template-columns:1fr 1fr}.p2ex-chart-head,.p2ex-routes header{align-items:stretch;flex-direction:column}.p2ex-move,.p2ex-routes header p{text-align:left}.p2ex-tools{align-items:flex-start;flex-direction:column}.p2ex-filters{grid-template-columns:1fr}.p2ex-filters label:first-child{grid-column:auto}}
 .p2ex-overview{display:grid;gap:12px;padding:18px;border:1px solid #5b3020;border-radius:8px;background:radial-gradient(circle at 88% 0,#2c150e 0,transparent 30%),#100b09}.p2ex-overview-head{display:flex;align-items:end;justify-content:space-between;gap:22px}.p2ex-overview-head>div>span,.p2ex-signal-panel header>span{color:#d56e44;font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase}.p2ex-overview-head h2{margin:4px 0;color:#f0ded5;font-size:23px}.p2ex-overview-head p{max-width:720px;margin:0;color:#9c867c;font-size:12.5px}.p2ex-overview-head dl{display:flex;gap:18px;margin:0}.p2ex-overview-head dl div{display:grid;gap:3px;text-align:right}.p2ex-overview-head dt{color:#806c63;font-size:9px;text-transform:uppercase}.p2ex-overview-head dd{margin:0;color:#e0c9be;font-size:15px;font-weight:700}.p2ex-signal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.p2ex-signal-panel{min-width:0;overflow:hidden;border:1px solid #3c281f;border-radius:7px;background:#120d0b}.p2ex-signal-panel header{display:grid;gap:3px;padding:13px 14px;border-bottom:1px solid #302019}.p2ex-signal-panel h3{margin:0;color:#e5d1c7;font-size:16px}.p2ex-signal-panel header p{margin:0;color:#826e65;font-size:10.5px;line-height:1.35}.p2ex-signal-list{display:grid}.p2ex-signal-list button{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:8px;padding:9px 11px;border:0;border-bottom:1px solid #281b16;background:transparent;color:inherit;text-align:left;cursor:pointer}.p2ex-signal-list button:last-child{border-bottom:0}.p2ex-signal-list button:hover{background:#21130e}.p2ex-signal-list button>em{color:#765b4e;font-size:10px;font-style:normal}.p2ex-signal-list button>span{display:grid;min-width:0;gap:2px}.p2ex-signal-list strong{overflow:hidden;color:#dbc5ba;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.p2ex-signal-list small{overflow:hidden;color:#78665e;font-size:9.5px;text-overflow:ellipsis;white-space:nowrap}.p2ex-signal-list b{color:#d9b6a5;font-size:12px;white-space:nowrap}.p2ex-signal-empty{padding:20px 14px;color:#78665e;font-size:11px;text-align:center}@media(max-width:900px){.p2ex-overview-head{align-items:stretch;flex-direction:column}.p2ex-overview-head dl{justify-content:space-between}.p2ex-overview-head dl div{text-align:left}}@media(max-width:680px){.p2ex-signal-grid{grid-template-columns:1fr}.p2ex-overview-head dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}
 .p2ex-workbench{display:grid;gap:14px;padding:18px;border:1px solid #654029;border-radius:8px;background:linear-gradient(120deg,#17100c,#100b09)}.p2ex-workbench-head{display:flex;align-items:end;justify-content:space-between;gap:20px}.p2ex-workbench-head>div:first-child>span,.p2ex-planner-controls label>span,.p2ex-planner-controls legend,.p2ex-flow span,.p2ex-brief-grid span{color:#bd6846;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}.p2ex-workbench h2{margin:4px 0;color:#f0ded5;font-size:22px}.p2ex-workbench-head p{max-width:760px;margin:0;color:#927d73;font-size:12px}.p2ex-flow{display:grid;flex:0 0 auto;gap:4px;padding:10px 12px;border:1px solid #493126;border-radius:6px;background:#100b09;text-align:right}.p2ex-flow strong{color:#d9beb1;font-size:13px}.p2ex-flow.fits{border-color:#365a39}.p2ex-flow.fits strong{color:#79bd72}.p2ex-flow.large{border-color:#6a3830}.p2ex-flow.large strong{color:#dc716c}.p2ex-planner-controls{display:flex;align-items:end;gap:10px}.p2ex-planner-controls label{display:grid;gap:5px}.p2ex-planner-controls input{width:160px;padding:8px;border:1px solid #633b29;border-radius:5px;background:#0f0a08;color:#ead5cb}.p2ex-planner-controls fieldset{display:flex;gap:5px;margin:0;padding:0;border:0}.p2ex-planner-controls legend{margin-bottom:5px}.p2ex-planner-controls button{padding:8px 11px;border:1px solid #493026;border-radius:5px;background:#130d0a;color:#9e867b;cursor:pointer}.p2ex-planner-controls button.on{border-color:#a55332;background:#2a160f;color:#efb59d}.p2ex-brief-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.p2ex-brief-grid article{display:grid;min-width:0;gap:4px;padding:11px 12px;border:1px solid #38271f;border-radius:6px;background:#100b09}.p2ex-brief-grid strong{overflow:hidden;color:#e3cec3;font-size:17px;text-overflow:ellipsis;white-space:nowrap}.p2ex-brief-grid small{overflow:hidden;color:#7f6b62;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.p2ex-planner-note{margin:0;color:#76645c;font-size:10.5px}@media(max-width:800px){.p2ex-workbench-head{align-items:stretch;flex-direction:column}.p2ex-flow{text-align:left}.p2ex-brief-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.p2ex-planner-controls{align-items:stretch;flex-direction:column}.p2ex-planner-controls input{box-sizing:border-box;width:100%}.p2ex-planner-controls fieldset{display:grid;grid-template-columns:repeat(4,1fr)}.p2ex-brief-grid{grid-template-columns:1fr}}

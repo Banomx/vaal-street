@@ -452,12 +452,13 @@ The chart window can be set to 1, 2, 4, 8, 12, 24 or 48 hours, 7 or 30 days, or
 the full stored history. Four hours is the default so the view opens on recent
 market movement while retaining longer windows for comparison.
 
-The three rules that keep a summed basket honest are the ones
-`poe1/features/strategies/stratHistory.js` already documents: a member with no
-stored history is excluded and named rather than back-filled, the plotted window
-is the members' overlap, and a member missing one hourly sample inside that
-window contributes its nearest one. Below three surviving members there is no
-index and the card says why.
+Members without usable history or weight are excluded and named. The plotted
+window is the members' overlap, also aligned to the entry series when available.
+Missing member samples may use a nearby quote within two hours; longer gaps are
+omitted. Below three surviving members there is no index and the card says why.
+Cards disclose observed duration, sample count, partial windows, nearby fills,
+and equal-weight fallback when unit volume is absent. Concentration measures
+starting basket value, not nominal unit weights, and names the dominant item.
 
 Stash-quoted uniques stay out of the basket. GGG cleared volume and poe.ninja
 listing counts are not the same measurement, so giving a stash-priced unique a
@@ -468,6 +469,10 @@ Return against entry is reported as a ratio, `(1 + return) / (1 + entry) - 1`,
 not as a difference of two percentages. Subtracting breaks down as soon as
 either side is large: a tablet up 486% against a basket down 6% is not
 -492%.
+Entry movement, basket movement, and additive member contributions use matching
+endpoints and the same Exalted or Divine-adjusted basis. Changing the display
+currency does not change the ratio. Limited or concentrated evidence stays out
+of the broader-evidence summary winner.
 
 Every card leads with the four values needed to read that ratio: current entry
 price and its window move, output-basket move, return versus entry, and cleared
@@ -610,18 +615,30 @@ same-hour quote/Exalted normalization leg. Exalted, Chaos, and Divine remain
 pinned comparisons when those completed pairs exist.
 History is decoded once into indexed pair maps; the resulting movement map is
 reused by the market catalogue. Route confidence combines the selected unit and
-turnover floors with completed-range width and cross-route disagreement; extreme
+turnover floors (with confidence minimums of 5 units/hour and 100 Exalted/hour)
+with completed-range width and cross-route disagreement; extreme
 gaps are marked low confidence instead of styled as profit. The best-observed
 card shows those inputs as separate numeric tags, while every route row carries
-its own compact confidence badge based on that route's depth and range. The bottom Route
+its own compact depth/range confidence badge. A separate strongest-evidence
+comparison favors confidence, then limiting turnover, then narrower range.
+Small-market discovery sets both views to 100 Exalted/hour and 5 units/hour;
+lowering filters never removes the confidence minimums. Pinned comparisons and
+history remain available even when no route passes the filters. The bottom Route
 opportunity scanner defaults to 1,000 Exalted/hour and 10 units/hour and renders
 20 rows at a time; search, sort, and filter
-changes reset it to the first batch. Its turnover floor filters both the item's
-overall turnover and every route's limiting turnover, then recalculates best
+changes reset it to the first batch. It starts sorted by turnover. Floors filter
+each route's limiting turnover and item units; an eligible alternate keeps the
+item visible even when its primary quote is thin. The scanner recalculates best
 buy, best sell, eligible route count, and route difference before sorting.
 Each displayed route includes units/hour and limiting Exalted/hour. On narrow
 screens, choosing an item collapses the market browser into a sticky change-item
 bar and moves directly to the route result.
+Exchange history defaults to four hours and offers the same windows as Farms.
+Coverage uses actual observed samples, not an inferred league start. Windows are
+anchored to the latest stored snapshot rather than the route's last trade;
+partial or stale history cannot appear as a full 24-hour mover. Execution times
+remain share-based scenarios, with warnings when the planned quantity exceeds
+the entire observed hourly flow.
 The Exchange picker uses the same metadata-driven category and subcategory rules
 as Price Tracker rather than maintaining an exchange-only taxonomy. Specific
 GGG tags such as catalysts take precedence over broad structural classes, and

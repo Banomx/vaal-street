@@ -4,6 +4,7 @@ import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import { fmtPrice } from "../bosses/bossProfit.js";
 import { buildTabletFamilies, sortTabletRows, tabletFamilyTimeline } from "./tabletFarms.js";
 import { buildPriceTimeline } from "../pricing/priceTimeline.js";
+import { windowEvidence } from "../../shared/marketWindow.js";
 import { curatedCoverage, ENTRY_DUAL_ROLE, FAMILY_LABELS, FAMILY_ORDER, FLOOR_NOTE, hasOutputPool, mechanicPools, NEUTRAL_NOTE, resolveEntry, TONES, DEFERRED } from "./mechanics.js";
 import { farmSignal, liquidity, poolContributions, poolFlow, poolMovers, topOfPool, WEIGHT_MODES } from "./farmIndex.js";
 
@@ -56,7 +57,7 @@ function sourceLabel(entry) {
 }
 
 function flowLabel(value) {
-  if (!(value > 0)) return "No cleared trade";
+  if (!(value > 0)) return "No flow data";
   if (value >= 1e6) return `${number(value / 1e6, 1)}M ex/h`;
   if (value >= 1e3) return `${number(value / 1e3, 0)}k ex/h`;
   return `${number(value, 0)} ex/h`;
@@ -140,7 +141,7 @@ function PoolTable({ rows, currency, divineExalted, chaosExalted }) {
           {sorted.map((row) => <tr key={row.name}>
             <td title={row.name}>{row.name}</td>
             <td>{fmtPrice(Number(row.entry.exalted) || 0, currency, divineExalted, chaosExalted)}</td>
-            <td className={row.market.tone}>{row.market.count ? `${number(row.market.count, 0)} ${row.market.unit}` : "unknown"}</td>
+            <td className={row.market.tone}>{row.market.count ? `${number(row.market.count, 0)} ${row.market.unit}` : row.market.label}</td>
             <td>{row.weight > 0 ? `${number(row.weight * 100, 1)}%` : "—"}</td>
             <td className={tone(row.change)}>{pct(row.change, 0)}</td>
             <td className={tone(row.contribution)}>{points(row.contribution)}</td>
@@ -217,11 +218,11 @@ export default function PopularFarms({ league, priceData, history, currency, cha
           : { name: null, item: null, kind: declared ? declared.kind : "tablet", label: declared?.label || null, unit: null };
       const timeline = entry.kind === "tablet"
         ? (family.baselineName
-          ? tabletFamilyTimeline(history, family, { currency: divineAdjusted ? "divine" : currency, rangeHours, divineAdjusted })
+          ? tabletFamilyTimeline(history, family, { currency: divineAdjusted ? "divine" : "exalted", rangeHours, divineAdjusted })
           : { points: [], change: null, unit: "Exalted", canDivineAdjust: false })
         : entry.name
           ? (() => {
-            const line = buildPriceTimeline(history, entry.name, { currency: divineAdjusted ? "divine" : currency, rangeHours });
+            const line = buildPriceTimeline(history, entry.name, { currency: divineAdjusted ? "divine" : "exalted", rangeHours });
             return { ...line, change: divineAdjusted ? line.divineAdjustedChange : line.change };
           })()
           : { points: [], change: null, unit: "Exalted", canDivineAdjust: false };
@@ -230,7 +231,10 @@ export default function PopularFarms({ league, priceData, history, currency, cha
       /* One walk of the pool's histories feeds the index, the movers, the
          top-of-pool list and the full table, so opening the table costs
          nothing extra. */
-      const contributions = pool ? poolContributions(history, pool.members, { mode: weightMode, rangeHours, divineAdjusted }) : null;
+      const contributions = pool ? poolContributions(history, pool.members, {
+        mode: weightMode, rangeHours, divineAdjusted,
+        entryName: timeline.points.length >= 2 ? entry.name : null,
+      }) : null;
       const index = contributions?.index || null;
       const movers = contributions ? poolMovers(contributions.rows) : null;
       const top = contributions ? topOfPool(contributions.rows) : [];
@@ -238,9 +242,12 @@ export default function PopularFarms({ league, priceData, history, currency, cha
          is large — a tablet up 486% against a basket down 6% is not "-492%".
          The ratio says what was actually asked: how the return moved relative
          to the entry cost over the same window. */
-      const spread = index?.change != null && timeline.change != null && timeline.change > -1
-        ? (1 + index.change) / (1 + timeline.change) - 1
+      const entryChange = index?.entryChange ?? null;
+      const spread = index?.change != null && entryChange != null && entryChange > -1
+        ? (1 + index.change) / (1 + entryChange) - 1
         : null;
+      const evidence = windowEvidence(index?.points || [], rangeHours, Date.parse(history?.timestamps?.at(-1)));
+      const limited = evidence.samples < 4 || evidence.partial || evidence.stale || index?.equalFallback || index?.concentration.heavy;
       return {
         ...family,
         entry,
@@ -251,6 +258,9 @@ export default function PopularFarms({ league, priceData, history, currency, cha
         top,
         rows: contributions?.rows || [],
         spread,
+        entryChange: pool ? entryChange : timeline.change,
+        evidence,
+        limited,
         flow: pool ? poolFlow(pool.members) : 0,
         baselineValue: Number(entry.item?.exalted || last?.exalted) || 0,
       };
@@ -267,7 +277,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
   const pricedEntries = rows.filter((row) => Number(row.entry.item?.exalted) > 0);
   const pricedTablets = pricedEntries.filter((row) => row.entry.kind === "tablet").length;
   const pricedAlternates = pricedEntries.length - pricedTablets;
-  const spreads = rows.filter((row) => row.spread != null);
+  const spreads = rows.filter((row) => row.spread != null && !row.limited);
   const bestSpread = [...spreads].sort((left, right) => right.spread - left.spread)[0];
   const deepestFlow = [...rows].sort((left, right) => right.flow - left.flow)[0];
 
@@ -316,7 +326,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
     </SourceStrip>
 
     {!!rows.length && <section className="p2pf-summary" aria-label="Mechanic summary">
-      <div><span>Best return vs entry</span><strong>{bestSpread?.label || "Building history"}</strong><em className={tone(bestSpread?.spread)}>{pct(bestSpread?.spread)}</em></div>
+      <div><span>Return vs entry · broader evidence</span><strong>{bestSpread?.label || "Evidence still limited"}</strong><em className={tone(bestSpread?.spread)}>{pct(bestSpread?.spread)}</em></div>
       <div><span>Deepest cleared trade</span><strong>{deepestFlow?.flow > 0 ? deepestFlow.label : "No cleared trade"}</strong><em>{flowLabel(deepestFlow?.flow)}</em></div>
       <div><span>Entry coverage</span><strong>{pricedEntries.length}/{rows.length} farms priced</strong><em>{pricedTablets} tablet{pricedTablets === 1 ? "" : "s"}{pricedAlternates ? ` · ${pricedAlternates} alternate` : ""}</em></div>
       <div><span>Curated coverage</span><strong>{coverage.matched}/{coverage.total} markets priced</strong><em>Unquoted markets stay outside baskets</em></div>
@@ -325,16 +335,18 @@ export default function PopularFarms({ league, priceData, history, currency, cha
     {!rows.length && <section className="p2pf-empty">No tablet markets are present in this snapshot yet.</section>}
     <section className="p2pf-grid">
       {sorted.map((row, index) => {
-        const move = row.timeline.change;
+        const move = row.entryChange;
         const market = liquidity(row.entry.item);
         const signal = farmSignal(row.spread);
-        const chart = mergeSeries(row.timeline.points, row.index?.points || []);
+        const entryPoints = row.index?.entryChange != null
+          ? row.index.points.map((point) => ({ at: point.at, value: point.entryValue })) : row.pool ? [] : row.timeline.points;
+        const chart = mergeSeries(entryPoints, row.index?.points || []);
         const heavy = row.index?.concentration?.heavy && row.pool?.members.length;
-        const topWeight = row.index ? [...row.index.weights.entries()].sort((left, right) => right[1] - left[1])[0] : null;
+        const topWeight = row.index?.dominant;
         return <article className="p2pf-card" key={row.id} style={{ "--tone": TONES[row.id] || "#bd6846" }}>
           <header>
             <div><span className="p2pf-rank">{index + 1}</span><h3>{row.label}</h3><em>{row.entry.name || `No ${row.entry.kind} quote in this league`}</em></div>
-            <div className={`p2pf-verdict ${signal.tone}`}><span>Market signal</span><strong>{signal.label}</strong></div>
+            <div className={`p2pf-verdict ${signal.tone}`}><span>{row.limited ? "Limited evidence" : "Market signal"}</span><strong>{signal.label}</strong></div>
           </header>
           <section className="p2pf-decision" aria-label={`${row.label} market decision`}>
             <div>
@@ -353,9 +365,9 @@ export default function PopularFarms({ league, priceData, history, currency, cha
               <small>{signal.detail}</small>
             </div>
             <div>
-              <span>Sellability</span>
+              <span>Observed output flow</span>
               <strong>{flowLabel(row.flow)}</strong>
-              <small>{row.flow > 0 ? "Cleared output turnover" : "No cleared output trade"}</small>
+              <small>{row.flow > 0 ? "Observed hourly turnover · not your yield" : "No unit-volume evidence"}</small>
             </div>
           </section>
           <div className="p2pf-badges">
@@ -366,7 +378,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
                 <span className={market.tone}>{market.count ? `${number(market.count, 0)} ${market.unit}` : market.label}</span>
               </>
               : <span className="unknown">{`no ${row.entry.kind} quote`}</span>}
-            {hasOutputPool(row.id)
+            {hasOutputPool(row.id) && row.pool
               ? <>
                 <span>{row.pool.members.length} pool markets</span>
                 <span className={row.index?.included.length === row.pool.members.length ? "active" : "limited"}
@@ -375,10 +387,15 @@ export default function PopularFarms({ league, priceData, history, currency, cha
                 </span>
                 <span className={row.flow > 0 ? "active" : "unknown"}>{flowLabel(row.flow)}</span>
                 {row.spread != null && <span className={tone(row.spread)}>spread {pct(row.spread)}</span>}
-                {heavy && <span className="limited" title={`${topWeight[0]} holds ${number(topWeight[1] * 100, 0)}% of the basket weight.`}>{`concentrated · ${number(topWeight[1] * 100, 0)}%`}</span>}
+                {heavy && topWeight && <span className="limited" title="Share of the basket's starting value; a single market can dominate the headline.">{`${topWeight[0]} · ${number(topWeight[1] * 100, 0)}% of basket value`}</span>}
               </>
               : <span className="unknown">no attributable output pool</span>}
           </div>
+          {row.pool && <p className={`p2pf-evidence ${row.limited ? "limited" : "active"}`}>
+            {row.evidence.label} · {divineAdjusted ? "Divine-adjusted" : "Exalted-based"} movement
+            {row.index?.equalFallback ? " · equal weights: no unit volume available" : ""}
+            {row.index?.estimatedSamples > 0 ? ` · ${row.index.estimatedSamples} samples use nearby quotes (within 2h)` : ""}
+          </p>}
           <div className="p2pf-chart">
             {chart.length ? <ResponsiveContainer width="100%" height={140}>
               <LineChart data={chart} margin={{ top: 12, right: 12, bottom: 2, left: 0 }}>
@@ -397,7 +414,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
           {hasOutputPool(row.id) && row.index?.reason && <p className="p2pf-note">No return index: {row.index.reason}.</p>}
           {!hasOutputPool(row.id) && <p className="p2pf-note">{NEUTRAL_NOTE}</p>}
           {DEFERRED[row.id] && <p className="p2pf-note">{DEFERRED[row.id]}</p>}
-          {row.index?.excluded?.length > 0 && <p className="p2pf-note">Outside the index — no stored history yet: {row.index.excluded.join(", ")}.</p>}
+          {row.index?.excluded?.length > 0 && <p className="p2pf-note">Outside the index — no usable history or weight for this mode: {row.index.excluded.join(", ")}.</p>}
           {row.pool?.caveat && <p className="p2pf-note">{row.pool.caveat}</p>}
           <footer>
             {row.top.length > 0 && <div className="p2pf-movers">
@@ -429,6 +446,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
 }
 
 const css = `
+.p2pf-evidence{margin:0 16px 9px;padding:7px 9px;border:1px solid #443020;border-radius:5px;color:#b2a092;font-size:10px;line-height:1.5}.p2pf-evidence.limited{border-color:#70502d;color:#d2aa72}.p2pf-evidence.active{border-color:#36553b;color:#94b48e}
 .p2pf-main{display:grid;gap:14px}.p2pf-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:20px 22px;border:1px solid #3e281e;border-radius:8px;background:linear-gradient(105deg,#17100d,#0d0908)}.p2pf-head>div:first-child>span,.p2pf-tool>span{color:#bd6846;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.p2pf-head h2{margin:4px 0;color:#f0ded5;font-size:27px}.p2pf-head p{max-width:700px;margin:0;color:#9c867c;font-size:13.5px}.p2pf-tools{display:flex;align-items:flex-end;gap:12px;flex-shrink:0;flex-wrap:wrap}.p2pf-tool{display:grid;gap:5px}.p2pf-ranges button,.p2pf-sort button{padding:6px 10px}.p2pf-adjust{display:flex;align-items:center;gap:7px;padding-bottom:6px;color:#c7ada1;font-size:12px;white-space:nowrap;cursor:pointer}.p2pf-adjust input{accent-color:#a44e2d}.p2pf-adjust.disabled{opacity:.45;cursor:not-allowed}.p2pf-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid #3d281f;border-radius:8px;background:#100b09}.p2pf-summary>div{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 16px;border-right:1px solid #302019}.p2pf-summary>div:last-child{border-right:0}.p2pf-summary span{grid-column:1/-1;color:#9b6b56;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase}.p2pf-summary strong{color:#ddc8be;font-size:14px}.p2pf-summary em{color:#ad9185;font-size:12px;font-style:normal;text-align:right}.p2pf-summary em.gain{color:#79bd72}.p2pf-summary em.loss{color:#d9705c}.p2pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px}.p2pf-card{min-width:0;overflow:hidden;border:1px solid #45291f;border-top:2px solid var(--tone);border-radius:8px;background:linear-gradient(150deg,rgba(255,255,255,.015),transparent 45%),#110c0a}.p2pf-card>header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:15px 16px 7px}.p2pf-card>header>div:first-child{display:grid;grid-template-columns:auto 1fr;column-gap:8px}.p2pf-rank{grid-row:1/3;align-self:center;color:#756159;font-size:12px}.p2pf-card h3{margin:0;color:#ead7ce;font-size:19px}.p2pf-card header em{color:#8e776d;font-size:11.5px;font-style:normal}.p2pf-value{display:grid;text-align:right}.p2pf-value strong{color:#f0d8cb;font-size:17px}.p2pf-value span{font-size:11px}.gain{color:#79bd72}.loss{color:#d9705c}.p2pf-badges{display:flex;flex-wrap:wrap;gap:5px;padding:0 16px 5px}.p2pf-badges span{padding:3px 6px;border:1px solid #3c2921;border-radius:999px;background:#17100d;color:#987f74;font-size:9.5px}.p2pf-badges .thin{border-color:#7b382d;color:#e18272}.p2pf-badges .limited{border-color:#765428;color:#d2a563}.p2pf-badges .active,.p2pf-badges .deep{border-color:#355c3a;color:#7fbd82}.p2pf-badges .gain{border-color:#355c3a;color:#7fbd82}.p2pf-badges .loss{border-color:#7b382d;color:#e18272}.p2pf-chart{height:140px;margin:0 6px}.p2pf-chart-empty{display:grid;height:140px;padding:12px;place-items:center;text-align:center;color:#75645c;font-size:12px}.p2pf-note{margin:0;padding:6px 16px 0;color:#7d6b62;font-size:10.5px;line-height:1.45}.p2pf-card footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;padding:11px 16px 14px;margin-top:9px;border-top:1px solid #302019;color:#806d64;font-size:10.5px}.p2pf-movers{display:grid;align-content:start;gap:5px;min-width:0}.p2pf-movers>span,.p2pf-uniques>span{color:#9b6b56;font-size:9px;letter-spacing:.11em;text-transform:uppercase}.p2pf-movers ul{display:grid;gap:3px;margin:0;padding:0;list-style:none}.p2pf-movers li{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px;align-items:baseline}.p2pf-movers li i{font-style:normal;font-size:9.5px;text-align:right;min-width:34px;color:#75645c}.p2pf-movers li i.gain{color:#79bd72}.p2pf-movers li i.loss{color:#d9705c}.p2pf-movers li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#bda49a;font-size:10.5px}.p2pf-movers li b{color:#d8bfb3;font-size:10.5px;font-weight:600}.p2pf-movers li em{font-style:normal;font-size:10px;text-align:right}.p2pf-movers li em.thin{color:#e18272}.p2pf-movers li em.limited{color:#d2a563}.p2pf-movers li em.active{color:#7fbd82}.p2pf-movers li em.unknown{color:#75645c}.p2pf-uniques{display:grid;gap:7px;min-width:0}.p2pf-unique-tile{padding:8px;border:1px solid #35251e;border-radius:6px;background:linear-gradient(120deg,#17100d,#100b09)}.p2pf-unique-main{display:grid;gap:4px;min-width:0}.p2pf-unique-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.p2pf-unique-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dbc5ba;font-size:11.5px}.p2pf-unique-title b{flex-shrink:0;color:#efc5b3;font-size:11.5px;font-weight:600}.p2pf-unique-meta,.p2pf-unique-delta{display:flex;justify-content:space-between;gap:8px}.p2pf-unique-meta span{color:#75645c;font-size:9px}.p2pf-unique-meta .thin{color:#e18272}.p2pf-unique-meta .limited{color:#d2a563}.p2pf-unique-meta .active,.p2pf-unique-meta .deep{color:#7fbd82}.p2pf-relative{position:relative;height:5px;overflow:hidden;border-radius:999px;background:#2a1c16}.p2pf-relative i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--tone),#e08a62)}.p2pf-relative b{position:absolute;top:-2px;bottom:-2px;left:25%;width:1px;background:#f0d7ca;opacity:.7}.p2pf-unique-delta span,.p2pf-unique-delta em{font-size:9.5px}.p2pf-unique-delta span{color:#9d8175}.p2pf-unique-delta em{font-style:normal;text-align:right}.p2pf-pool{padding:0 16px 14px}.p2pf-pool-toggle{width:100%;padding:6px 9px;border:1px solid #3c2921;border-radius:5px;background:#17100d;color:#b09287;font:inherit;font-size:10.5px;cursor:pointer}.p2pf-pool-toggle:hover{border-color:#7b3e24;color:#e4b49e}.p2pf-pool-scroll{max-height:320px;overflow:auto;margin-top:8px;border:1px solid #302019;border-radius:6px}.p2pf-pool-table{width:100%;border-collapse:collapse;font-size:10.5px}.p2pf-pool-table th{position:sticky;top:0;z-index:1;padding:0;background:#17100d;text-align:right}.p2pf-pool-table th:first-child{text-align:left}.p2pf-pool-table th button{width:100%;padding:6px 8px;border:0;border-bottom:1px solid #3c2921;background:transparent;color:#9b6b56;font:inherit;font-size:9px;letter-spacing:.09em;text-transform:uppercase;text-align:inherit;cursor:pointer}.p2pf-pool-table th button:hover{color:#e4b49e}.p2pf-pool-table td{padding:4px 8px;border-bottom:1px solid #241812;color:#bda49a;text-align:right;white-space:nowrap}.p2pf-pool-table td:first-child{max-width:190px;overflow:hidden;text-overflow:ellipsis;text-align:left}.p2pf-pool-table tbody tr:last-child td{border-bottom:0}.p2pf-pool-table tbody tr:hover td{background:#17100d}.p2pf-pool-table .thin{color:#e18272}.p2pf-pool-table .limited{color:#d2a563}.p2pf-pool-table .active{color:#7fbd82}.p2pf-pool-table .gain{color:#79bd72}.p2pf-pool-table .loss{color:#d9705c}.p2pf-empty{padding:40px;border:1px solid #3e281e;border-radius:8px;text-align:center;color:#806d64}@media(max-width:1100px){.p2pf-head{align-items:flex-start;flex-direction:column}.p2pf-tools{width:100%;flex-wrap:wrap}}@media(max-width:720px){.p2pf-summary{grid-template-columns:1fr}.p2pf-summary>div{border-right:0;border-bottom:1px solid #302019}.p2pf-summary>div:last-child{border-bottom:0}}@media(max-width:520px){.p2pf-grid{grid-template-columns:1fr}.p2pf-tools{align-items:flex-start;flex-direction:column}}
 .p2pf-summary{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:520px){.p2pf-tool{max-width:100%}.p2pf-ranges{flex-wrap:wrap;overflow:visible;border:0;gap:4px}.p2pf-ranges button{border:1px solid #65351f;border-radius:4px}}

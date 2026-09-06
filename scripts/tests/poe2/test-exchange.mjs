@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { assessExchangeMarket, strongestEvidenceRoute } from "../../../src/games/poe2/features/exchange/exchangeDesk.js";
+import { windowEvidence } from "../../../src/games/poe2/shared/marketWindow.js";
 import { appendExchangeSnapshot } from "../../poe2/exchange-history.mjs";
 import { buildGggExchangeSnapshot, DIVINE_ID, EXALTED_ID } from "../../poe2/ggg-exchange.mjs";
 import { assessExchangeRoute, buildExchangeOverview, buildExchangeRouteOptions, buildExchangeRouteTimeline, buildExchangeRows, buildExchangeTimeline, CHAOS_ID, estimateExchangeExecution, filterExchangeRowsByTurnover, findTriangleChecks } from "../../../src/games/poe2/features/exchange/exchangeDesk.js";
@@ -108,12 +110,13 @@ assert.ok(Math.abs(divineQuotedTimeline.divineAdjustedChange) < 1e-12,
 const overview = buildExchangeOverview(rows, history, { limit: 3 });
 assert.equal(overview.historySnapshots, 2);
 assert.equal(overview.quoteGaps[0].itemId, ITEM, "the overview surfaces independently comparable source gaps");
-assert.equal(overview.movers[0].itemId, ITEM, "the overview ranks meaningful 24-hour moves by magnitude");
+assert.equal(overview.movers.length, 0, "one hour of data cannot rank as a 24-hour mover");
 assert.ok(overview.liquidity.every((entry, index, list) => !index || list[index - 1].turnoverExalted >= entry.turnoverExalted));
 assert.equal(overview.ranges[0].itemId, ITEM, "the overview isolates the widest completed range even when most markets were flat");
 assert.equal(overview.medianRange, 0);
-assert.ok(Math.abs(overview.movementByItem[ITEM].change - .2) < 1e-12,
-  "the table can reuse the overview's indexed 24-hour movement calculation");
+assert.equal(overview.movementByItem[ITEM].change, null, "the 24h table leaves partial-window movement blank");
+assert.ok(Math.abs(buildExchangeOverview(rows, history, { moveHours: 1 }).movementByItem[ITEM].change - .2) < 1e-12,
+  "a covered one-hour window retains its observed movement");
 
 const execution = estimateExchangeExecution(row, 20, { participation: .5 });
 assert.equal(execution.plannedHourlyUnits, 5);
@@ -141,5 +144,24 @@ assert.equal(assessExchangeRoute({ itemVolume: 20, limitingTurnoverExalted: 2000
 assert.equal(assessExchangeRoute({ itemVolume: 100, limitingTurnoverExalted: 10000, rangePercent: .1 }, {
   minItemVolume: 10, minTurnoverExalted: 1000, routeGap: .75,
 }).level, "low", "extreme cross-route disagreement is surfaced as low confidence rather than green profit");
+
+assert.equal(assessExchangeRoute({ itemVolume: 1, limitingTurnoverExalted: 10, rangePercent: 0 }, {
+  minItemVolume: 0, minTurnoverExalted: 0,
+}).level, "low", "lowering discovery filters must not turn a one-unit market into high confidence");
+const deep = { quoteId: "deep", itemVolume: 100, limitingTurnoverExalted: 10000, rangePercent: .1, priceExalted: 10 };
+const spike = { quoteId: "spike", itemVolume: 10, limitingTurnoverExalted: 1000, rangePercent: 2, priceExalted: 30 };
+assert.equal(strongestEvidenceRoute([spike, deep]).quoteId, "deep", "best evidence is independent of the largest observed payout");
+assert.equal(assessExchangeMarket({ bestBuy: deep, bestSell: { ...deep, rangePercent: 2 }, routeGap: .1 }).level,
+  "low", "market confidence considers the weaker of the buy and sell evidence");
+assert.equal(filterExchangeRowsByTurnover([{ ...row, itemVolume: 1, turnoverExalted: 1,
+  routeOptions: [{ ...deep, firstLegTurnoverExalted: 10000 }],
+}], 1000, { minItemVolume: 10 }).length, 1, "a thin primary quote cannot hide a qualifying alternative route");
+const sparseHistory = { ...history, snapshots: [...history.snapshots,
+  { at: "2026-08-21T10:00:00.000Z", pairs: [] }],
+};
+assert.equal(buildExchangeRouteTimeline(sparseHistory, ITEM, EXALTED_ID, { rangeHours: 4 }).points.length, 0,
+  "the window anchors to the dataset hour, not a stale route's last trade");
+assert.equal(windowEvidence([{ at: 0 }, { at: 40 * 3600e3 }], 48).partial, true,
+  "40 hours of event data are explicitly partial for a 48-hour window");
 
 console.log("PoE 2 Currency Exchange desk passed.");

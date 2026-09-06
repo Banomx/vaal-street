@@ -1,3 +1,5 @@
+import { windowEvidence } from "../../shared/marketWindow.js";
+
 export const EXALTED_ID = "Metadata/Items/Currency/CurrencyAddModToRare";
 export const DIVINE_ID = "Metadata/Items/Currency/CurrencyModValues";
 export const CHAOS_ID = "Metadata/Items/Currency/CurrencyRerollRare";
@@ -127,15 +129,24 @@ export function filterExchangeRowsByTurnover(rows, minimumTurnoverExalted = 0, {
   const floor = Math.max(0, Number(minimumTurnoverExalted) || 0);
   const unitFloor = Math.max(0, Number(minItemVolume) || 0);
   return (rows || []).flatMap((row) => {
-    if (row.turnoverExalted < floor || (unitFloor > 0 && (Number(row.itemVolume) || 0) < unitFloor)) return [];
     const routeOptions = (row.routeOptions || [])
       .filter((route) => route.limitingTurnoverExalted >= floor && (unitFloor <= 0 || (Number(route.itemVolume) || 0) >= unitFloor))
       .sort((left, right) => left.priceExalted - right.priceExalted);
     if (!routeOptions.length) return [];
     const bestBuy = routeOptions[0];
     const bestSell = routeOptions[routeOptions.length - 1];
+    const representative = [...routeOptions].sort((a, b) => b.limitingTurnoverExalted - a.limitingTurnoverExalted)[0];
     return [{
       ...row,
+      itemVolume: representative.itemVolume ?? row.itemVolume,
+      turnoverExalted: representative.firstLegTurnoverExalted ?? representative.limitingTurnoverExalted,
+      lowExalted: representative.lowExalted ?? row.lowExalted,
+      highExalted: representative.highExalted ?? row.highExalted,
+      priceExalted: representative.priceExalted ?? row.priceExalted,
+      quoteRoute: representative.routeLabel ?? row.quoteRoute,
+      rangePercent: representative.rangePercent ?? row.rangePercent,
+      quoteGap: row.listingExalted && representative.priceExalted
+        ? row.listingExalted / representative.priceExalted - 1 : row.quoteGap,
       routeOptions,
       bestBuy,
       bestSell,
@@ -152,8 +163,9 @@ export function assessExchangeRoute(route, {
   routeGap = 0,
 } = {}) {
   if (!route) return { level: "unknown", label: "No evidence", reasons: ["No completed route"] };
-  const turnoverFloor = Math.max(0, Number(minTurnoverExalted) || 0);
-  const unitFloor = Math.max(0, Number(minItemVolume) || 0);
+  // Discovery filters can expose small markets; they must not upgrade evidence.
+  const turnoverFloor = Math.max(100, Number(minTurnoverExalted) || 0);
+  const unitFloor = Math.max(5, Number(minItemVolume) || 0);
   const turnover = Number(route.limitingTurnoverExalted) || 0;
   const units = Number(route.itemVolume) || 0;
   const range = Number(route.rangePercent) || 0;
@@ -161,9 +173,9 @@ export function assessExchangeRoute(route, {
   const reasons = [];
   let level = "high";
 
-  if (units < unitFloor) reasons.push("below the selected unit floor");
+  if (units < unitFloor) reasons.push("too few completed units for confidence");
   else if (unitFloor && units < unitFloor * 5) reasons.push("modest completed unit count");
-  if (turnover < turnoverFloor) reasons.push("below the selected turnover floor");
+  if (turnover < turnoverFloor) reasons.push("too little completed turnover for confidence");
   else if (turnoverFloor && turnover < turnoverFloor * 5) reasons.push("modest limiting turnover");
   if (range > .5) reasons.push("very wide completed range");
   else if (range > .2) reasons.push("wide completed range");
@@ -177,6 +189,21 @@ export function assessExchangeRoute(route, {
     label: level === "high" ? "High confidence" : level === "medium" ? "Use caution" : "Low confidence",
     reasons: reasons.length ? reasons : ["deep completed flow and a contained traded range"],
   };
+}
+
+export function strongestEvidenceRoute(routes = [], options = {}) {
+  const rank = { high: 2, medium: 1, low: 0, unknown: -1 };
+  return [...routes].sort((a, b) =>
+    rank[assessExchangeRoute(b, options).level] - rank[assessExchangeRoute(a, options).level]
+      || b.limitingTurnoverExalted - a.limitingTurnoverExalted
+      || a.rangePercent - b.rangePercent)[0] || null;
+}
+
+export function assessExchangeMarket(row, options = {}) {
+  const buy = assessExchangeRoute(row.bestBuy, { ...options, routeGap: row.routeGap });
+  const sell = assessExchangeRoute(row.bestSell, { ...options, routeGap: row.routeGap });
+  const rank = { high: 2, medium: 1, low: 0, unknown: -1 };
+  return rank[buy.level] <= rank[sell.level] ? buy : sell;
 }
 
 function compactQuote(values, key, itemId, quoteId) {
@@ -250,8 +277,8 @@ function exchangeRouteTimelineFromPrepared(prepared, itemId, quoteId, rangeHours
       adjustedPrice: divine?.rate ? price / divine.rate : null,
     };
   }).filter(Boolean);
-  const latest = points[points.length - 1];
-  if (rangeHours && latest) points = points.filter((point) => point.at >= latest.at - rangeHours * 60 * 60 * 1000);
+  const latestAt = Math.max(...prepared.snapshots.map((snapshot) => snapshot.atMs).filter(Number.isFinite));
+  if (rangeHours) points = points.filter((point) => point.at >= latestAt - rangeHours * 60 * 60 * 1000);
   const first = points[0];
   const last = points[points.length - 1];
   const canDivineAdjust = points.length >= 2 && first.adjustedPrice != null && last.adjustedPrice != null;
@@ -260,6 +287,7 @@ function exchangeRouteTimelineFromPrepared(prepared, itemId, quoteId, rangeHours
     change: points.length >= 2 ? last.price / first.price - 1 : null,
     divineAdjustedChange: canDivineAdjust ? last.adjustedPrice / first.adjustedPrice - 1 : null,
     canDivineAdjust,
+    evidence: windowEvidence(points, rangeHours, latestAt),
   };
 }
 
@@ -302,11 +330,12 @@ export function buildExchangeOverview(rows, history, {
   const movers = liquid.map((row) => {
     const timeline = exchangeTimelineFromPrepared(preparedHistory, row.itemId, moveHours);
     movementByItem[row.itemId] = {
-      change: timeline.change,
-      divineAdjustedChange: timeline.divineAdjustedChange,
+      change: timeline.evidence?.partial || timeline.evidence?.stale ? null : timeline.change,
+      divineAdjustedChange: timeline.evidence?.partial || timeline.evidence?.stale ? null : timeline.divineAdjustedChange,
+      evidence: timeline.evidence,
       historyPoints: timeline.points.length,
     };
-    return timeline.change == null ? null : {
+    return movementByItem[row.itemId].change == null ? null : {
       ...row,
       change: timeline.change,
       divineAdjustedChange: timeline.divineAdjustedChange,
