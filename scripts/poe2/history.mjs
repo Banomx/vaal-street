@@ -59,7 +59,13 @@ export function mergePriceHistories(...histories) {
   const documents = histories.filter(Boolean);
   const rows = new Map();
   for (const history of documents) {
-    for (const [timestamp, row] of rowsFromHistory(history)) rows.set(timestamp, row);
+    for (const [timestamp, row] of rowsFromHistory(history)) {
+      const previous = rows.get(timestamp);
+      rows.set(timestamp, {
+        divineExalted: row.divineExalted ?? previous?.divineExalted ?? null,
+        prices: { ...previous?.prices, ...row.prices },
+      });
+    }
   }
   const newest = documents[documents.length - 1] || {};
   return historyFromRows(rows, {

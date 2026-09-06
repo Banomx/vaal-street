@@ -11,31 +11,46 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm test
       - name: Snapshot market data
         run: npm run data
         env:
           # push = code deploy only (reuse deployed data, no new snapshot);
           # schedule + manual dispatch = fetch fresh data
           DATA_MODE: ${{ github.event_name == 'push' && 'reuse' || 'fetch' }}
-      - run: npm test
       - run: npm run validate
+      - name: Validate generated file contracts
+        run: node scripts/tests/shared/test-contracts.mjs
+      - name: Select daily recovery backup
+        id: backup
+        run: echo "hour=$(date -u +%H)" >> "$GITHUB_OUTPUT"
+      - name: Retain validated data for recovery
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && steps.backup.outputs.hour == '00')
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-data-${{ github.run_id }}-${{ github.run_attempt }}
+          path: public/data
+          retention-days: 30
+          if-no-files-found: error
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
@@ -45,6 +60,10 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

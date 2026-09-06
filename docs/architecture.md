@@ -101,6 +101,57 @@ something" is "it is much worse than the last one": `collapsed()` fails a run
 whose priced-name count, league count or history depth drops sharply. The
 report is written to `public/data/<game>/quality.json` and read by the browser.
 
+PoE 2 history preservation checks compare observation buckets inside the
+configured retention period: exact timestamps for the latest seven days, UTC
+days for older samples, and no requirement beyond 430 days. Expected daily
+compaction therefore publishes; lost recent samples or a vanished history file
+fail, even if new points keep the total count unchanged.
+
+### CI, deployment and recovery
+
+Node 24 LTS is declared in `.nvmrc` and `package.json`; both workflows read that
+file and install the lockfile with `npm ci`. Vite 8 and its React plugin build
+the static application. Dependabot proposes npm and Actions updates weekly;
+updates are reviewed and tested before merging.
+
+`Code checks` runs tests, dataset validation and a build on pull requests and
+main pushes without fetching market data or granting deployment permissions.
+The deployment workflow tests code before collecting data, then validates the
+generated dataset and file contracts before building. Builds have a 45-minute
+timeout and deployments 10 minutes. Only the deployment job receives Pages
+write and identity-token permissions; the build receives Pages read access.
+Pages runs are serialized without cancelling an active snapshot/deployment.
+GitHub may still replace pending runs or delay scheduled runs; this is an
+hourly best-effort collector, not a guaranteed record of every hour.
+
+Successful validation during a scheduled run in the 00 UTC hour, or a manual
+run, uploads `market-data-<run-id>-<attempt>` with 30-day retention. This contains
+the complete `public/data` tree, including raw history and quality reports.
+It is a daily recovery copy separate from the Pages upload; a failed or missed
+run does not produce a backup. Check the Actions artifact list after rollout.
+
+For recovery, download and extract a `market-data-*` artifact. Its root contains
+`poe1/` and `poe2/`. Inventory local and deployed histories by timestamp and
+point count, then use the existing merger with the extracted directory:
+
+```bash
+node scripts/tools/merge-pages-artifact.mjs <extracted-market-data-directory>
+npm test
+npm run validate
+npm run build
+```
+
+Review the data diff before committing. A Pages artifact instead wraps these
+directories in `data/`; pass that inner directory. Recovery merges observations
+and rebuilds derived curves. Run only one local generator/recovery operation per
+output directory; workflow serialization does not lock separate local processes.
+
+Both games still share one site release: a failed publication gate leaves the
+last successful release live. The browser exposes snapshot age, but this does
+not provide independent uptime alerting. Repository rules and Actions failure
+notification preferences are account settings, not established by these files.
+Long-term history backup beyond 30 days needs a separately managed archive.
+
 ### Carried-forward data is cleaned on the way in
 
 Reuse mode and the per-family fallback both copy files from the live
@@ -184,11 +235,18 @@ the filenames) describing what that run actually published; the app addresses
 every file through it, with the names in each game's `config.js` as the fallback
 for a tree written before the map existed. The gates fail a run whose manifest
 names a file that is not there.
+PoE 2 builds this map from the files actually written, so a new league without
+completed pairs does not advertise nonexistent exchange files.
 
 ## Repository boundaries
 
 `src/app/App.jsx` owns the selected game and renders one game workspace at a
-time. It does not contain league, pricing, or feature logic. The canonical
+time. Each game is dynamically imported when selected, with a loading state
+and a top-level error boundary offering a reload after rendering or chunk-load
+failure. Storage access is guarded even when the browser throws while obtaining
+`localStorage`. Snapshot requests time out after 30 seconds, including body
+download; navigation cancellation stays distinct from a visible timeout.
+It does not contain league, pricing, or feature logic. The canonical
 application layout is:
 
 ```text
@@ -219,6 +277,8 @@ A module may import from its own game or from `src/shared`; game directories do
 not import from each other. Similar PoE 1 and PoE 2 concepts remain separate
 until the common part is demonstrably game-neutral. This prevents a change to a
 PoE 1 league rule or item shape from silently changing PoE 2.
+The shared contract tests enforce relative-import boundaries between games and
+prevent shared application code from importing either game.
 
 The PoE 2 workspace opens on its own Overview. That page follows the shared
 briefing pattern—feature signal, decision desk, and data-quality row—but its
@@ -253,6 +313,10 @@ history file is column-oriented: every item series is aligned to one timestamp
 array, so item names and times are not repeated for every quote. A missing quote
 is stored as `null`, not carried forward as a stale price. The current
 `prices.json` entry remains the source of descriptive and liquidity metadata.
+Merging PoE 2 history unions valid item and pair observations at overlapping
+timestamps; the later input wins conflicting observed values, while a missing
+value cannot erase another file's observation. This never fills a different
+timestamp's gap with an earlier price.
 When a newly started league has completed Exalted trades but no completed
 Divine/Exalted pair, `prices.json` omits `divineExalted` and the quality report
 marks the snapshot degraded. The league still publishes and remains usable in

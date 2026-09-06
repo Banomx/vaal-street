@@ -14,7 +14,7 @@
    here instead of silently emptying a tab in production. */
 
 import assert from "node:assert/strict";
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readJsonFile } from "../../shared/dataset.mjs";
@@ -101,6 +101,30 @@ assert.deepEqual(POE1_FILE_CONTRACTS.gems, ["generatedAt", "gems"]);
 assert.ok(POE1_FILE_CONTRACTS.scarabs.includes("items"));
 
 const manifests = await checkManifests("poe1") + await checkManifests("poe2");
+
+// Keep imports inside their documented ownership boundaries as features grow.
+async function checkImports(dir, forbiddenRoots) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) { await checkImports(file, forbiddenRoots); continue; }
+    if (!/\.[cm]?[jt]sx?$/.test(entry.name)) continue;
+    const source = await readFile(file, "utf8");
+    const imports = source.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"']+)["']/g);
+    for (const [, specifier] of imports) {
+      if (!specifier.startsWith(".")) continue;
+      const target = path.resolve(path.dirname(file), specifier);
+      for (const forbidden of forbiddenRoots) {
+        const relative = path.relative(forbidden, target);
+        assert.ok(relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative),
+          `${path.relative(ROOT, file)} imports ${specifier}, crossing a game ownership boundary`);
+      }
+    }
+  }
+}
+const gameRoot = path.join(ROOT, "src", "games");
+await checkImports(path.join(gameRoot, "poe1"), [path.join(gameRoot, "poe2")]);
+await checkImports(path.join(gameRoot, "poe2"), [path.join(gameRoot, "poe1")]);
+await checkImports(path.join(ROOT, "src", "shared"), [gameRoot]);
 
 console.log(`File contract tests passed (${poe1.checked + poe2.checked} files across `
   + `${poe1.leagues + poe2.leagues} leagues, ${manifests} manifest entries).`);

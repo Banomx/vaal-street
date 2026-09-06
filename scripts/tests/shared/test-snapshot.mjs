@@ -6,6 +6,7 @@ import {
 } from "../../../src/shared/data/snapshot.js";
 import { allowsDemo, allowsLiveApi, resolveDataMode } from "../../../src/shared/data/dataMode.js";
 import { QualityReport } from "../../shared/dataset.mjs";
+import { createJsonStore } from "../../../src/shared/storage/jsonStore.js";
 
 /* A stand-in for the browser's fetch: every route is one of the failure modes
    the reader has to be able to tell apart. */
@@ -173,5 +174,36 @@ assert.equal(allowsLiveApi("static"), false, "production never calls the legacy 
 assert.equal(allowsDemo("static"), false, "production never substitutes sample data for a failed load");
 assert.equal(allowsLiveApi("auto"), true);
 assert.equal(allowsDemo("demo"), true);
+
+const waitForAbort = (signal) => new Promise((resolve, reject) => {
+  const fail = () => reject(new DOMException("aborted", "AbortError"));
+  if (signal.aborted) fail();
+  else signal.addEventListener("abort", fail, { once: true });
+});
+const stalled = await readJson("/stalled", {
+  timeoutMs: 5, fetchImpl: (url, { signal }) => waitForAbort(signal),
+});
+assert.equal(stalled.state, OFFLINE);
+assert.equal(stalled.timedOut, true, "a stalled download reaches a visible error instead of loading forever");
+assert.ok(!stalled.aborted, "timeouts must not be hidden as deliberate navigation cancellations");
+const cancelledBody = new AbortController();
+const bodyResult = readJson("/body", {
+  signal: cancelledBody.signal,
+  fetchImpl: async (url, { signal }) => ({ ok: true, status: 200, json: () => waitForAbort(signal) }),
+});
+cancelledBody.abort();
+assert.equal((await bodyResult).aborted, true, "cancelling while reading the body is not corrupt JSON");
+
+const storageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+try {
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("Storage blocked"); } });
+  const store = createJsonStore({ feature: "restricted-test" });
+  assert.equal(store.load("fallback"), "fallback", "blocked storage cannot crash application initialization");
+  assert.equal(store.save("value"), "value");
+  store.clear();
+} finally {
+  if (storageDescriptor) Object.defineProperty(globalThis, "localStorage", storageDescriptor);
+  else delete globalThis.localStorage;
+}
 
 console.log("Snapshot contract tests passed.");

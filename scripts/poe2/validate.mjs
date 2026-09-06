@@ -17,6 +17,7 @@ import {
   orderedUnique, readJsonFile, writeJsonFile,
 } from "../shared/dataset.mjs";
 import { isPlaceholderName } from "./prices.mjs";
+import { PRICE_HISTORY_HOURLY_HOURS, PRICE_HISTORY_MAX_DAYS } from "./history.mjs";
 
 export const POE2_SCHEMA_VERSION = 2;
 export const SUPPORTED_SCHEMA_VERSIONS = [1, 2];
@@ -32,6 +33,22 @@ async function listLeagueDirs(dir) {
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name);
   } catch { return []; }
+}
+
+// Compare retained observation buckets, not raw counts: hourly samples become
+// daily after seven days and expire after 430. New samples cannot hide a loss.
+function checkRetainedHistory(report, label, previous, current, nowMs) {
+  const hourlyCutoff = nowMs - PRICE_HISTORY_HOURLY_HOURS * 3600e3;
+  const minimum = nowMs - PRICE_HISTORY_MAX_DAYS * 86400e3;
+  const buckets = (timestamps) => new Set(timestamps.flatMap((at) => {
+    const ms = Date.parse(at);
+    if (!Number.isFinite(ms) || ms < minimum || ms > nowMs + 3600e3) return [];
+    return [ms < hourlyCutoff ? new Date(ms).toISOString().slice(0, 10) : new Date(ms).toISOString()];
+  }));
+  const retained = buckets(current);
+  const missing = [...buckets(previous)].filter((key) => !retained.has(key));
+  if (missing.length) report.fail("history-shrank",
+    `${label}: lost ${missing.length} observation bucket(s) still inside retention`, missing.slice(0, 8));
 }
 
 function checkPrices(report, label, snapshot) {
@@ -240,29 +257,26 @@ export async function validatePoe2(dir, { previousDir = null, report = new Quali
     }
 
     const history = await readJsonFile(path.join(leagueDir, files.priceHistory || "price-history.json"));
+    const previousHistory = previousDir
+      ? await readJsonFile(path.join(previousDir, league.slug, "price-history.json")) : null;
+    checkRetainedHistory(report, `${label}/price-history.json`, previousHistory?.timestamps || [],
+      history?.timestamps || [], Date.parse(snapshot.generatedAt));
     if (!history) {
       report.degrade("history-missing", `${label}: no price history — the UI must present this as current-only`);
     } else {
-      const points = checkPriceHistory(report, `${label}/price-history.json`, history, snapshot);
-      const previousPoints = previousDir
-        ? (await readJsonFile(path.join(previousDir, league.slug, "price-history.json")))?.timestamps?.length ?? 0
-        : 0;
-      if (previousPoints > 2 && points < previousPoints) {
-        report.fail("history-shrank", `${label}: price history fell from ${previousPoints} to ${points} point(s)`);
-      }
+      checkPriceHistory(report, `${label}/price-history.json`, history, snapshot);
     }
 
     const markets = await readJsonFile(path.join(leagueDir, files.exchangeMarkets || "exchange-markets.json"));
     if (markets) checkExchangeMarkets(report, `${label}/exchange-markets.json`, markets);
     const exchangeHistory = await readJsonFile(path.join(leagueDir, files.exchangeHistory || "exchange-history.json"));
+    const previousExchangeHistory = previousDir
+      ? await readJsonFile(path.join(previousDir, league.slug, "exchange-history.json")) : null;
+    checkRetainedHistory(report, `${label}/exchange-history.json`,
+      (previousExchangeHistory?.snapshots || []).map((point) => point.at),
+      (exchangeHistory?.snapshots || []).map((point) => point.at), Date.parse(snapshot.generatedAt));
     if (exchangeHistory) {
-      const snapshots = checkExchangeHistory(report, `${label}/exchange-history.json`, exchangeHistory);
-      const previousSnapshots = previousDir
-        ? (await readJsonFile(path.join(previousDir, league.slug, "exchange-history.json")))?.snapshots?.length ?? 0
-        : 0;
-      if (previousSnapshots > 2 && snapshots < previousSnapshots) {
-        report.fail("history-shrank", `${label}: exchange history fell from ${previousSnapshots} to ${snapshots} snapshot(s)`);
-      }
+      checkExchangeHistory(report, `${label}/exchange-history.json`, exchangeHistory);
     }
   }
   return report;

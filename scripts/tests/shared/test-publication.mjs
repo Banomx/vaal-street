@@ -18,6 +18,8 @@ import {
 } from "../../shared/dataset.mjs";
 import { validatePoe1 } from "../../poe1/validate.mjs";
 import { validatePoe2 } from "../../poe2/validate.mjs";
+import { thinPriceHistory } from "../../poe2/history.mjs";
+import { thinExchangeHistory } from "../../poe2/exchange-history.mjs";
 
 const NOW = Date.now();
 const ago = (hours) => new Date(NOW - hours * 3600e3).toISOString();
@@ -258,6 +260,7 @@ async function poe2Tree(mutate = () => {}) {
   await write(path.join(dir, "index.json"), tree.index);
   await write(path.join(dir, "standard", "prices.json"), tree.prices);
   if (tree.history) await write(path.join(dir, "standard", "price-history.json"), tree.history);
+  if (tree.exchangeHistory) await write(path.join(dir, "standard", "exchange-history.json"), tree.exchangeHistory);
   return dir;
 }
 
@@ -310,6 +313,34 @@ assert.ok(codes(await validatePoe2(await poe2Tree((t) => {
   const shrunk = await validatePoe2(await poe2Tree((t) => { t.history.timestamps = [ago(0)]; t.history.divineExalted = [400]; t.history.series = { "Chaos Orb": [0.05] }; }),
     { previousDir: previous });
   assert.ok(codes(shrunk).includes("history-shrank"), "a timeline that lost points must not publish");
+}
+
+{
+  const pastDay = new Date(NOW - 10 * 86400e3).toISOString().slice(0, 10);
+  const timestamps = [ago(431 * 24), `${pastDay}T01:00:00.000Z`, `${pastDay}T02:00:00.000Z`, ago(2), ago(1), ago(0)];
+  const history = {
+    schemaVersion: 1, generatedAt: ago(0), league: "Standard", timestamps,
+    divineExalted: timestamps.map(() => 400), series: { "Chaos Orb": timestamps.map(() => .05) },
+  };
+  const exchangeHistory = {
+    schemaVersion: 1, generatedAt: ago(0), league: "Standard", pairKeys: ["A|B"],
+    snapshots: timestamps.map((at) => ({ at, pairs: [[0, 10, 20, 2, 1, 3]] })),
+  };
+  const previous = await poe2Tree((t) => Object.assign(t, { history, exchangeHistory }));
+  const retained = await poe2Tree((t) => Object.assign(t, {
+    history: thinPriceHistory(history, { nowMs: NOW }),
+    exchangeHistory: thinExchangeHistory(exchangeHistory, { nowMs: NOW }),
+  }));
+  assert.equal((await validatePoe2(retained, { previousDir: previous })).publishable, true,
+    "normal daily compaction and expiry must not freeze deployment for either timeline");
+  const deleted = await poe2Tree((t) => { t.history = null; });
+  assert.ok(codes(await validatePoe2(deleted, { previousDir: previous })).includes("history-shrank"),
+    "a vanished history file is data loss even when the current prices still exist");
+  const replaced = await poe2Tree((t) => {
+    t.history.timestamps = [ago(1), ago(.5), ago(0)];
+  });
+  assert.ok(codes(await validatePoe2(replaced, { previousDir: await poe2Tree() })).includes("history-shrank"),
+    "new timestamps cannot hide the loss of older retained observations behind an unchanged count");
 }
 
 console.log("Publication gates passed.");

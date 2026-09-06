@@ -22,6 +22,9 @@ const replacement = appendPriceSnapshot(null, snapshot("2026-08-20T11:00:00.000Z
 const merged = mergePriceHistories(history, replacement);
 assert.deepEqual(merged.series.A, [10, 99], "the newest document wins when two stores contain the same snapshot hour");
 assert.deepEqual(merged.series.B, [20, null], "replacing one timestamp does not damage the rest of the aligned series");
+assert.deepEqual(merged.series.C, [null, 30], "a partial overlapping file cannot erase another item's observation");
+assert.deepEqual(mergePriceHistories(history, { ...replacement, divineExalted: [null] }).divineExalted,
+  [400, 420], "an unknown rate cannot erase the rate already recorded at that timestamp");
 
 const now = Date.parse("2026-08-20T12:00:00.000Z");
 const raw = {
@@ -118,6 +121,15 @@ const oldExchange = {
     { ...exchangeHistory.snapshots[1], at: "2026-08-15T20:00:00.000Z" },
   ],
 };
+const extraPair = {
+  ...exchangeReplacement,
+  pairKeys: ["A|C"],
+  items: { A: { name: "A" }, C: { name: "C" } },
+};
+const union = mergeExchangeHistories(exchangeHistory, extraPair);
+assert.deepEqual(union.pairKeys, ["A|B", "A|C"]);
+assert.equal(union.snapshots[1].pairs.length, 2,
+  "a partial exchange hour preserves pairs recorded only in the other file");
 assert.deepEqual(thinExchangeHistory(oldExchange, { nowMs: now }).snapshots.map((point) => point.at), [
   "2026-08-12T20:00:00.000Z",
   "2026-08-15T08:00:00.000Z",

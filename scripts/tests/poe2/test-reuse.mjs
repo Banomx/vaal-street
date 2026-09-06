@@ -112,6 +112,13 @@ await (async () => {
 const read = async (...parts) => JSON.parse(await readFile(path.join(OUT_DIR, ...parts), "utf8"));
 const history = await read("runes-of-aldur", "price-history.json");
 const index = await read("index.json");
+for (const league of index.leagues) {
+  for (const file of Object.values(league.files || {})) {
+    ok(!!await read(league.slug, file), `manifest entry ${league.slug}/${file} exists and contains JSON`);
+  }
+}
+ok(index.leagues.every((league) => !league.files.exchangeMarkets && !league.files.exchangeHistory),
+  "leagues with no completed pairs do not advertise absent exchange files");
 
 ok(history.timestamps.length === seedTimestamps.length + 1,
   `reuse publishes the union, expected ${seedTimestamps.length + 1} points, got ${history.timestamps.length}`);

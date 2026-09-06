@@ -50,7 +50,9 @@ export function mergeExchangeHistories(...histories) {
   const rows = new Map();
   let items = {};
   for (const history of documents) {
-    for (const [at, pairs] of rowsFromHistory(history)) rows.set(at, pairs);
+    for (const [at, pairs] of rowsFromHistory(history)) {
+      rows.set(at, new Map([...(rows.get(at) || []), ...pairs]));
+    }
     items = { ...items, ...(history.items || {}) };
   }
   const newest = documents[documents.length - 1] || {};

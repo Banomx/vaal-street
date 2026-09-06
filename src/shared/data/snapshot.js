@@ -51,25 +51,33 @@ export function isUsable(result) {
     for an empty dataset. An aborted request (league switched, component
     unmounted) is reported as such so a caller can ignore it instead of
     rendering "offline" over a view the user already left. */
-export async function readJson(url, { fetchImpl, signal, cache = "no-cache" } = {}) {
+export async function readJson(url, { fetchImpl, signal, cache = "no-cache", timeoutMs = 30000 } = {}) {
   const doFetch = fetchImpl || (typeof fetch === "function" ? fetch : null);
   if (!doFetch) return { state: OFFLINE, url, error: "no fetch implementation" };
-  let response;
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (signal?.aborted) cancel();
+  else signal?.addEventListener("abort", cancel, { once: true });
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
   try {
-    response = await doFetch(url, { cache, signal });
+    const response = await doFetch(url, { cache, signal: controller.signal });
+    if (response.status === 404) return { state: MISSING, url, status: 404 };
+    if (!response.ok) return { state: OFFLINE, url, status: response.status, error: `HTTP ${response.status}` };
+    try {
+      return { state: READY, url, status: response.status, data: await response.json() };
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      return { state: CORRUPT, url, status: response.status, error: `unparseable JSON: ${String(error?.message || error)}` };
+    }
   } catch (error) {
+    if (timedOut) return { state: OFFLINE, url, error: "download timed out", timedOut: true };
+    if (signal?.aborted) return { state: OFFLINE, url, aborted: true, error: "aborted" };
     if (error?.name === "AbortError") return { state: OFFLINE, url, aborted: true, error: "aborted" };
     return { state: OFFLINE, url, error: String(error?.message || error) };
-  }
-  if (response.status === 404) return { state: MISSING, url, status: 404 };
-  if (!response.ok) return { state: OFFLINE, url, status: response.status, error: `HTTP ${response.status}` };
-  try {
-    return { state: READY, url, status: response.status, data: await response.json() };
-  } catch (error) {
-    /* A 200 that will not parse is the dangerous case: a proxy error page, a
-       truncated upload, an index.html served for a missing path. Treating it
-       as "no data" would hide a broken deployment behind an empty chart. */
-    return { state: CORRUPT, url, status: response.status, error: `unparseable JSON: ${String(error?.message || error)}` };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", cancel);
   }
 }
 

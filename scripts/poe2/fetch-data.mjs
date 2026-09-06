@@ -59,6 +59,11 @@ export const LEAGUE_FILES = {
   exchangeHistory: "exchange-history.json",
 };
 
+async function existingLeagueFiles(slug) {
+  const names = new Set(await readdir(join(OUT, slug)));
+  return Object.fromEntries(Object.entries(LEAGUE_FILES).filter(([, file]) => names.has(file)));
+}
+
 async function tryGetJson(url) {
   try { return await getJson(url); }
   catch { return null; }
@@ -150,6 +155,7 @@ async function reuseDeployment() {
     await writeJson(join(OUT, league.slug, LEAGUE_FILES.priceHistory), files.priceHistory);
     if (files.markets) await writeJson(join(OUT, league.slug, LEAGUE_FILES.exchangeMarkets), files.markets);
     if (files.exchangeHistory) await writeJson(join(OUT, league.slug, LEAGUE_FILES.exchangeHistory), files.exchangeHistory);
+    league.files = await existingLeagueFiles(league.slug);
   }
   await writeJson(join(OUT, "index.json"), {
     // A code-only deployment may be carrying version-1 snapshots from the
@@ -324,7 +330,7 @@ async function main() {
       name,
       slug,
       group: name === "Standard" ? "permanent" : "current",
-      files: { ...LEAGUE_FILES },
+      files: await existingLeagueFiles(slug),
     });
     const coverage = summarizePriceCoverage(computeBosses(BOSSES, snapshot.prices, {}));
     console.log(`${name}: ${Object.keys(snapshot.prices).length} prices · ${history.timestamps.length} price points · ${gggLeague?.exchange?.pairs?.length || 0} completed exchange pairs · boss market coverage ${coverage.priced}/${coverage.total}`);

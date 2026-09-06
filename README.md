@@ -60,11 +60,11 @@ is unavailable or has no usable pair.
 
 ## Run locally
 
-Requires Node.js 18+ (you have a matching setup if `node --version` prints v18 or higher).
+Requires Node.js 24 LTS (see `.nvmrc`). CI and local development use the same major version.
 
 ```bash
 cd vaal-street
-npm install
+npm ci
 npm run dev
 ```
 
