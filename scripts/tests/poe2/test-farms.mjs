@@ -18,9 +18,10 @@
 */
 
 import assert from "node:assert/strict";
+import { buildTabletFamilies, tabletFamilyTimeline } from "../../../src/games/poe2/features/farms/tabletFarms.js";
 import {
-  COMPETING, ENTRY_DUAL_ROLE, NEUTRAL, POOL_CAVEATS, SLOTS, curatedCoverage, entrySource,
-  hasOutputPool, mechanicFor, mechanicPools, resolveEntry,
+  COMPETING, NEUTRAL, POOL_CAVEATS, SLOTS, curatedCoverage,
+  hasOutputPool, mechanicFor, mechanicPools,
 } from "../../../src/games/poe2/features/farms/mechanics.js";
 import {
   MIN_MEMBERS, buildBasketIndex, concentration, farmSignal, liquidity, poolContributions, poolFlow,
@@ -249,37 +250,22 @@ ok(tabletless.expedition.members.length === 3,
 ok(poolFlow(tabletless.expedition.members) > 0,
   "flow is reported for a mechanic with no tablet baseline");
 
-/* ---- entry sources ---- */
-
-/* Expedition is entered through a logbook, not a tablet: roughly ten maps of
-   access either way, so the two quotes sit on the same axis. */
-const logbook = resolveEntry("expedition", expeditionPrices);
-ok(logbook.kind === "logbook", "Expedition declares a logbook entry");
-ok(logbook.name === "Expedition Logbook" && logbook.entry.exalted === 414,
-  "the logbook entry resolves to a real quote");
-
-/* Matched on the tag, so a rename does not silently unprice the entry side. */
-const renamed = resolveEntry("expedition", {
-  "Kalguuran Expedition Logbook": ggg("Expedition", { exalted: 500, tags: ["expedition_logbook", "default"] }),
-});
-ok(renamed.name === "Kalguuran Expedition Logbook",
-  "the entry is found by tag rather than by display name");
-
-ok(resolveEntry("breach", expeditionPrices) === null,
-  "a mechanic with no declared entry source falls back to its precursor tablet");
-
-const unquoted = resolveEntry("expedition", { "Perfect Flux": ggg("Expedition", { exalted: 11852 }) });
-ok(unquoted !== null && unquoted.name === null && unquoted.entry === null,
-  "a declared entry source that matches nothing reports an unknown entry, not a substitute price");
-ok(entrySource("expedition") !== null && entrySource("ritual") === null,
-  "entrySource only answers for mechanics that declare one");
-
-/* The logbook is deliberately left in the return basket: expeditions drop
-   logbooks, so sustain is part of what the mechanic returns. The consequence is
-   that one item sits on both sides of the card, which the UI states outright. */
-ok(tabletless.expedition.members.some((member) => member.name === "Expedition Logbook"),
-  "the entry logbook stays in the Expedition return basket, so sustain is counted");
-ok(ENTRY_DUAL_ROLE.length > 0, "the dual role has a note the card can show");
+/* Mapping entry uses tablets; logbooks remain output and boss-entry items. */
+const entryPrices = { ...expeditionPrices,
+  "Expedition Tablet": { exalted: 8, marketFamily: "PrecursorTablets", variant: "Normal", tags: ["tower_augment_expedition"] },
+};
+const expeditionFamily = buildTabletFamilies(entryPrices).find(row => row.id === "expedition");
+assert.equal(expeditionFamily.baseline.name, "Expedition Tablet");
+assert.equal(expeditionFamily.baseline.entry.exalted, 8);
+assert.ok(!buildTabletFamilies(expeditionPrices).some(row => row.baseline?.name === "Expedition Logbook"));
+assert.ok(tabletless.expedition.members.some(member => member.name === "Expedition Logbook"), "logbooks remain farm output");
+const expeditionEntryHistory = { tabletBaselineVersion: 1,
+  timestamps: ["2026-09-06T00:00:00Z", "2026-09-06T12:00:00Z", "2026-09-07T00:00:00Z"],
+  divineExalted: [400, 400, 400], series: { "Expedition Tablet": [4, 6, 8] },
+};
+assert.equal(tabletFamilyTimeline(expeditionEntryHistory, expeditionFamily, { rangeHours: 1, currency: "exalted" }).change, null);
+assert.equal(tabletFamilyTimeline(expeditionEntryHistory, expeditionFamily, { rangeHours: 12, currency: "exalted" }).points.length, 2);
+assert.equal(tabletFamilyTimeline(expeditionEntryHistory, expeditionFamily, { rangeHours: 48, currency: "exalted" }).change, 1);
 
 /* ---- contributions, movers and top of pool ---- */
 

@@ -71,7 +71,7 @@ export default function PriceTracker({ league, priceData, history, currency, rat
 
         <section className="p2pt-card">
         <div className="p2pt-card-head">
-          <div><span>Selected market</span><h3>{item || "No priced items available"}</h3>
+          <div><span>Selected market</span><h3>{item || (names.length ? "Choose a market" : "No priced items available")}</h3>
             {current && <p>{currentCategory}{currentSubcategory ? ` · ${currentSubcategory}` : ""} · {current.source}{current.listingCount ? ` · ${number(current.listingCount, 0)} listings` : ""}{current.volume1H ? ` · ${number(current.volume1H, 0)} traded in source hour` : ""}</p>}
           </div>
           <div className="p2pt-stats">
@@ -104,7 +104,7 @@ export default function PriceTracker({ league, priceData, history, currency, rat
                 {divineAdjusted && <Line yAxisId="rate" type="monotone" dataKey="rate" name="Divine rate" stroke="#8f7eaf" strokeWidth={1.5} strokeDasharray="5 4" dot={false} connectNulls={false} animationDuration={1000} />}
               </LineChart>
             </ResponsiveContainer>
-          ) : <div className="p2pt-empty">{history ? "This item has no stored points in the selected range." : "Price history starts with the next market snapshot."}</div>}
+          ) : <div className="p2pt-empty">{!item && names.length ? "Select an item from the market browser to see its price history." : history ? "This item has no stored points in the selected range." : "Price history starts with the next market snapshot."}</div>}
         </div>
         <footer>{timeline.points.length < 2 ? "A trend appears after a second stored snapshot." : `${timeline.points.length} stored points shown.`} {divineAdjusted ? "The move compares Exalted price / Divine rate at both ends; the dashed line is Exalted per Divine. " : ""}The latest 7 days stay hourly; older history uses one point per UTC day.</footer>
         </section>

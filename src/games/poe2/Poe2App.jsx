@@ -158,7 +158,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
             <span>Currency</span>
             <div className="app-segmented p2-segmented" aria-label="Display currency">
               {[['exalted', 'Exalted'], ['chaos', 'Chaos'], ['divine', 'Divine'], ['smart', 'Smart']].map(([value, label]) => (
-                <button key={value} className={currency === value ? "on" : ""} onClick={() => setCurrency(value)}>{label}</button>
+                <button key={value} className={currency === value ? "on" : ""} aria-pressed={currency === value} onClick={() => setCurrency(value)}>{label}</button>
               ))}
             </div>
           </div>

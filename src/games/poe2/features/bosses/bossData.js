@@ -185,7 +185,8 @@ export const BOSSES = [
   {
     id: "olroth", name: "Olroth, Origin of the Fall", group: "Expedition", location: "Expedition Logbook",
     sourceUrl: "https://www.poe2wiki.net/wiki/Olroth,_Origin_of_the_Fall", rateSummary: "Maxroll rarity estimates",
-    entryNote: "A Logbook contains more than this boss and has variable implicit value, so no whole-Logbook entry cost is charged to one kill.",
+    entry: entry(["Expedition Logbook"]),
+    entryNote: "One logbook per kill; other area rewards excluded. Edit the entry price below for your actual cost.",
     groups: [
       fixed("guaranteed", "Guaranteed", [drop("Shattered Triskelion", 1, ESTIMATE, { note: "Maxroll labels this Always." })]),
       pool("unique", "Boss unique pool", [
@@ -202,7 +203,8 @@ export const BOSSES = [
   {
     id: "uhtred", name: "Uhtred, the Stardrinker", group: "Expedition", location: "Expedition Logbook",
     sourceUrl: "https://www.poe2wiki.net/wiki/Uhtred,_the_Stardrinker", rateSummary: "Maxroll estimates",
-    entryNote: "A Logbook contains more than this boss, so entry cost is omitted.",
+    entry: entry(["Expedition Logbook"]),
+    entryNote: "One logbook per kill; other area rewards excluded. Edit the entry price below for your actual cost.",
     groups: [
       pool("unique", "Boss unique pool", [
         estimated("Uhtred's Crest of the Chalice", .50, "Common"), estimated("Uhtred's Chalice", .50, "Common"),

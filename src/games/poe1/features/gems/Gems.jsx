@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
+import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import {
   CORRUPT, GCP_NAME, VAAL_ORB_NAME, XP_FAMILIES, XP_PER_QUALITY,
   buildGems, computeGem, levellingTime, loadSettings, saveSettings, sanitizeSettings, tierLabel,
@@ -237,24 +238,24 @@ export default function Gems({
   if (gemData === "missing") {
     return (
       <section className="gm-wrap">
-        <div className="st-banner">
+        <SourceStrip tone="alert" className="app-source-strip--spaced">
           No gem snapshot for {league} yet. This tab needs <code>gems.json</code>, which the data workflow
           writes alongside the scarab and price data — it appears after the next refresh.
-        </div>
+        </SourceStrip>
       </section>
     );
   }
-  if (!snapshot) return <section className="gm-wrap"><div className="st-banner st-quiet">Loading gem prices…</div></section>;
+  if (!snapshot) return <section className="gm-wrap"><SourceStrip>Loading gem prices…</SourceStrip></section>;
 
   return (
     <section className="gm-wrap">
-      <div className="st-banner st-quiet">
+      <SourceStrip className="app-source-strip--spaced">
         Prices via {snapshot.priceSource || "poe.ninja"} · {league}
         {snapshot.generatedAt ? ` · updated ${new Date(snapshot.generatedAt).toLocaleString()}` : ""}
         {" · "}1 Divine ≈ {Math.round(rate)} Chaos
         {gcp > 0 && <> · 1 {GCP_NAME} {fmtChaos(gcp)}c</>}
         {vaalOrb > 0 && <> · 1 {VAAL_ORB_NAME} {fmtChaos(vaalOrb)}c</>}
-      </div>
+      </SourceStrip>
 
       {/* ---------- bar ---------- */}
       <div className="gm-bar">

@@ -22,6 +22,7 @@ export function tabletFamily(name, entry) {
 }
 
 export function isTabletMarket(name, entry) {
+  if (/logbook/i.test([name, entry?.baseType, ...(entry?.tags || [])].join(" "))) return false;
   return /tablet|tower_augment/.test(textFor(name, entry));
 }
 

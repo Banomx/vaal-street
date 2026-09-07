@@ -411,31 +411,23 @@ curated name that matched no market instead of letting it vanish.
 Overseer and Irradiated have no attributable output market and are labelled that
 way. Their cards show entry cost alone.
 
-### Entry cost: tablet, or logbook
+### Mapping and boss entry costs
 
-A tablet covers the maps in its tower radius, roughly ten of them; an Expedition
-Logbook grants roughly ten maps of Expedition. One block of access either way,
-so the two quotes compare directly and neither is divided down to a per-map
-figure — "around ten" is too soft to bake into an absolute number the page
-shows.
+Popular farms uses each mechanic's Normal tablet baseline from
+`buildTabletFamilies`, including Expedition Tablet. Missing tablet quotes stay
+unknown; a logbook price never replaces one. All entry timelines use
+`tabletFamilyTimeline` and its Normal-tablet compatibility checks. Logbooks
+remain in Expedition's output basket, while the entry side tracks tablets.
 
-Most mechanics are entered through their precursor tablet, which
-`buildTabletFamilies` resolves. Expedition is the exception: no source prices an
-Expedition Tablet, so `ENTRY_SOURCES` in `mechanics.js` declares the logbook
-instead, matched on its `expedition_logbook` tag rather than its display name so
-a rename does not silently unprice the entry side. A declared source that
-matches nothing reports an unknown entry rather than substituting another
-market. The timeline splits by kind, because `tabletFamilyTimeline` carries
-`tabletBaselineVersion` handling that only applies to a Normal precursor tablet;
-a logbook reads `buildPriceTimeline` directly.
+Olroth and Uhtred each charge one Expedition Logbook per kill through
+`bosses/bossData.js`. Their net EV subtracts the market quote or the user's
+manual entry-price override. Other area rewards are excluded from boss EV.
+The other Expedition encounters keep their own configured entry rules.
 
-The logbook is deliberately left in the Expedition return basket as well, where
-it holds about 15% of the supply weight. Expeditions drop logbooks, so sustain
-is part of what the mechanic returns and excluding it would understate
-Expedition. The cost is that one item sits on both sides of that card and damps
-the spread a little — measured at +11.9% against +12.1% with it held out — so
-the card states the double role rather than leaving a reader to assume the two
-sides are independent measurements.
+Popular farms offers 1h, 2h, 4h, 8h, 12h, 24h, 48h, 3d, 7d, 14d, 30d and All.
+Short windows still require enough stored observations to report movement.
+Unique-tablet comparisons expand on demand; output baskets and their detailed
+market tables retain their existing calculations.
 
 ### The return index
 
@@ -1047,6 +1039,12 @@ strip used by both games. Their visual contract lives in
 `src/shared/ui/app-shell.css`: page gutters, header height, title/subtitle,
 labels, controls, tabs and source text all use shared `--ui-*` tokens. New
 game sections should compose these components instead of copying shell CSS.
+Body text and headings use the system sans-serif stack; the brand retains Kei.
+The shared stylesheet owns native dark controls, focus indicators and scrollbars.
+At 1100px and wider, navigation is a fixed left rail. Medium widths use the
+horizontal navigation; up to 720px it becomes an Explore select. All forms use
+the same page handlers and return to the top when a section is selected.
+Desktop buttons expose the current page with `aria-current`.
 Game-specific header artwork and feature layouts remain in the game workspace,
 so PoE 2 can keep its dense boss ranking/detail layout without diverging from
 PoE 1's outer scale. The PoE 2 shell also owns its Ardura background treatment

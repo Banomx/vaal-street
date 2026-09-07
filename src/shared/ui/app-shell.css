@@ -1,6 +1,7 @@
 :root {
   --ui-page-gutter: clamp(12px, 4vw, 44px);
-  --ui-header-min-height: 104px;
+  color-scheme: dark;
+  --ui-header-min-height: 72px;
   --ui-header-padding: 20px;
   --ui-header-gap: 20px;
   --ui-title-size: clamp(23px, 4vw, 31px);
@@ -9,19 +10,36 @@
   --ui-control-size: 13px;
   --ui-tab-size: 15px;
   --ui-source-size: 13px;
-  --ui-control-padding: 7px 12px;
+  --ui-control-padding: 9px 12px;
   --ui-border: #35231b;
   --ui-control-border: #65351f;
   --ui-control-bg: #17100d;
   --ui-accent: #ef4f19;
+  --ui-font-body: "Segoe UI", system-ui, sans-serif;
+  --ui-font-display: "Segoe UI", system-ui, sans-serif;
 }
 
 .app-shell-page {
   min-height: 100vh;
   padding: 22px var(--ui-page-gutter) 40px;
   color: #e7d9d2;
-  font-family: "Kei", Georgia, "Palatino Linotype", "Times New Roman", serif;
+  font-family: var(--ui-font-body);
+  line-height: 1.45;
 }
+
+.app-shell-page :is(h1, h2, h3) { font-family: var(--ui-font-display); letter-spacing: -.025em; font-weight: 650; }
+.app-shell-page .app-brand h1 { font-family: "Kei", Georgia, serif; }
+.app-shell-page :is(button, input, select, textarea) { font-family: inherit; }
+.app-shell-page :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #ff9a61;
+  outline-offset: -2px;
+}
+.app-shell-page :is(input, select, textarea) { accent-color: var(--ui-accent); }
+.app-shell-page :is(input, textarea)::placeholder { color: #a28a7e; }
+.app-shell-page :is(button, select):disabled { cursor: not-allowed; }
+.app-shell-page :is(table, input) { font-variant-numeric: tabular-nums; }
+.app-shell-page * { scrollbar-width: thin; scrollbar-color: #654331 #120d0b; }
+.app-shell-page ::selection { background: #71331e; color: #fff0e6; }
 
 /* The shell is explicitly content-box so it has the same visual height in
    both games even when a feature workspace uses border-box internally. */
@@ -35,7 +53,7 @@
   min-height: var(--ui-header-min-height);
   padding: var(--ui-header-padding);
   border: 1px solid var(--ui-border);
-  border-radius: 6px 6px 0 0;
+  border-radius: 12px;
 }
 
 .app-brand {
@@ -78,16 +96,16 @@
 
 .app-control > span,
 .game-switcher > span {
-  color: #9c877e;
+  color: #b09a8e;
   letter-spacing: .14em;
   text-transform: uppercase;
 }
 
 .app-control select {
   min-width: 180px;
-  padding: 7px 10px;
+  padding: 9px 10px;
   border: 1px solid var(--ui-control-border);
-  border-radius: 5px;
+  border-radius: 7px;
   background: var(--ui-control-bg);
   color: #e1cec3;
   font: inherit;
@@ -99,15 +117,18 @@
   display: flex;
   overflow: hidden;
   border: 1px solid var(--ui-control-border);
-  border-radius: 5px;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 8px;
+  background: #100c0a;
 }
 
 .app-segmented button,
 .game-switcher button {
   padding: var(--ui-control-padding);
   border: 0;
-  border-right: 1px solid #3e281e;
-  background: var(--ui-control-bg);
+  border-radius: 5px;
+  background: transparent;
   color: #a98d82;
   cursor: pointer;
   font: inherit;
@@ -117,7 +138,9 @@
 .app-segmented button:last-child,
 .game-switcher button:last-child { border-right: 0; }
 .app-segmented button.on,
-.game-switcher button.on { background: #7a2a13; color: #fff0e6; }
+.game-switcher button.on { background: #6c321e; color: #fff0e6; box-shadow: inset 0 1px 0 #ffffff14, 0 1px 3px #0004; }
+.app-segmented button:not(.on):not(:disabled):hover,
+.game-switcher button:not(.on):hover { background: #251a15; color: #f0d5c6; }
 
 .app-segmented button:focus-visible,
 .app-control select:focus-visible,
@@ -129,12 +152,12 @@
 .app-tabs {
   display: flex;
   gap: 2px;
-  margin: 0 0 12px;
-  padding: 0 12px;
+  margin: 12px 0 18px;
+  padding: 4px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   border: 1px solid var(--ui-border);
-  border-top: 0;
+  border-radius: 9px;
   border-bottom-color: #3b2419;
   background: #100a08;
   scrollbar-width: none;
@@ -144,50 +167,88 @@
 .app-tabs::-webkit-scrollbar { display: none; }
 .app-tabs button {
   flex: 0 0 auto;
-  padding: 13px 12px 12px;
+  padding: 10px 12px;
   border: 0;
   border-bottom: 2px solid transparent;
+  border-radius: 6px;
   background: transparent;
   color: #a48e84;
   cursor: pointer;
   font: inherit;
   font-size: var(--ui-tab-size);
   font-weight: 500;
-  letter-spacing: .045em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
-.app-tabs button.on { color: #ff6828; border-bottom-color: var(--ui-accent); }
-.app-tabs button:hover { color: #c6aaa0; }
+.app-tabs button.on { color: #ffc29e; border-bottom-color: transparent; background: #392017; box-shadow: inset 0 0 0 1px #794028; }
+.app-tabs button:hover { color: #f0d5c6; background-color: #ffffff05; }
 .app-tabs button:focus-visible { outline: 2px solid #ff6a24; outline-offset: -2px; }
+
+.app-mobile-nav { display: none; }
+.app-mobile-nav span { color: #b09a8e; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.app-mobile-nav select { min-width: 0; flex: 1; padding: 10px; border: 1px solid var(--ui-control-border); border-radius: 5px; background: var(--ui-control-bg); color: #f1d8ca; font: inherit; }
 
 .app-source-strip {
   box-sizing: border-box;
   padding: 9px 14px;
   border: 1px solid #3e281e;
   border-radius: 6px;
-  color: #9c877e;
+  color: #b39e91;
   font-size: var(--ui-source-size);
   line-height: 1.45;
 }
 
-.app-source-strip--quiet { background: #1d1912; }
+.app-source-strip--quiet { background: #15120f; border-color: #30261f; }
 .app-source-strip--alert { border-color: #7a361b; background: #2a130b; color: #e6a078; }
+.app-source-strip--spaced { margin: 6px 0 16px; }
+
 .app-source-strip--notice { border-color: #4d3a1e; background: #221a10; color: #c6ac83; }
 .app-source-strip--warning { border-color: #7a5a1b; background: #251a09; color: #e6c078; }
 .app-source-strip--error { border-color: #8a2f2f; background: #2a0f0f; color: #f0928c; }
-.app-source-strip--spaced { margin: 6px 0 16px; }
-
 .app-snapshot-notice ul { margin: 4px 0 0; padding-left: 18px; }
 .app-snapshot-notice li { margin: 2px 0; }
 .app-snapshot-notice strong { color: inherit; font-weight: 600; }
 
 @media (max-width: 720px) {
+  .app-shell-page { padding-top: 12px; }
+  .app-header { min-height: 0; padding: 16px; gap: 18px; }
   .app-header { align-items: flex-start; flex-direction: column; }
   .app-header-controls { width: 100%; justify-content: space-between; }
+  .app-tabs { padding: 10px 12px; }
+  .app-tabs > button { display: none; }
+  .app-mobile-nav { display: flex; align-items: center; gap: 14px; width: 100%; }
 }
 
 @media (max-width: 480px) {
-  .app-header-controls { align-items: stretch; flex-direction: column; }
-  .app-control select { width: 100%; }
+  .app-header-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
+  .app-header-controls > .app-control:last-child { grid-column: 1 / -1; }
+  .app-header-controls .app-control select { width: 100%; min-width: 0; box-sizing: border-box; }
+  .app-header-controls :is(.app-segmented, .game-switcher-buttons) button { flex: 1; min-height: 40px; }
+}
+
+/* Wide screens keep all tools in view while the workspace scrolls. */
+@media (min-width: 1100px) {
+  .app-shell-page { padding-left: 226px; padding-right: 28px; }
+  .app-shell-page .app-tabs {
+    box-sizing: border-box;
+    position: fixed;
+    z-index: 20;
+    inset: 22px auto 22px 22px;
+    width: 180px;
+    flex-direction: column;
+    gap: 5px;
+    margin: 0;
+    padding: 18px 10px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid #38271f;
+    border-radius: 12px;
+    background: linear-gradient(160deg, #1d130e, #100c0a 45%);
+  }
+  .app-tabs::before { content: "WORKSPACE"; padding: 0 12px 17px; color: #a58c7e; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+  .app-shell-page .app-tabs button { width: 100%; text-align: left; padding: 12px; font-size: 13px; }
+  .app-tabs button.on { box-shadow: inset 3px 0 #ef793e, inset 0 0 0 1px #653b29; }
+  .app-tabs::after { content: "VAAL STREET"; margin-top: auto; padding: 28px 12px 0; color: #866a5b; font-size: 10px; letter-spacing: .18em; }
+  .app-header { margin-bottom: 18px; }
 }

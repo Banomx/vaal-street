@@ -21,6 +21,13 @@ const uhtredRune = BOSSES.find((boss) => boss.id === "uhtred").groups.flatMap((g
   .find((line) => line.item === "Depleted Mana Rune");
 assert.equal(makePriceResolver({ "Runeseeker's Call": { exalted: 1200 } })(uhtredRune).exalted, 1200,
   "Depleted Mana Rune is valued through its Runeseeker's Call conversion");
+for (const id of ["olroth", "uhtred"]) {
+  const boss = BOSSES.find((row) => row.id === id);
+  const market = { "Expedition Logbook": { exalted: 120 }, "Expedition Tablet": { exalted: 7 } };
+  const priced = computeBoss(boss, makePriceResolver(market));
+  assert.equal(priced.entryCost, 120, `${id} charges one logbook, not a mapping tablet`);
+  assert.equal(priced.net, priced.gross - 120);
+}
 const aberration = BOSSES.find((boss) => boss.id === "aberration");
 assert.deepEqual(aberration.groups.find((group) => group.id === "runes").drops.map((line) => line.item), [
   "Emergent Instinct", "Emergent Protection", "Emergent Vigour", "Emergent Possibility",

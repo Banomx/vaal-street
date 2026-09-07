@@ -342,7 +342,10 @@ function BossDetail({ row, currency, divineExalted, chaosExalted, activeProfile,
       </div>
 
       {!!row.entryLines.length && <div className="p2-entry-lines"><strong>Encounter entry</strong>{row.entryLines.map((line) => (
-        <span key={line.item}>{line.qty}× {line.item} <em>{line.price.found ? fmtPrice(line.value, currency, divineExalted, chaosExalted) : "unpriced"}</em></span>
+        <span key={line.item}>{line.qty}× {line.item}
+          <PriceEditor line={line} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} onCommit={(value) => onPrice(line.item, value)} />
+          {line.qty > 1 && line.price.found && <em>= {fmtPrice(line.value, currency, divineExalted, chaosExalted)} total</em>}
+        </span>
       ))}</div>}
 
       {row.allLines.some((line) => line.gamble) && <div className="p2-gamble-note">
@@ -411,7 +414,7 @@ const bossCss = `
 .p2-drop-table-wrap { min-width:0; overflow:hidden; }.p2-drop-table { width:100%; min-width:0; border-collapse:collapse; table-layout:fixed; font-size:13.5px; }.p2-drop-table th { padding:9px 8px; color:#817067; font-size:10px; line-height:1.25; letter-spacing:.08em; text-align:left; text-transform:uppercase; white-space:normal; }.p2-drop-table td { min-width:0; padding:9px 8px; border-top:1px solid #271b16; color:#c7aea2; overflow-wrap:anywhere; }.p2-drop-table th:nth-child(1){width:40%}.p2-drop-table th:nth-child(2){width:20%}.p2-drop-table th:nth-child(3){width:20%}.p2-drop-table th:nth-child(4){width:20%}.p2-drop-table td:first-child strong { color:#e7d2c8; }.p2-drop-table td:first-child small { color:#967c70; font-size:12px; }.p2-rarity,.p2-price-proxy { display:block; }.p2-info { display:inline-grid; width:16px; height:16px; margin-left:5px; place-items:center; border:1px solid #6e4b3d; border-radius:50%; color:#bc876e; font-size:10.5px; line-height:1; vertical-align:2px; cursor:help; }
 .p2-rate-input,.p2-price-edit { display:inline-flex; max-width:100%; align-items:center; justify-content:flex-end; gap:3px; }.p2-rate-input input,.p2-price-edit input { width:min(62px,calc(100% - 14px)); min-width:42px; padding:4px 5px; border:1px solid #7d4023; border-radius:4px; background:#0d0907; color:#f2c1a7; font:inherit; text-align:right; }.p2-rate-input em,.p2-price-edit em,.p2-rate em { color:#8b7165; font-style:normal; }.p2-rate,.p2-price { display:inline-grid; max-width:100%; justify-items:end; padding:0; border:0; background:none; color:#d6a37c; font:inherit; overflow-wrap:anywhere; cursor:pointer; }.p2-rate { display:inline-flex; gap:3px; }.p2-rate:hover,.p2-price:hover { color:#f0c3a6; text-decoration:underline dotted; }.p2-price.missing { color:#b96748; text-decoration:underline dotted; }.p2-price.manual { color:#77b780; }.p2-price small { color:#709173; font-size:9px; }
 .p2-model-note { margin:15px 17px 0; color:#8f7a70; font-size:13px; line-height:1.55; }.p2-empty-result { padding:25px 12px; color:#8d766c; font-size:13.5px; text-align:center; }
-@media(max-width:1120px){.p2-boss-workspace{grid-template-columns:320px minmax(0,1fr)}.p2-time-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.p2-ev-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.p2-drop-grid{grid-template-columns:1fr}}
+@media(max-width:1400px){.p2-boss-workspace{grid-template-columns:320px minmax(0,1fr)}.p2-time-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.p2-ev-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.p2-drop-grid{grid-template-columns:1fr}}
 @media(max-width:900px){.p2-boss-workspace{grid-template-columns:1fr}.p2-boss-rank-list{max-height:360px}.p2-ttk-banner{align-items:flex-start;flex-direction:column}.p2-time-grid{grid-template-columns:1fr}}
 @media(max-width:520px){.p2-boss-detail>header,.p2-profile-editor>header{align-items:stretch;flex-direction:column}.p2-ev-cards{grid-template-columns:1fr}.p2-drop-grid{padding-inline:10px}.p2-boss-tools>*{width:100%}.p2-ttk-actions{flex-wrap:wrap}}
 `;

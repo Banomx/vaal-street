@@ -72,7 +72,7 @@ export default function Overview({ league, priceData, exchange, currency, chaosE
       <header className="p2ov-head">
         <div className="p2ov-kicker">Across Path of Exile 2</div>
         <h2>The daily briefing</h2>
-        <p>Current tools and market signals in one place. More desks will appear here as new PoE 2 tabs are added.</p>
+        <p>Compare boss returns, follow tablet prices, and find your next market to watch.</p>
       </header>
 
       <div className="p2ov-briefing">
@@ -131,14 +131,14 @@ export default function Overview({ league, priceData, exchange, currency, chaosE
         </section>
       </div>
 
-      <section className="p2ov-attention" aria-label="PoE 2 data quality and roadmap">
+      <section className="p2ov-attention" aria-label="PoE 2 data quality">
         <button type="button" onClick={feature.open}>
           <span>Price coverage</span>
           <strong>{coverage ? `${coverage.priced}/${coverage.total} boss-market items priced` : "Checking boss price coverage"}</strong>
           <small>{coverage?.missing.length ? `${coverage.missing.length} items currently need a market quote.` : "Every configured challenge-league item contributes when pricing is available."}</small>
         </button>
         <div><span>Timing</span><strong>No hidden default TTK</strong><small>Profit/hour appears only after you create or select a custom timing profile.</small></div>
-        <button type="button" onClick={() => onOpenTab("prices")}><span>Market storage</span><strong>Reusable normalized snapshots</strong><small>Current source metadata and bounded timelines are available to future PoE 2 features.</small></button>
+        <button type="button" onClick={() => onOpenTab("prices")}><span>Price history</span><strong>Follow a market over time</strong><small>Browse item prices and compare their movement across the available snapshots.</small></button>
       </section>
     </main>
   );

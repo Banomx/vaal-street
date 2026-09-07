@@ -959,9 +959,9 @@ export default function Poe1App({ activeGame, onGameChange }) {
           <div className="app-control st-ctl">
             <span>Currency</span>
             <div className="app-segmented st-seg">
-              <button className={currency === "chaos" ? "on" : ""} onClick={() => setCurrency("chaos")}>Chaos</button>
-              <button className={currency === "divine" ? "on" : ""} onClick={() => setCurrency("divine")}>Divine</button>
-              <button className={currency === "smart" ? "on" : ""} onClick={() => setCurrency("smart")}
+              <button className={currency === "chaos" ? "on" : ""} aria-pressed={currency === "chaos"} onClick={() => setCurrency("chaos")}>Chaos</button>
+              <button className={currency === "divine" ? "on" : ""} aria-pressed={currency === "divine"} onClick={() => setCurrency("divine")}>Divine</button>
+              <button className={currency === "smart" ? "on" : ""} aria-pressed={currency === "smart"} onClick={() => setCurrency("smart")}
                 title={`Chaos below ${SMART_DIV_AT} divine, divine above it — each value in whichever unit reads cleanly`}>Smart</button>
             </div>
           </div>
@@ -1004,8 +1004,8 @@ export default function Poe1App({ activeGame, onGameChange }) {
           hourly job may be mid-deployment; reloading in a few minutes is the usual fix.
         </SourceStrip>
       )}
-      {mode === "connecting" && !OWN_BAR[tab] && <SourceStrip className="app-source-strip--spaced st-banner st-quiet">Loading the latest snapshot…</SourceStrip>}
-      {mode === "live" && !OWN_BAR[tab] && (
+      {mode === "connecting" && !OWN_BAR[tab] && tab !== "gems" && <SourceStrip className="app-source-strip--spaced st-banner st-quiet">Loading the latest snapshot…</SourceStrip>}
+      {mode === "live" && !OWN_BAR[tab] && tab !== "gems" && (
         <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
           {dataSource === "static"
             ? `${staticInfo?.priceSource ? `Prices via ${staticInfo.priceSource}` : "Snapshot data"} · ${league} · updated ${staticInfo?.generatedAt ? new Date(staticInfo.generatedAt).toLocaleString() : "recently"}`
