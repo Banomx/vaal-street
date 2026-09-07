@@ -1895,7 +1895,7 @@ const css = `
 .ov-desk button:focus-visible, .ov-attention button:focus-visible { outline: 2px solid #ff6a24; outline-offset: 2px; }
 .ov-briefing { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, .75fr); gap: 8px; }
 .ov-feature {
-  min-height: 190px; padding: 14px; border: 1px solid #66301e; border-left: 3px solid #f05a24;
+  min-height: 230px; padding: 22px; border: 1px solid #66301e; border-left: 3px solid #f05a24;
   border-radius: 6px; background: radial-gradient(circle at 88% 22%, rgba(241,80,25,.14), transparent 26%), linear-gradient(125deg, #1b0e0a, #100b09 68%);
 }
 .ov-feature-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
@@ -1905,7 +1905,7 @@ const css = `
 }
 .ov-feature h3 { max-width: 760px; margin: 12px 0 4px; color: #f7e7df; font-size: 27px; font-weight: 500; line-height: 1.15; }
 .ov-feature-number { display: flex; flex-wrap: wrap; gap: 7px; align-items: baseline; }
-.ov-feature-number strong { color: #efcdbd; font-size: 20px; font-weight: 500; }
+.ov-feature-number strong { color: #efcdbd; font-size: 34px; font-weight: 650; letter-spacing: -.03em; }
 .ov-feature-number strong.up { color: #69bfa1; }
 .ov-feature-number strong.down { color: #d47f7f; }
 .ov-feature-number span { color: #9d8379; font-size: 12px; }
@@ -1943,8 +1943,8 @@ const css = `
   margin: 13px 0 6px; padding: 0; color: #9e8176; border: 0;
   font-size: 11px; font-weight: 500; letter-spacing: .13em; text-transform: uppercase;
 }
-.ov-desks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
-.ov-desk { min-width: 0; padding: 10px; color: #d7c8c1; background: #120e0c; border: 1px solid #3e281f; border-radius: 5px; }
+.ov-desks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ov-desk { min-width: 0; padding: 18px; color: #d7c8c1; background: #120e0c; border: 1px solid #3e281f; border-radius: 5px; }
 .ov-desk header { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .ov-desk h3 { margin: 0; color: #eadbd4; font-size: 15px; font-weight: 500; }
 .ov-desk header em { color: #d65c2d; font-size: 9.5px; font-style: normal; letter-spacing: .08em; text-transform: uppercase; }

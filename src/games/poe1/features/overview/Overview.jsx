@@ -42,7 +42,7 @@ function Signal({ kind, title, value, tone = "", selected, pinned, onSelect }) {
   return (
     <button type="button" className={`ov-signal${selected ? " on" : ""}${pinned ? " pinned" : ""}`}
       aria-pressed={selected} onClick={onSelect}
-      title={pinned ? "Pinned — click again to let it keep rotating" : "Click to pin this one"}>
+      title={pinned ? "Pinned — click again to unpin" : "Click to inspect this signal"}>
       <span className="ov-kind">{kind}{pinned && <em className="ov-pin" aria-label="pinned">pinned</em>}</span>
       <strong>{title}</strong>
       <span className={`ov-value ${tone}`}>{value}</span>
@@ -109,11 +109,14 @@ export default function Overview({
   const [selectedRising, setSelectedRising] = useState(null);
   const [selectedFalling, setSelectedFalling] = useState(null);
   const [tick, setTick] = useState(0);
+  const [direction, setDirection] = useState("up");
+  const [rotating, setRotating] = useState(false);
 
   useEffect(() => {
+    if (!rotating) return undefined;
     const timer = setInterval(() => setTick((value) => value + 1), TREND_ROTATION_MS);
     return () => clearInterval(timer);
-  }, []);
+  }, [rotating]);
 
   useEffect(() => {
     if (!staticBase) return undefined; // no league folder yet
@@ -480,7 +483,7 @@ export default function Overview({
     : "Every configured drop contributes when broad pricing is available.";
 
   return (
-    <main className="ov-main">
+    <main className="ov-main market-overview">
       <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
         <b>{status}</b>
         {league ? ` · ${league}` : ""}
@@ -489,11 +492,11 @@ export default function Overview({
         {showRates && mirrorDivine > 0 ? ` · 1 Mirror ≈ ${Math.round(mirrorDivine).toLocaleString()} Divine` : ""}
       </SourceStrip>
 
-      <div className="ov-head">
+      <div className="ov-head overview-heading">
         <div>
-          <div className="ov-kicker">Across Vaal Street</div>
-          <h2>The daily briefing</h2>
-          <p>The same live calculations, organised around what deserves a closer look.</p>
+          <div className="ov-kicker">Path of Exile 1 · market desk</div>
+          <h2>Market overview</h2>
+          <p>Find a farming opportunity, compare boss returns, or check what is moving.</p>
         </div>
         <div className="app-segmented st-seg" aria-label="Change window">
           {CHANGE_WINDOW_OPTIONS.map((window) => (
@@ -505,31 +508,42 @@ export default function Overview({
         </div>
       </div>
 
-      <div className="ov-briefing">
-        <Feature signal={risingSignal} />
-        <SignalList label="Upward trends" signals={risingSignals}
-          activeId={risingSignal.id} pinned={selectedRising} onSelect={toggle(setSelectedRising)} />
-      </div>
+      <section className="overview-stats" aria-label="Market at a glance">
+        <button className="overview-stat" onClick={() => onOpenTab("bosses", bestBoss?.boss?.id)}>
+          <span>Highest boss net / kill</span><strong>{bestBoss ? fmtPrice(bestBoss.net, currency, divineRate) : "—"}</strong><small>{bestBoss?.boss?.name || "Waiting for prices"}</small>
+        </button>
+        <button className="overview-stat" onClick={() => onOpenTab("gems")}>
+          <span>Highest gem profit / hour</span><strong>{pools.gems.up[0] ? fmtPrice(pools.gems.up[0].profitPerHour, currency, divineRate) : "—"}</strong><small>Per socket · your levelling settings</small>
+        </button>
+        <button className="overview-stat" onClick={() => onOpenTab("watcher")}>
+          <span>Saved strategies</span><strong>{strategyRows.length}<em> / 10</em></strong><small>{strategyRows.length ? "Track your setup costs" : "Build your first farming setup"}</small>
+        </button>
+      </section>
 
-      <div className="ov-head ov-head-down">
-        <div>
-          <div className="ov-kicker">Downward trends</div>
-          <h2>What is cooling off</h2>
-          <p>The same desks, read from the bottom of each list.</p>
+      <div className="overview-toolbar">
+        <div><h3>Signals to explore</h3><p>Movements and estimated returns from your tools.</p></div>
+        <div className="overview-toolbar-actions">
+          <div className="app-segmented" aria-label="Signal direction">
+            <button aria-pressed={direction === "up"} className={direction === "up" ? "on" : ""} onClick={() => setDirection("up")}>Stronger signals</button>
+            <button aria-pressed={direction === "down"} className={direction === "down" ? "on" : ""} onClick={() => setDirection("down")}>Weaker signals</button>
+          </div>
+          <button className="overview-rotate" aria-pressed={rotating} onClick={() => setRotating(value => !value)}>{rotating ? "Pause rotation" : "Auto rotate"}</button>
         </div>
       </div>
-
-      <div className="ov-briefing ov-down">
-        <Feature signal={fallingSignal} />
-        <SignalList label="Downward trends" signals={fallingSignals}
-          activeId={fallingSignal.id} pinned={selectedFalling} onSelect={toggle(setSelectedFalling)} />
+      <div className={direction === "up" ? "ov-briefing" : "ov-briefing ov-down"}>
+        <Feature signal={direction === "up" ? risingSignal : fallingSignal} />
+        <SignalList label={direction === "up" ? "Stronger signals" : "Weaker signals"}
+          signals={direction === "up" ? risingSignals : fallingSignals}
+          activeId={direction === "up" ? risingSignal.id : fallingSignal.id}
+          pinned={direction === "up" ? selectedRising : selectedFalling}
+          onSelect={toggle(direction === "up" ? setSelectedRising : setSelectedFalling)} />
       </div>
 
-      <h3 className="ov-section-title">Three decision desks</h3>
+      <h3 className="ov-section-title">Plan your next run</h3>
       <div className="ov-desks">
         <section className="ov-desk">
           <header><h3>{deskStrategy ? deskStrategy.name : "Watch a farming strategy"}</h3><em>Strat Watcher</em></header>
-          <p>{deskStrategy ? `Rotating through your strongest saved setups every ${ROTATION_SECONDS} seconds.` : "Save up to ten setups of five scarabs and one Astrolabe."}</p>
+          <p>{deskStrategy ? (rotating ? `Rotating through saved setups every ${ROTATION_SECONDS} seconds.` : "Your saved setup, priced from the current snapshot.") : "Save up to ten setups of five scarabs and one Astrolabe."}</p>
           <dl>
             {deskStrategy ? <>
               <div><dt>Current cost</dt><dd>{fmtPrice(deskStrategy.total, currency, divineRate)}</dd></div>

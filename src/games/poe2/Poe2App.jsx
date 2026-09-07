@@ -51,6 +51,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
   const [verdict, setVerdict] = useState(null);
   const [currency, setCurrency] = useState("smart");
   const [tab, setTab] = useState("overview");
+  const [bossTarget, setBossTarget] = useState(null);
   const rates = marketRates(prices);
 
   useEffect(() => {
@@ -182,10 +183,10 @@ export default function Poe2App({ activeGame, onGameChange }) {
         )}
       </div>
       {tab === "overview" && <Overview league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary}
-        onOpenTab={(next) => setTab(next)} />}
+        onOpenTab={(next, target) => { setBossTarget(target || null); setTab(next); window.scrollTo({ top: 0, behavior: "instant" }); }} />}
       {tab === "farms" && <PopularFarms league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency}
         chaosExalted={rates.chaosExalted} divineExalted={rates.divineExalted} rateSummary={rates.summary} />}
-      {tab === "bosses" && <BossProfit league={league || "Standard"} priceData={prices} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
+      {tab === "bosses" && <BossProfit initialBossId={bossTarget} league={league || "Standard"} priceData={prices} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "exchange" && <CurrencyExchange league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} history={exchangeHistory} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "prices" && <PriceTracker league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency} rateSummary={rates.summary} />}
       <footer className="p2-art-credit" aria-label="Artwork credit">

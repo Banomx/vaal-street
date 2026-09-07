@@ -120,9 +120,9 @@ function Money({ value, currency, divineExalted, chaosExalted, signed = false })
   return <span className={value < 0 ? "loss" : value > 0 ? "gain" : ""}>{signed ? `${value >= 0 ? "+" : "−"}${text}` : text}</span>;
 }
 
-export default function BossProfit({ league, priceData, currency, chaosExalted, rateSummary }) {
+export default function BossProfit({ initialBossId, league, priceData, currency, chaosExalted, rateSummary }) {
   const [settings, setSettings] = useState(() => sanitizeSettings(settingsStore.load({})));
-  const [selectedId, setSelectedId] = useState(BOSSES[0].id);
+  const [selectedId, setSelectedId] = useState(() => BOSSES.some(boss => boss.id === initialBossId) ? initialBossId : BOSSES[0].id);
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
   const [sort, setSort] = useState("gross");

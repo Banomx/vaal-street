@@ -280,10 +280,12 @@ PoE 1 league rule or item shape from silently changing PoE 2.
 The shared contract tests enforce relative-import boundaries between games and
 prevent shared application code from importing either game.
 
-The PoE 2 workspace opens on its own Overview. That page follows the shared
-briefing pattern—feature signal, decision desk, and data-quality row—but its
-registry contains only native PoE 2 features. Adding a PoE 2 tab also adds its
-overview signal within `features/overview/`; PoE 1 overview code is not reused.
+The PoE 2 workspace opens on its own Overview. Headline cards show market count,
+normal-tablet price coverage and completed exchange pairs. A boss highlight and
+three-entry shortlist use the boss calculator with saved settings; each link
+opens that specific encounter. Farming, price history and exchange cards follow,
+with a data-quality strip below. Calculations stay in native PoE 2 features;
+only the summary-card presentation is shared with PoE 1.
 
 PoE 1 feature folders are `bosses`, `delve`, `gems`, `overview`, `pricing`, and
 `strategies`. A feature keeps its React view, pure calculation layer, and
@@ -1059,13 +1061,12 @@ than failing, so the mount and the styles have to be added together.
 `src/games/poe1/features/overview/Overview.jsx` is the PoE 1 default view and
 reads the same generated snapshots as
 the detailed tools. It calls the pure boss and Delve calculation modules instead
-of maintaining separate estimates. It stacks two briefing panels with the same
-layout — feature card on the left, signal selectors on the right — one reading
-upward and one downward, separated by accent colour rather than by shape so the
-same position means the same thing in both. Both panels draw the same six desks —
-Popular farms, Strat Watcher, Boss profit, Delve, Gem levelling and category
-movers (Astrolabes and Catalysts, each labelled by its own family) — and each
-desk contributes a signal only while it has an entry for that direction. The
+of maintaining separate estimates. Headline cards link to the highest boss net,
+highest gem profit per hour and saved strategies. One briefing panel pairs a
+feature card with signal selectors; Stronger/Weaker controls switch its direction.
+The panel draws from Popular farms, Strat Watcher, Boss profit, Delve,
+Gem levelling and category movers (Astrolabes and Catalysts, labelled by family).
+Each desk contributes a signal only while it has an entry for that direction. The
 gem desk runs the same `computeGems` the tab does on the same saved settings,
 and drops thin markets whatever the tab's filter is set to: a headline is the
 wrong place to lead with a profit resting on three listings. Three
@@ -1073,7 +1074,8 @@ decision desks and a data-quality strip follow. These are alternate
 presentations of existing results, not new calculations.
 
 `src/games/poe1/features/overview/overviewTrends.js` owns the ranking and the
-shared five-second rotation.
+five-second rotation sequence. The overview stays still by default; Auto rotate
+enables the timer and Pause rotation stops it.
 Every desk keeps a three-deep shortlist per direction. `rotateDesks` moves the
 highlighted feature card one desk per tick and only advances the entries once
 the tick has been all the way round, so the page walks across the desks showing
