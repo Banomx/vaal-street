@@ -172,7 +172,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
         <button className={tab === "prices" ? "on" : ""} onClick={() => setTab("prices")}>Price tracker</button>
       </AppTabs>
       <div className="p2-notices">
-        <SnapshotNotice verdict={verdict} />
+        {verdict?.level !== "notice" && <SnapshotNotice verdict={verdict} />}
         {currentOnly && (
           <SourceStrip className="app-source-strip--spaced" tone="notice">
             <strong>Current snapshot only</strong>
@@ -189,6 +189,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
       {tab === "bosses" && <BossProfit initialBossId={bossTarget} league={league || "Standard"} priceData={prices} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "exchange" && <CurrencyExchange league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} history={exchangeHistory} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "prices" && <PriceTracker league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency} rateSummary={rates.summary} />}
+      {verdict?.level === "notice" && <div className="p2-notices"><SnapshotNotice verdict={verdict} /></div>}
       <footer className="p2-art-credit" aria-label="Artwork credit">
         Background artwork <strong>© Grinding Gear Games</strong>
       </footer>

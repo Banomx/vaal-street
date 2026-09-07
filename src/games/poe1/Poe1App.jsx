@@ -988,7 +988,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
         </button>
       </AppTabs>
 
-      <SnapshotNotice verdict={verdict} className="st-banner" />
+      {verdict?.level !== "notice" && <SnapshotNotice verdict={verdict} className="st-banner" />}
 
       {mode === "demo" && (
         <SourceStrip className="app-source-strip--spaced st-banner" tone="alert">
@@ -1551,6 +1551,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
         </section>
       )}
 
+      {verdict?.level === "notice" && <SnapshotNotice verdict={verdict} className="st-banner" />}
       <footer className="st-foot">
         Exchange prices via <a href="https://www.pathofexile.com/developer/docs/reference#currencyexchange" target="_blank" rel="noopener noreferrer">GGG</a>
         {" · fallbacks via "}<a href="https://poe.watch" target="_blank" rel="noopener noreferrer">poe.watch</a>
