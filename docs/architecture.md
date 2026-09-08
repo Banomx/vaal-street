@@ -1053,6 +1053,10 @@ PoE 1's outer scale. The PoE 2 shell also owns its Ardura background treatment
 and the visible Grinding Gear Games artwork credit; neither is applied to the
 shared shell or PoE 1.
 
+Shared controls use muted copper borders, explicit active navigation and keyboard
+focus states. Overview cards emphasize values and full-width tool actions; mobile
+summary cards stack below 720px. Transitions respect reduced-motion preferences.
+
 Informational snapshot quality notes appear after the active view, before the
 footer, in both games. Stale-data warnings and blocking errors remain above
 the view.

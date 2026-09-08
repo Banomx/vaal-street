@@ -2815,4 +2815,12 @@ const css = `
   .dl-assume-layout { grid-template-columns: 1fr; }
   .dl-assume-samples { border-left: 0; border-top: 1px solid #3e281e; padding: 14px 0 0; }
 }
+
+.ov-feature,.ov-desk{border-radius:12px;box-shadow:inset 0 1px #ffffff08}
+.ov-desk{display:flex;flex-direction:column;gap:12px;background:linear-gradient(145deg,#1b130e,#110d0a)}
+.ov-desk header{flex-direction:column-reverse;gap:7px;align-items:flex-start}
+.ov-desk h3{font-size:19px}.ov-desk>p{margin:0;line-height:1.55;color:#b6a092}
+.ov-desk>button{margin-top:auto;align-self:stretch;text-align:left;padding:11px 14px;border-radius:7px;background:#2b1c13;color:#f0c6a5}
+.ov-desk>button:hover,.ov-feature button:hover{background:#432b1b;border-color:#b8784e}
+.ov-signal{padding:16px}.ov-signal:not(.on):hover{background:#25190f}
 `;

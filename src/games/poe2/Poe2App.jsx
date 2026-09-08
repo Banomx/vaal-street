@@ -207,7 +207,7 @@ button,select,input { font-family:inherit; }
   isolation:isolate;
   background-color:#090605;
   background-image:
-    linear-gradient(180deg,rgba(9,6,5,.3) 0,rgba(9,6,5,.76) 54vh,#090605 108vh),
+    linear-gradient(180deg,rgba(9,6,5,.66) 0,rgba(9,6,5,.88) 54vh,#090605 108vh),
     url("${import.meta.env.BASE_URL}assets/poe2-ardura-caravan.jpg");
   background-position:center top;
   background-repeat:no-repeat;
