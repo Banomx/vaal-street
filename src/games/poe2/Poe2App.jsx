@@ -215,7 +215,7 @@ button,select,input { font-family:inherit; }
   background-attachment:fixed;
 }
 .p2-head {
-  border-bottom-color:#632b17;
+  border-bottom-color:#631c19;
   background:linear-gradient(110deg,rgba(13,9,8,.88),rgba(37,16,11,.76) 72%,rgba(11,8,7,.9));
   box-shadow:0 18px 44px rgba(0,0,0,.24);
   backdrop-filter:blur(3px);

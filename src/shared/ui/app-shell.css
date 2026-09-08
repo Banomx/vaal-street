@@ -11,10 +11,10 @@
   --ui-tab-size: 15px;
   --ui-source-size: 14px;
   --ui-control-padding: 9px 12px;
-  --ui-border: #35231b;
-  --ui-control-border: #88674f;
-  --ui-control-bg: #17100d;
-  --ui-accent: #ef4f19;
+  --ui-border: #351d1c;
+  --ui-control-border: #885251;
+  --ui-control-bg: #170e0d;
+  --ui-accent: #ef261f;
   --ui-font-body: "Segoe UI", system-ui, sans-serif;
   --ui-font-display: "Segoe UI", system-ui, sans-serif;
 }
@@ -31,15 +31,15 @@
 .app-shell-page .app-brand h1 { font-family: "Kei", Georgia, serif; }
 .app-shell-page :is(button, input, select, textarea) { font-family: inherit; }
 .app-shell-page :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: 2px solid #ff9a61;
+  outline: 2px solid #ff6a66;
   outline-offset: -2px;
 }
 .app-shell-page :is(input, select, textarea) { accent-color: var(--ui-accent); }
 .app-shell-page :is(input, textarea)::placeholder { color: #e2e2e0; }
 .app-shell-page :is(button, select):disabled { cursor: not-allowed; }
 .app-shell-page :is(table, input) { font-variant-numeric: tabular-nums; }
-.app-shell-page * { scrollbar-width: thin; scrollbar-color: #654331 #120d0b; }
-.app-shell-page ::selection { background: #71331e; color: #fff0e6; }
+.app-shell-page * { scrollbar-width: thin; scrollbar-color: #653433 #120d0b; }
+.app-shell-page ::selection { background: #712320; color: #ffe8e7; }
 
 /* The shell is explicitly content-box so it has the same visual height in
    both games even when a feature workspace uses border-box internally. */
@@ -71,7 +71,7 @@
   text-shadow: 0 1px 0 #000, 0 0 24px rgba(239, 79, 25, .24);
 }
 
-.app-brand h1 span { color: #ffa685; }
+.app-brand h1 span { color: #ff8c89; }
 .app-brand-subtitle {
   margin: 3px 0 0;
   color: #e2e2e0;
@@ -138,14 +138,14 @@
 .app-segmented button:last-child,
 .game-switcher button:last-child { border-right: 0; }
 .app-segmented button.on,
-.game-switcher button.on { background: #593520; color: #fff0e6; box-shadow: inset 0 1px 0 #ffffff14, 0 1px 3px #0004; }
+.game-switcher button.on { background: #592322; color: #ffe8e7; box-shadow: inset 0 1px 0 #ffffff14, 0 1px 3px #0004; }
 .app-segmented button:not(.on):not(:disabled):hover,
-.game-switcher button:not(.on):hover { background: #251a15; color: #e2e2e0; }
+.game-switcher button:not(.on):hover { background: #251615; color: #e2e2e0; }
 
 .app-segmented button:focus-visible,
 .app-control select:focus-visible,
 .game-switcher button:focus-visible {
-  outline: 2px solid #ff6a24;
+  outline: 2px solid #ff312b;
   outline-offset: -2px;
 }
 
@@ -158,7 +158,7 @@
   overscroll-behavior-x: contain;
   border: 1px solid var(--ui-border);
   border-radius: 9px;
-  border-bottom-color: #3b2419;
+  border-bottom-color: #3b1b1a;
   background: #100a08;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -181,9 +181,9 @@
   white-space: nowrap;
 }
 
-.app-tabs button.on { color: #ffc29e; border-bottom-color: transparent; background: #392017; box-shadow: inset 0 0 0 1px #794028; }
+.app-tabs button.on { color: #ffa4a1; border-bottom-color: transparent; background: #391918; box-shadow: inset 0 0 0 1px #792d2a; }
 .app-tabs button:not(.on):hover { color: #e2e2e0; background-color: #ffffff05; }
-.app-tabs button:focus-visible { outline: 2px solid #ff6a24; outline-offset: -2px; }
+.app-tabs button:focus-visible { outline: 2px solid #ff312b; outline-offset: -2px; }
 
 .app-mobile-nav { display: none; }
 .app-mobile-nav span { color: #e2e2e0; font-size:12.5px; letter-spacing: .12em; text-transform: uppercase; }
@@ -192,14 +192,14 @@
 .app-source-strip {
   box-sizing: border-box;
   padding: 9px 14px;
-  border: 1px solid #3e281e;
+  border: 1px solid #3e201f;
   border-radius: 6px;
   color: #e2e2e0;
   font-size: var(--ui-source-size);
   line-height: 1.45;
 }
 
-.app-source-strip--quiet { background: #15120f; border-color: #30261f; }
+.app-source-strip--quiet { background: #15120f; border-color: #302020; }
 .app-source-strip--alert { border-color: #7a361b; background: #2a130b; color: #eaaf8e; }
 .app-source-strip--spaced { margin: 6px 0 16px; }
 
@@ -242,23 +242,23 @@
     padding: 18px 10px;
     overflow-y: auto;
     overflow-x: hidden;
-    border: 1px solid #38271f;
+    border: 1px solid #382120;
     border-radius: 12px;
-    background: linear-gradient(160deg, #1d130e, #100c0a 45%);
+    background: linear-gradient(160deg, #1d0f0e, #100c0a 45%);
   }
   .app-tabs::before { content: "WORKSPACE"; padding: 0 12px 17px; color: #e2e2e0; font-size:12.5px; font-weight: 600; letter-spacing: .16em; }
   .app-shell-page .app-tabs button { width: 100%; text-align: left; padding: 12px; font-size: 13px; }
-  .app-tabs button.on { box-shadow: inset 3px 0 #ef793e, inset 0 0 0 1px #653b29; }
+  .app-tabs button.on { box-shadow: inset 3px 0 #ef4943, inset 0 0 0 1px #652d2b; }
   .app-tabs::after { content: "VAAL STREET"; margin-top: auto; padding: 28px 12px 0; color: #e2e2e0; font-size:12.5px; letter-spacing: .18em; }
   .app-header { margin-bottom: 18px; }
 }
 
 /* Overview summaries share a visual scale; each game supplies its own metrics. */
-.market-overview .overview-heading { margin: 4px 0 18px; padding: 18px 22px; border: 1px solid #ffffff0b; border-radius: 12px; background: linear-gradient(110deg,#1b120fee,#110d0bdf); }
+.market-overview .overview-heading { margin: 4px 0 18px; padding: 18px 22px; border: 1px solid #ffffff0b; border-radius: 12px; background: linear-gradient(110deg,#1b100fee,#110d0bdf); }
 .market-overview .overview-heading h2 { margin: 5px 0 8px; font-size: clamp(26px, 3vw, 34px); }
 .overview-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-bottom: 18px; }
-.overview-stat { position: relative; display: grid; gap: 7px; min-width: 0; padding: 18px 20px; border: 1px solid #4b3527; border-radius: 12px; background: radial-gradient(ellipse at top right,#56342244,transparent 70%),#15100d; box-shadow: inset 0 1px #ffffff08; text-align: left; cursor: pointer; color: #e2e2e0; }
-.overview-stat:hover { border-color: #b8784e; background-color: #21170f; }
+.overview-stat { position: relative; display: grid; gap: 7px; min-width: 0; padding: 18px 20px; border: 1px solid #4b2928; border-radius: 12px; background: radial-gradient(ellipse at top right,#56252444,transparent 70%),#15100d; box-shadow: inset 0 1px #ffffff08; text-align: left; cursor: pointer; color: #e2e2e0; }
+.overview-stat:hover { border-color: #b85451; background-color: #211010; }
 .overview-stat::after { content: "↗" / ""; position: absolute; right: 16px; top: 12px; color: #e2e2e0; font-size: 16px; }
 .overview-stat > span { padding-right: 16px; }
 .overview-stat > span { color: #e2e2e0; font-size:12.5px; text-transform: uppercase; letter-spacing: .09em; }
@@ -268,14 +268,14 @@
 .overview-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 22px 0 12px; }
 .overview-toolbar h3 { margin: 0; font-size: 17px; }.overview-toolbar p { margin: 4px 0 0; color: #e2e2e0; font-size:12.5px; }
 .overview-toolbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.overview-rotate { padding: 9px 12px; border: 1px solid #573522; border-radius: 6px; background: #19110d; color: #e2e2e0; cursor: pointer; }
+.overview-rotate { padding: 9px 12px; border: 1px solid #572524; border-radius: 6px; background: #190e0d; color: #e2e2e0; cursor: pointer; }
 @media(max-width:720px) { .overview-stats { grid-template-columns: 1fr; gap: 8px; }.overview-stat{grid-template-columns:1fr auto;padding:14px 16px}.overview-stat > strong{grid-column:2;grid-row:1/3;align-self:center}.overview-stat small{grid-column:1}.overview-stat > span{letter-spacing:.03em}.overview-toolbar-actions{width:100%} }
 
 /* Quiet surfaces keep the active destination and primary actions distinct. */
 .app-shell-page .app-header { border-color:#ffffff10; box-shadow:0 8px 28px #0002; }
 .app-shell-page .app-source-strip--quiet { color:#e2e2e0; border-color:#ffffff09; background:#15120f; font-size:12.5px; }
-.app-shell-page .app-tabs button.on { color:#e2e2e0; background:linear-gradient(100deg,#52321f,#2a1c14); }
-.app-shell-page .app-tabs button.on::after { content:"›" / ""; margin-left:auto; color:#eab080; }
+.app-shell-page .app-tabs button.on { color:#e2e2e0; background:linear-gradient(100deg,#522221,#2a1515); }
+.app-shell-page .app-tabs button.on::after { content:"›" / ""; margin-left:auto; color:#ea8683; }
 .app-shell-page .app-tabs > button { display:flex; align-items:center; gap:8px; }
 .app-shell-page .app-tabs button em { margin-left:0; }
 @media(max-width:720px){.app-shell-page .app-tabs > button{display:none}.overview-stat::after{display:none}.market-overview .overview-heading{padding:18px}.overview-stat > span{padding-right:0}}
@@ -286,11 +286,11 @@
 /* Reading surfaces stay opaque; artwork and muted tints must not dim content. */
 .app-shell-page { color:#f4f4f2; }
 .app-shell-page .app-header { background:#151515; }
-.app-shell-page .overview-heading { background:#151515; border-color:#49413a; }
-.app-shell-page .app-source-strip--quiet { color:#e2e2e0; background:#181818; border-color:#50473f; font-size:13px; }
+.app-shell-page .overview-heading { background:#151515; border-color:#493b3a; }
+.app-shell-page .app-source-strip--quiet { color:#e2e2e0; background:#181818; border-color:#504040; font-size:13px; }
 .app-shell-page :is(.app-control>span,.game-switcher>span,.app-brand-subtitle) { color:#e2e2e0; }
 .app-shell-page .app-tabs button { color:#e2e2e0; }
-.app-shell-page .app-tabs button.on { color:#fff; background:#654126; }
+.app-shell-page .app-tabs button.on { color:#fff; background:#652a28; }
 .app-shell-page :is(input,textarea)::placeholder { color:#cfcfcd; }
 
 /* Keep status accessible without competing with the workspace itself. */
@@ -301,7 +301,7 @@
 .app-snapshot-notice details[open] .app-notice-toggle::after { transform:rotate(225deg); }
 .app-snapshot-notice details[open]>summary { padding-bottom:8px;border-bottom:1px solid currentColor; }
 .app-snapshot-notice details[open]>ul { margin-top:10px; }
-.overview-provenance { margin-top:22px;padding-top:16px;border-top:1px solid #514337; }
+.overview-provenance { margin-top:22px;padding-top:16px;border-top:1px solid #513938; }
 .overview-provenance .app-source-strip { margin:0; }
 .market-overview .overview-heading { margin-top:0; }
 .overview-stat { min-height:128px; }
