@@ -1060,6 +1060,10 @@ Shared controls use visible copper borders, explicit active navigation and keybo
 focus states. Overview cards emphasize values and full-width tool actions; mobile
 summary cards stack below 720px. Transitions respect reduced-motion preferences.
 
+Overview pages place provenance below their main content. Snapshot notices use
+native expandable details: warning titles stay visible and errors start expanded.
+On mobile, the view selector stays sticky while the workspace scrolls.
+
 Informational snapshot quality notes appear after the active view, before the
 footer, in both games. Stale-data warnings and blocking errors remain above
 the view.

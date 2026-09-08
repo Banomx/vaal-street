@@ -21,10 +21,12 @@ export default function SnapshotNotice({ verdict, className = "", headline }) {
   const level = verdict.level;
   return (
     <SourceStrip className={`app-source-strip--spaced app-snapshot-notice ${className}`.trim()} tone={TONE[level] || "quiet"}>
-      <strong>{headline || HEADLINE[level]}</strong>
+      <details open={level === "error"}>
+        <summary><strong>{headline || HEADLINE[level]}</strong><span className="app-notice-toggle">Details</span></summary>
       <ul>
         {verdict.notes.map((note, index) => <li key={`${note.level}-${index}`}>{note.text}</li>)}
       </ul>
+      </details>
     </SourceStrip>
   );
 }

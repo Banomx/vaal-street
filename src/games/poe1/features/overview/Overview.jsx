@@ -484,13 +484,7 @@ export default function Overview({
 
   return (
     <main className="ov-main market-overview">
-      <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
-        <b>{status}</b>
-        {league ? ` · ${league}` : ""}
-        {updatedAt ? ` · updated ${new Date(updatedAt).toLocaleString()}` : ""}
-        {showRates ? ` · 1 Divine ≈ ${Math.round(divineRate)} Chaos` : ""}
-        {showRates && mirrorDivine > 0 ? ` · 1 Mirror ≈ ${Math.round(mirrorDivine).toLocaleString()} Divine` : ""}
-      </SourceStrip>
+
 
       <div className="ov-head overview-heading">
         <div>
@@ -593,6 +587,15 @@ export default function Overview({
           <small>{catalogue ? catalogue.note : "The first snapshot after this change starts the comparison."}</small>
         </div>
       </section>
+      <div className="overview-provenance">
+      <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
+        <b>{status}</b>
+        {league ? ` · ${league}` : ""}
+        {updatedAt ? ` · updated ${new Date(updatedAt).toLocaleString()}` : ""}
+        {showRates ? ` · 1 Divine ≈ ${Math.round(divineRate)} Chaos` : ""}
+        {showRates && mirrorDivine > 0 ? ` · 1 Mirror ≈ ${Math.round(mirrorDivine).toLocaleString()} Divine` : ""}
+      </SourceStrip>
+      </div>
     </main>
   );
 }

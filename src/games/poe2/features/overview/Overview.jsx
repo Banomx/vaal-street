@@ -72,7 +72,7 @@ export default function Overview({ league, priceData, exchange, currency, chaosE
   return (
     <main className="p2ov-main market-overview">
       <style>{css}</style>
-      <SourceStrip className="p2ov-source">{sourceText(league, priceData, rateSummary)}</SourceStrip>
+
 
       <header className="p2ov-head overview-heading">
         <div className="p2ov-kicker">Path of Exile 2 · market desk</div>
@@ -140,6 +140,9 @@ export default function Overview({ league, priceData, exchange, currency, chaosE
         <div><span>Timing</span><strong>No hidden default TTK</strong><small>Profit/hour appears only after you create or select a custom timing profile.</small></div>
         <button type="button" onClick={() => onOpenTab("prices")}><span>Price history</span><strong>Follow a market over time</strong><small>Browse item prices and compare their movement across the available snapshots.</small></button>
       </section>
+      <div className="overview-provenance">
+      <SourceStrip className="p2ov-source">{sourceText(league, priceData, rateSummary)}</SourceStrip>
+      </div>
     </main>
   );
 }

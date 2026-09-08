@@ -292,3 +292,24 @@
 .app-shell-page .app-tabs button { color:#e2e2e0; }
 .app-shell-page .app-tabs button.on { color:#fff; background:#654126; }
 .app-shell-page :is(input,textarea)::placeholder { color:#cfcfcd; }
+
+/* Keep status accessible without competing with the workspace itself. */
+.app-snapshot-notice details>summary { display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;list-style:none;min-height:28px; }
+.app-snapshot-notice details>summary::-webkit-details-marker { display:none; }
+.app-notice-toggle { display:flex;align-items:center;gap:9px;font-size:12.5px;white-space:nowrap; }
+.app-notice-toggle::after { content:"";width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg); }
+.app-snapshot-notice details[open] .app-notice-toggle::after { transform:rotate(225deg); }
+.app-snapshot-notice details[open]>summary { padding-bottom:8px;border-bottom:1px solid currentColor; }
+.app-snapshot-notice details[open]>ul { margin-top:10px; }
+.overview-provenance { margin-top:22px;padding-top:16px;border-top:1px solid #514337; }
+.overview-provenance .app-source-strip { margin:0; }
+.market-overview .overview-heading { margin-top:0; }
+.overview-stat { min-height:128px; }
+.overview-stat>strong { color:#fff;font-weight:700; }
+.overview-stat>span { text-transform:none;letter-spacing:0;font-size:14px; }
+.app-shell-page .overview-heading h2 { font-size:clamp(28px,3vw,38px);line-height:1.15; }
+@media(max-width:720px){
+  .app-shell-page .app-tabs { position:sticky;top:8px;z-index:30;background:#181411;box-shadow:0 6px 18px #0008; }
+  .overview-stat{min-height:80px}.overview-stat>span{font-size:13px}
+  .app-shell-page .overview-heading h2{font-size:28px}
+}
