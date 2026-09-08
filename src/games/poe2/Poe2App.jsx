@@ -229,13 +229,13 @@ button,select,input { font-family:inherit; }
   margin:28px auto -20px;
   padding:13px 18px 0;
   border-top:1px solid rgba(150,86,61,.28);
-  color:#79655d;
+  color:#c3bbb7;
   font-size:10px;
   letter-spacing:.08em;
   text-align:right;
   text-transform:uppercase;
 }
-.p2-art-credit strong { color:#a88d81; font-weight:500; }
+.p2-art-credit strong { color:#cab9b2; font-weight:500; }
 @media (max-width:720px) {
   .p2-root { background-position:58% top; background-size:100% 100vh,auto 100vh; }
   .p2-art-credit { text-align:center; }
