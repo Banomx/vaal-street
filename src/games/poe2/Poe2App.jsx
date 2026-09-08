@@ -207,7 +207,7 @@ button,select,input { font-family:inherit; }
   isolation:isolate;
   background-color:#090605;
   background-image:
-    linear-gradient(180deg,rgba(9,6,5,.66) 0,rgba(9,6,5,.88) 54vh,#090605 108vh),
+    linear-gradient(180deg,rgba(9,6,5,.96) 0,rgba(9,6,5,.98) 54vh,#090605 108vh),
     url("${import.meta.env.BASE_URL}assets/poe2-ardura-caravan.jpg");
   background-position:center top;
   background-repeat:no-repeat;
@@ -229,13 +229,13 @@ button,select,input { font-family:inherit; }
   margin:28px auto -20px;
   padding:13px 18px 0;
   border-top:1px solid rgba(150,86,61,.28);
-  color:#c3bbb7;
-  font-size:10px;
+  color:#e2e2e0;
+  font-size:12.5px;
   letter-spacing:.08em;
   text-align:right;
   text-transform:uppercase;
 }
-.p2-art-credit strong { color:#cab9b2; font-weight:500; }
+.p2-art-credit strong { color:#e2e2e0; font-weight:500; }
 @media (max-width:720px) {
   .p2-root { background-position:58% top; background-size:100% 100vh,auto 100vh; }
   .p2-art-credit { text-align:center; }

@@ -1053,7 +1053,8 @@ PoE 1's outer scale. The PoE 2 shell also owns its Ardura background treatment
 and the visible Grinding Gear Games artwork credit; neither is applied to the
 shared shell or PoE 1.
 
-Supporting text uses brighter warm neutrals across tables, captions and controls;
+Supporting text uses near-white neutrals across tables, captions and controls;
+CSS captions use at least 12.5px. Headers and reading surfaces are opaque;
 source strips have opaque backgrounds for consistent readability.
 Shared controls use visible copper borders, explicit active navigation and keyboard
 focus states. Overview cards emphasize values and full-width tool actions; mobile
