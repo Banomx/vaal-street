@@ -110,7 +110,7 @@ export default function Overview({
   const [selectedFalling, setSelectedFalling] = useState(null);
   const [tick, setTick] = useState(0);
   const [direction, setDirection] = useState("up");
-  const [rotating, setRotating] = useState(false);
+  const [rotating, setRotating] = useState(true);
 
   useEffect(() => {
     if (!rotating) return undefined;

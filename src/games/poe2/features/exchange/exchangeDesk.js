@@ -357,9 +357,9 @@ export function buildExchangeOverview(rows, history, {
   };
 }
 
-export function estimateExchangeExecution(row, amount, { participation = .25 } = {}) {
+export function estimateExchangeExecution(row, amount, { participation = .8 } = {}) {
   const units = Math.max(0, Number(amount) || 0);
-  const share = Math.min(1, Math.max(.001, Number(participation) || .25));
+  const share = Math.min(1, Math.max(.001, Number(participation) || .8));
   const observedHourlyUnits = Math.max(0, Number(row?.itemVolume) || 0);
   const plannedHourlyUnits = observedHourlyUnits * share;
   const completedValue = units * (Number(row?.priceExalted) || 0);

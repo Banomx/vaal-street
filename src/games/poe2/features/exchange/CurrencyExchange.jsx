@@ -85,7 +85,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   const [rangeHours, setRangeHours] = useState(4);
   const [divineAdjusted, setDivineAdjusted] = useState(false);
   const [plannedUnits, setPlannedUnits] = useState(1);
-  const [participation, setParticipation] = useState(.25);
+  const [participation, setParticipation] = useState(.8);
   const [tradeSide, setTradeSide] = useState("sell");
   const [routeMinimum, setRouteMinimum] = useState(1000);
   const [routeMinimumUnits, setRouteMinimumUnits] = useState(10);
@@ -271,7 +271,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
             <label><span>Units</span><input type="number" min="1" step="1" value={plannedUnits} onChange={(event) => setPlannedUnits(Math.max(1, Number(event.target.value) || 1))} /><small>Starts at one item · enter a bulk amount when needed</small></label>
             <label><span>Minimum hourly route turnover</span><input type="number" min="0" step="100" list="p2ex-turnover-presets" value={routeMinimum} onChange={(event) => setRouteMinimum(Math.max(0, Number(event.target.value) || 0))} /><small>Exalted/hour · custom value allowed</small><datalist id="p2ex-turnover-presets"><option value="500" /><option value="1000" /><option value="2500" /><option value="5000" /><option value="10000" /><option value="25000" /><option value="50000" /></datalist></label>
             <label><span>Minimum hourly units</span><input type="number" min="0" step="1" list="p2ex-unit-presets" value={routeMinimumUnits} onChange={(event) => setRouteMinimumUnits(Math.max(0, Number(event.target.value) || 0))} /><small>Completed units/hour · protects against one-sale markets</small><datalist id="p2ex-unit-presets"><option value="1" /><option value="5" /><option value="10" /><option value="25" /><option value="50" /><option value="100" /></datalist></label>
-            <label><span>Your assumed share of hourly flow</span><input type="number" min="0.1" max="100" step="0.1" list="p2ex-flow-presets" value={Number((participation * 100).toFixed(2))} onChange={(event) => setParticipation(Math.min(1, Math.max(.001, (Number(event.target.value) || .1) / 100)))} /><small>Clear-time assumption only · units/h and ex/h show the full observed market</small><datalist id="p2ex-flow-presets"><option value="1" /><option value="5" /><option value="10" /><option value="25" /><option value="50" /><option value="75" /><option value="90" /><option value="100" /></datalist></label>
+            <label><span>Your assumed share of hourly flow</span><input type="number" min="0.1" max="100" step="0.1" list="p2ex-flow-presets" value={Number((participation * 100).toFixed(2))} onChange={(event) => setParticipation(Math.min(1, Math.max(.001, (Number(event.target.value) || .1) / 100)))} /><small>Clear-time assumption only · units/h and ex/h show the full observed market</small><datalist id="p2ex-flow-presets"><option value="1" /><option value="5" /><option value="10" /><option value="25" /><option value="50" /><option value="75" /><option value="80" /><option value="90" /><option value="100" /></datalist></label>
           </div>
           {selected ? <>
             {recommendedRoute ? <div className={`p2ex-recommendation evidence-${confidence.level}`}>

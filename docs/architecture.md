@@ -587,7 +587,7 @@ Buy mode sorts normalized means ascending and sell mode descending; sell is the
 default. These are labelled as the lowest and highest **observed** routes rather
 than live recommendations because pair means within an hour need not have been
 executable simultaneously. The selected route floors apply to both legs. The
-editable defaults are 1,000 Exalted/hour, 10 completed units/hour, and a 25%
+editable defaults are 1,000 Exalted/hour, 10 completed units/hour, and an 80%
 assumed personal share of the observed flow; all expose presets but accept custom values. Planned
 quantity starts at one item and applies to both recommendation cards and the
 route table.
@@ -1089,8 +1089,8 @@ decision desks and a data-quality strip follow. These are alternate
 presentations of existing results, not new calculations.
 
 `src/games/poe1/features/overview/overviewTrends.js` owns the ranking and the
-five-second rotation sequence. The overview stays still by default; Auto rotate
-enables the timer and Pause rotation stops it.
+five-second rotation sequence. The overview rotates by default; Pause rotation stops the timer and Auto rotate
+starts it again.
 Every desk keeps a three-deep shortlist per direction. `rotateDesks` moves the
 highlighted feature card one desk per tick and only advances the entries once
 the tick has been all the way round, so the page walks across the desks showing
