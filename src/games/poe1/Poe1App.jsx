@@ -1889,8 +1889,8 @@ const css = `
 .ov-head {
   display: flex; justify-content: space-between; gap: 18px; align-items: end; margin-bottom: 10px;
 }
-.ov-kicker { color: #f8928e; font-size:12.5px; font-weight: 500; letter-spacing: .13em; text-transform: uppercase; }
-.ov-head h2 { margin: 3px 0 2px; color: #e2e2e0; font-size: 24px; font-weight: 500; }
+.ov-kicker { color: #f8928e; font-size:12.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+.ov-head h2 { margin: 3px 0 2px; color: #e2e2e0; font-size: 24px; font-weight: 650; }
 .ov-head p { margin: 0; color: #e2e2e0; font-size: 13.5px; }
 .ov-signal:focus-visible, .ov-feature button:focus-visible,
 .ov-desk button:focus-visible, .ov-attention button:focus-visible { outline: 2px solid #ff312b; outline-offset: 2px; }
