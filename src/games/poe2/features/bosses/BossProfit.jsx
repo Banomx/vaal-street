@@ -1,3 +1,4 @@
+import DryStreakCalculator from "../../../../shared/ui/DryStreakCalculator.jsx";
 import { useEffect, useMemo, useState } from "react";
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import { createJsonStore } from "../../../../shared/storage/jsonStore.js";
@@ -352,6 +353,8 @@ function BossDetail({ row, currency, divineExalted, chaosExalted, activeProfile,
         <strong>Gamble pricing</strong>
         <span>Megalomaniac uses poe.ninja&apos;s normal market quote as a conservative floor. Strong notable combinations can sell for many Divines, so the displayed EV is likely below the true long-run value.</span>
       </div>}
+
+      <DryStreakCalculator key={boss.id} targets={row.allLines.filter(line => line.quantity > 0 && line.chance >= 0 && line.chance <= 1).map(line => ({ id: line.key, label: line.item, chance: line.chance }))} entryCost={row.entryUnknown || !row.entryLines.length ? null : row.entryCost} costUnit="Exalted" formatMoney={value => fmtPrice(value, currency, divineExalted, chaosExalted)} />
 
       <div className="p2-drop-grid">{row.groups.map((group) => (
         <section className="p2-drop-group" key={group.id}>

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { dryStreak } from '../../../src/shared/ui/dryStreak.js';
+assert.equal(dryStreak(.1,0).dry,1);
+assert.ok(Math.abs(dryStreak(.1,20).dry - .9 ** 20)<1e-12);
+assert.equal(dryStreak(0,20).milestones[0].attempts,null);
+assert.equal(dryStreak(1,20).dry,0);
+assert.equal(dryStreak(1,0).dry,1);
+assert.equal(dryStreak(.1,20,0).dry,1);
+assert.ok(Math.abs(dryStreak(.2,10,.5).dry - .9 ** 10)<1e-12);
+assert.equal(dryStreak(.1,1).milestones[2].attempts,29);
+assert.equal(dryStreak(NaN,1),null);
+assert.equal(dryStreak(.1,-1),null);
+assert.equal(dryStreak(.1,1.5),null);
+console.log('Dry-streak probabilities and confidence thresholds passed.');

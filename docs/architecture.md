@@ -426,6 +426,14 @@ Olroth and Uhtred each charge one Expedition Logbook per kill through
 manual entry-price override. Other area rewards are excluded from boss EV.
 The other Expedition encounters keep their own configured entry rules.
 
+The boss tools share a game-neutral dry-streak calculator. Game adapters supply
+per-kill probabilities and complete entry costs in their own currency units.
+Unsupported multi-roll or quantity-scaled PoE 1 groups require a custom chance.
+The calculator models independent attempts with effective chance = drop chance ×
+success rate. Entry budgets are gross upfront costs, never net losses; missing
+entry prices and encounters without a fixed entry item remain unknown unless
+the user supplies a full cost. Local inputs reset when the selected boss changes.
+
 Popular farms offers 1h, 2h, 4h, 8h, 12h, 24h, 48h, 3d, 7d, 14d, 30d and All.
 Short windows still require enough stored observations to report movement.
 Unique-tablet comparisons expand on demand; output baskets and their detailed

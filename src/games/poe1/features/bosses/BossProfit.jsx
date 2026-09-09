@@ -1,3 +1,4 @@
+import DryStreakCalculator from "../../../../shared/ui/DryStreakCalculator.jsx";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import { POE1_SCHEMA_VERSIONS, requiredFields } from "../../config.js";
@@ -638,6 +639,8 @@ export default function BossProfit({ league, staticBase, currency, divineRate, m
                     <span className="bp-entry-total">= {money(current.entryCost)}</span>
                   </div>
                 )}
+
+                <DryStreakCalculator key={current.boss.id} targets={current.groups.filter(group => (group.kind === "independent" && !group.scaled) || (group.kind === "pool" && group.rolls === 1)).flatMap(group => [...group.lines, ...group.hiddenLines].filter(line => !line.unrated && line.pct >= 0 && line.pct <= 1).map(line => ({ id: group.id + line.key, label: line.label, chance: line.pct })))} entryCost={current.entryUnknown || !current.entryLines.length ? null : current.entryCost} costUnit="Chaos" formatMoney={money} />
 
                 <div className="bp-groups">
                   {current.groups.map((g) => (
