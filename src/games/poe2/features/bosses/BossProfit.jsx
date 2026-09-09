@@ -330,8 +330,8 @@ function BossDetail({ row, currency, divineExalted, chaosExalted, activeProfile,
       </header>
       <div className="p2-ev-cards">
         <div><small>ENTRY COST</small><strong>{row.entryLines.length ? row.entryUnknown ? "incomplete" : <Money value={row.entryCost} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} /> : "not charged"}</strong><p>{boss.entryNote || (row.entryLines.length ? "tradeable encounter items" : "no fixed entry item")}</p></div>
-        <div><small>GROSS EV / KILL</small><strong><Money value={row.gross} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} /></strong><p>priced drops before entry</p></div>
-        <div><small>NET EV / KILL</small><strong><Money value={row.net} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} signed /></strong><p>{row.net == null ? "waiting for every entry price" : "gross EV minus entry"}</p></div>
+        <div><small>GROSS EV / KILL</small><strong><Money value={row.gross} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} /></strong><p>{row.allLines.length ? "priced drops before entry" : "Drop table not yet available"}</p></div>
+        <div><small>NET EV / KILL</small><strong><Money value={row.net} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} signed /></strong><p>{row.net == null ? row.allLines.length ? "waiting for every entry price" : "Drop table not yet available" : "gross EV minus entry"}</p></div>
         <div><small>PROFIT / HOUR</small><strong>{row.ttkSeconds ? <Money value={row.profitPerHour} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} signed /> : "set TTK"}</strong><p>{row.ttkSeconds ? `${fmtTime(row.ttkSeconds)} per kill in the active profile` : "no default timing assumption"}</p></div>
       </div>
 

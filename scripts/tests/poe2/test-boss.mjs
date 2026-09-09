@@ -25,8 +25,8 @@ for (const id of ["olroth", "uhtred"]) {
   const boss = BOSSES.find((row) => row.id === id);
   const market = { "Expedition Logbook": { exalted: 120 }, "Expedition Tablet": { exalted: 7 } };
   const priced = computeBoss(boss, makePriceResolver(market));
-  assert.equal(priced.entryCost, 120, `${id} charges one logbook, not a mapping tablet`);
-  assert.equal(priced.net, priced.gross - 120);
+  assert.equal(priced.entryCost, 180, `${id} budgets 1.5 logbooks, not mapping tablets`);
+  assert.equal(priced.net, priced.gross - 180);
 }
 const aberration = BOSSES.find((boss) => boss.id === "aberration");
 assert.deepEqual(aberration.groups.find((group) => group.id === "runes").drops.map((line) => line.item), [
@@ -88,3 +88,13 @@ assert.equal(untimed.profitPerHour, null, "no profile means no assumed profit/ho
 assert.deepEqual(timedSettings.ttkProfiles[0].times, { "the-bodach": 120 }, "invalid custom times are removed");
 
 console.log(`PoE 2 boss model: ${BOSSES.length} encounters, ${estimatedDrops().length} reviewable rates.`);
+
+for (const id of ['medved','styrn']) {
+ const boss = BOSSES.find(b=>b.id===id);
+ const priced=computeBoss(boss,makePriceResolver({'Expedition Logbook':{exalted:120}}));
+ assert.equal(priced.entryCost,120);
+ assert.ok(boss.entryNote.includes('more logbooks'));
+ if(id==='medved'){assert.equal(priced.gross,null);assert.equal(priced.net,null);}
+}
+assert.deepEqual(aberration.entry,[{item:'The Triskelion Reforged',qty:1}]);
+assert.ok(aberration.entryNote.includes('killing Olroth'));

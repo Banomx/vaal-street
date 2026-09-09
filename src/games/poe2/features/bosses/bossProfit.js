@@ -92,8 +92,8 @@ export function computeBoss(boss, resolve, { rateOverrides = {}, ttkSeconds = nu
 
   const allLines = groups.flatMap((group) => group.lines);
   const missing = groups.flatMap((group) => group.missing);
-  const gross = groups.reduce((sum, group) => sum + group.subtotal, 0);
-  const net = entryUnknown ? null : gross - entryCost;
+  const gross = allLines.length ? groups.reduce((sum, group) => sum + group.subtotal, 0) : null;
+  const net = entryUnknown || gross == null ? null : gross - entryCost;
   const ttk = finite(ttkSeconds) > 0 ? finite(ttkSeconds) : null;
   return {
     boss,

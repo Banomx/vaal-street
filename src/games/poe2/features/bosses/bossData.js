@@ -185,8 +185,8 @@ export const BOSSES = [
   {
     id: "olroth", name: "Olroth, Origin of the Fall", group: "Expedition", location: "Expedition Logbook",
     sourceUrl: "https://www.poe2wiki.net/wiki/Olroth,_Origin_of_the_Fall", rateSummary: "Maxroll rarity estimates",
-    entry: entry(["Expedition Logbook"]),
-    entryNote: "One logbook per kill; other area rewards excluded. Edit the entry price below for your actual cost.",
+    entry: entry(["Expedition Logbook", 1.5]),
+    entryNote: "Estimated access: 1–2 logbooks; the model uses 1.5 as a planning midpoint, not a guaranteed encounter rate. Other area rewards excluded. Use the dry-streak full-cost override for your actual spending.",
     groups: [
       fixed("guaranteed", "Guaranteed", [drop("Shattered Triskelion", 1, ESTIMATE, { note: "Maxroll labels this Always." })]),
       pool("unique", "Boss unique pool", [
@@ -203,8 +203,8 @@ export const BOSSES = [
   {
     id: "uhtred", name: "Uhtred, the Stardrinker", group: "Expedition", location: "Expedition Logbook",
     sourceUrl: "https://www.poe2wiki.net/wiki/Uhtred,_the_Stardrinker", rateSummary: "Maxroll estimates",
-    entry: entry(["Expedition Logbook"]),
-    entryNote: "One logbook per kill; other area rewards excluded. Edit the entry price below for your actual cost.",
+    entry: entry(["Expedition Logbook", 1.5]),
+    entryNote: "Estimated access: 1–2 logbooks; the model uses 1.5 as a planning midpoint, not a guaranteed encounter rate. Other area rewards excluded. Use the dry-streak full-cost override for your actual spending.",
     groups: [
       pool("unique", "Boss unique pool", [
         estimated("Uhtred's Crest of the Chalice", .50, "Common"), estimated("Uhtred's Chalice", .50, "Common"),
@@ -223,8 +223,17 @@ export const BOSSES = [
     ],
   },
   {
+    id: "medved", name: "Medved, the Fallen Seer", group: "Expedition", location: "Sprawling Jungle",
+    sourceUrl: "https://www.poe2wiki.net/wiki/Medved,_the_Fallen_Seer", rateSummary: "Drop model unavailable",
+    entry: entry(["Expedition Logbook"]),
+    entryNote: "Budget estimate: one logbook. Finding this encounter may need more logbooks; this is not guaranteed access.",
+    groups: [],
+  },
+  {
     id: "styrn", name: "Styrn, Fallen Knight of Aldur", group: "Expedition", location: "Tomb of the Fallen Knight",
     sourceUrl: "https://www.poe2wiki.net/wiki/Styrn,_Fallen_Knight_of_Aldur", rateSummary: "Maxroll estimates",
+    entry: entry(["Expedition Logbook"]),
+    entryNote: "Budget estimate: one logbook. Finding this encounter may need more logbooks; this is not guaranteed access.",
     groups: [
       fixed("guaranteed", "Guaranteed", [drop("Expedition Logbook", 1, ESTIMATE, { note: "Maxroll labels this Guaranteed." })]),
       pool("crest", "One expedition crest", [
@@ -242,6 +251,7 @@ export const BOSSES = [
     id: "aberration", name: "The Aberration", group: "Expedition", location: "Ruins of Kingsmarch",
     sourceUrl: "https://www.poe2wiki.net/wiki/The_Aberration", rateSummary: "supplied wiki table",
     entry: entry(["The Triskelion Reforged"]),
+    entryNote: "Requires The Triskelion Reforged and killing Olroth. The item quote alone excludes the logbooks spent reaching Olroth; include that spending in the dry-streak full-cost override.",
     groups: [
       pool("unique", "One guaranteed unique", [
         drop("Venerable Starlit Ore", .36), drop("Warding Starlit Ore", .32),

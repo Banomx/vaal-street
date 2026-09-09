@@ -421,10 +421,15 @@ unknown; a logbook price never replaces one. All entry timelines use
 `tabletFamilyTimeline` and its Normal-tablet compatibility checks. Logbooks
 remain in Expedition's output basket, while the entry side tracks tablets.
 
-Olroth and Uhtred each charge one Expedition Logbook per kill through
+Olroth and Uhtred budget 1.5 Expedition Logbooks per kill (the user-supplied
+1–2 logbook range, not a measured spawn rate) through
 `bosses/bossData.js`. Their net EV subtracts the market quote or the user's
 manual entry-price override. Other area rewards are excluded from boss EV.
-The other Expedition encounters keep their own configured entry rules.
+Medved and Styrn budget one logbook and warn that more may be needed. Medved
+has no drop model yet, so gross/net EV remain unknown. The Aberration charges
+The Triskelion Reforged and notes the Olroth kill prerequisite; preceding
+logbook spending is excluded from its item quote and can be supplied as a full
+cost in the dry-streak calculator.
 
 The boss tools share a game-neutral dry-streak calculator. Game adapters supply
 per-kill probabilities and complete entry costs in their own currency units.
