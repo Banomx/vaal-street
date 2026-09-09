@@ -307,7 +307,7 @@
 .overview-stat { min-height:128px; }
 .overview-stat>strong { color:#fff;font-weight:700; }
 .overview-stat>span { text-transform:none;letter-spacing:0;font-size:14px; }
-.app-shell-page .overview-heading h2 { font-size:clamp(28px,3vw,38px);line-height:1.15; }
+.app-shell-page .overview-heading h2 { font-size:clamp(28px,3vw,38px);line-height:1.15;font-weight:700; }
 @media(max-width:720px){
   .app-shell-page .app-tabs { position:sticky;top:8px;z-index:30;background:#181411;box-shadow:0 6px 18px #0008; }
   .overview-stat{min-height:80px}.overview-stat>span{font-size:13px}
