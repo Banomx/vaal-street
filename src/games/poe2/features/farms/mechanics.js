@@ -1,3 +1,5 @@
+import { BOSSES } from "../bosses/bossData.js";
+
 /* Which PoE 2 markets belong to which league mechanic, and the tower rules that
    decide how much of each mechanic a loadout is exposed to.
 
@@ -90,12 +92,12 @@ const MECHANIC_POOLS = {
      is matched anywhere in the stable Omen path rather than in the name. */
   abyss: { family: "Abyss", paths: [/^Metadata\/Items\/Currency\/OmenOn[^/]*Abyss/] },
   expedition: { family: "Expedition" },
-  /* Incursion has no GGG family of its own; the metadata path is the whole
-     pool, Vaal currencies plus the four Theses. */
+  /* Incursion has no GGG family of its own. Paths identify currencies and
+     related Theses; role classification below excludes Theses from the index. */
   vaal: { paths: [/^Metadata\/Items\/Currency\/CurrencyIncursion/, /^Metadata\/Items\/SoulCores\/Thesis/] },
 };
 
-/* Uniques are a mechanic's most-wanted output and no structural field connects
+/* Uniques are themed chase output and no structural field connects
    them to it: Xoph's Blood is just a UniqueAccessory. Names are therefore
    curated, verified against poe2db.tw on 2026-08-22 — membership only, since
    that source publishes no weights either.
@@ -125,9 +127,6 @@ const CURATED = {
     "Eventide Petals", "Uhtred's Chalice", "Svalinn", "Keeper of the Arc",
     "Olroth's Resolve", "Olrovasara", "Heroic Tragedy",
   ],
-  /* Vaal's structural pool already covers its tradeable output; poe2db has no
-     reachable Atziri's Temple page to curate uniques from. Left empty rather
-     than guessed. */
   vaal: [],
 };
 
@@ -135,6 +134,10 @@ const CURATED = {
    poe2db's Abyss related-item list provide the narrower drop-source identity,
    so Abyss-specific omens are reassigned without double counting. */
 export const POOL_CAVEATS = {
+  expedition: "This is an Expedition market basket, including logbooks, Sagas and Flux. Market membership does not establish which encounter produces each item or its drop rate.",
+  vaal: "Temple currencies form the baseline basket. Atziri rewards and related Thesis augments are shown separately; prices do not imply ordinary temple yield.",
+  breach: "Catalysts, splinters and Breachstones form the market basket. Breachlord and curated chase rewards are separate. Exchange categories do not prove a drop source or rate.",
+  delirium: "Liquid emotions and Simulacrum access markets form the basket. Simulacrum uniques and Raven’s Reflection are separate encounter rewards.",
   ritual: "GGG's exchange groups every Omen under Ritual. Abyss-specific Omens are reassigned from their RePoE metadata paths, so this basket keeps the remaining Ritual markets.",
   abyss: "Abyss-specific Omens are assigned here from their RePoE metadata paths even though GGG's exchange lists every Omen under Ritual.",
 };
@@ -161,55 +164,62 @@ export function mechanicFor(name, entry) {
   return null;
 }
 
+/* Boss catalogue membership is reused without importing its probability model.
+   Shared ordinary outputs (Omens, bones and logbooks) remain index candidates. */
+const BOSS_FAMILIES = { Expedition: "expedition", Breach: "breach", Delirium: "delirium", Ritual: "ritual", Abyss: "abyss", "Fate of the Vaal": "vaal" };
+const SHARED_GROUPS = new Set(["omen", "bone"]);
+const ORDINARY_CURATED = new Set(["An Audience with the King", "Call of the Shadows", "Kulemak's Invitation"]);
 const curatedIndex = () => {
   const index = new Map();
-  for (const [id, names] of Object.entries(CURATED)) for (const name of names) index.set(name, id);
+  for (const [id, names] of Object.entries(CURATED)) for (const name of names) {
+    index.set(name, { id, reason: ORDINARY_CURATED.has(name) ? null : "Themed chase reward" });
+  }
+  for (const boss of BOSSES) {
+    const id = BOSS_FAMILIES[boss.group];
+    if (!id) continue;
+    for (const group of boss.groups) {
+      if (SHARED_GROUPS.has(group.id)) continue;
+      for (const drop of group.drops) {
+        if (drop.item === "Expedition Logbook") continue;
+        const previous = index.get(drop.item);
+        const origin = boss.name;
+        index.set(drop.item, { id, reason: previous?.bosses ? `Boss reward: ${[...new Set([...previous.bosses, origin])].join(" / ")}` : `Boss reward: ${origin}`, bosses: [...new Set([...(previous?.bosses || []), origin])] });
+      }
+    }
+  }
+  index.set("Breachlord Sac", { id: "breach", reason: "Breachlord / Genesis reward and boss access item" });
+  for (const name of ["Kurgal's Gaze", "Tecrod's Gaze", "Amanamu's Gaze", "Ulaman's Gaze"]) {
+    index.set(name, { id: "abyss", reason: "Abyssal Depths chase augment" });
+  }
   return index;
 };
 
-/* An item earns a place in the weighted index only if it carries the evidence
-   the weights are built from. GGG volume and poe.ninja listing counts are not
-   the same measurement, so a stash-quoted unique is held back as a chase item
-   rather than given a fabricated share of a volume-weighted basket. */
-const tradeable = (entry) => Number(entry?.volume1H) > 0;
+const validPrice = (entry) => Number.isFinite(Number(entry?.exalted)) && Number(entry.exalted) > 0;
 
 export function mechanicPools(prices = {}) {
-  const pools = Object.fromEntries(COMPETING.map((id) => [id, { id, label: FAMILY_LABELS[id], members: [], chase: [] }]));
+  const pools = Object.fromEntries(COMPETING.map((id) => [id, { id, label: FAMILY_LABELS[id], members: [], chase: [], unpriced: [] }]));
   const curated = curatedIndex();
-  const claimed = new Set();
-
   for (const [name, entry] of Object.entries(prices || {})) {
-    const id = mechanicFor(name, entry);
+    const identity = curated.get(name);
+    const id = identity?.id || mechanicFor(name, entry);
     if (!id) continue;
-    pools[id].members.push({ name, entry, curated: false });
-    claimed.add(name);
+    if (!validPrice(entry)) { pools[id].unpriced.push(name); continue; }
+    const thesis = /^Metadata\/Items\/SoulCores\/Thesis/.test(String(entry.metadataPath || ""));
+    const reason = identity?.reason || (thesis ? "Related Vaal crafting augment; outside the baseline basket" : null);
+    (reason ? pools[id].chase : pools[id].members).push({ name, entry, curated: !!identity, reason });
   }
-
-  for (const [name, id] of curated) {
-    const entry = prices?.[name];
-    if (!entry || claimed.has(name)) continue;
-    claimed.add(name);
-    (tradeable(entry) ? pools[id].members : pools[id].chase).push({ name, entry, curated: true });
-  }
-
   for (const pool of Object.values(pools)) {
-    pool.members.sort((left, right) => Number(right.entry.exalted || 0) - Number(left.entry.exalted || 0));
-    pool.chase.sort((left, right) => Number(right.entry.exalted || 0) - Number(left.entry.exalted || 0));
+    pool.members.sort((left, right) => Number(right.entry.exalted) - Number(left.entry.exalted));
+    pool.chase.sort((left, right) => Number(right.entry.exalted) - Number(left.entry.exalted));
     pool.caveat = POOL_CAVEATS[pool.id] || null;
   }
   return pools;
 }
 
 export function curatedCoverage(prices = {}) {
-  const missing = [];
-  let total = 0;
-  for (const [id, names] of Object.entries(CURATED)) {
-    for (const name of names) {
-      total += 1;
-      if (!prices?.[name]) missing.push({ mechanic: id, name });
-    }
-  }
-  return { total, matched: total - missing.length, missing };
+  const index = curatedIndex();
+  const missing = [...index].filter(([name]) => !validPrice(prices?.[name])).map(([name, { id }]) => ({ mechanic: id, name }));
+  return { total: index.size, matched: index.size - missing.length, missing };
 }
 
 export const hasOutputPool = (id) => COMPETING.includes(id);

@@ -393,22 +393,35 @@ false parser-change spike.
 ### Mechanic identity
 
 `src/games/poe2/features/farms/mechanics.js` decides which markets belong to
-which mechanic. It asserts membership and never a drop rate. Matchers run in
-source-trust order: GGG's own exchange `marketFamily`, then a `metadataPath`
-prefix, then item tags.
+which mechanic. It asserts membership and never a drop rate. Specific metadata
+paths and tags take priority over GGG's broader exchange families. PoE2Scout's
+lower-case category names are not mechanic evidence: its `expedition` category
+contains Soul Cores and `ritual` contains Idols.
 
-The source check is not decoration. `marketFamily` carries two different
-vocabularies — GGG's exchange category and PoE2Scout's `CategoryApiId` — and
-the second one files Soul Cores under `expedition` and Idols under `ritual`.
-Only a value from `GGG completed trades` is read as a mechanic name, so a rune
-is never counted as Expedition output. Incursion has no GGG family at all; its
-pool is the `CurrencyIncursion` and `Thesis` metadata paths.
+Boss/chase identity takes priority over structural market membership and never
+changes with trade volume. The farm classifier reuses the themed boss catalogue's
+reward names, not its probabilities. Shared ordinary boss outputs (Ritual Omens,
+Abyss bones and Expedition Logbooks) remain basket candidates. Curated uniques,
+Breachlord Sac, Abyssal Depths Gazes, Simulacrum rewards, Head of the King,
+Atziri rewards and related Thesis augments stay outside the baseline basket.
+These are editorial basket exclusions, not claims that all such rewards are
+boss-exclusive. Expedition Sagas/Flux and Breach catalysts remain related market
+families; the exchange category does not establish their encounter or yield.
 
-Uniques need curation, because nothing structural connects Xoph's Blood to
-Breach. A short per-mechanic name list, verified against poe2db.tw, supplies
-them. That is membership only, the same trade `catalogue/scarabs.js` makes in
-PoE 1, and it carries the same rename risk: `curatedCoverage` reports any
-curated name that matched no market instead of letting it vanish.
+The September 9 audit checked acquisition against the wiki pages for
+[Breachlord Sac](https://www.poe2wiki.net/wiki/Breachlord_Sac),
+[Head of the King](https://www.poe2wiki.net/wiki/Head_of_the_King),
+[Raven's Reflection](https://www.poe2wiki.net/wiki/Raven%27s_Reflection),
+[Ancient Collarbone](https://www.poe2wiki.net/wiki/Ancient_Collarbone),
+[Tecrod's Gaze](https://www.poe2wiki.net/wiki/Tecrod%27s_Gaze) and
+[Jiquani's Thesis](https://www.poe2wiki.net/wiki/Jiquani%27s_Thesis).
+Boss reward names retain their sources in `bosses/bossData.js`.
+
+Only positive finite quotes enter either priced list. `curatedCoverage` reports
+missing/invalid named quotes, including catalogue items absent from the selected
+league, without substituting a proxy or zero. Cards expose all chase rewards,
+exclusion reasons, source labels and quoted variants. Generic unique/jewel quotes
+are indicative; they do not establish the sale price of a particular roll.
 
 Overseer and Irradiated have no attributable output market and are labelled that
 way. Their cards show entry cost alone.
@@ -467,10 +480,10 @@ Cards disclose observed duration, sample count, partial windows, nearby fills,
 and equal-weight fallback when unit volume is absent. Concentration measures
 starting basket value, not nominal unit weights, and names the dominant item.
 
-Stash-quoted uniques stay out of the basket. GGG cleared volume and poe.ninja
-listing counts are not the same measurement, so giving a stash-priced unique a
-share of a volume-weighted basket would mean inventing the weight. They render
-as a separate chase-item list instead.
+Boss and chase rewards remain outside the basket even if they have completed
+trades. Listing counts and cleared unit volume are different measurements;
+listing counts never stand in for index volume. Candidate markets still need
+usable history and weights under the selected mode.
 
 Return against entry is reported as a ratio, `(1 + return) / (1 + entry) - 1`,
 not as a difference of two percentages. Subtracting breaks down as soon as

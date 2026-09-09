@@ -50,9 +50,9 @@ function sourceText(league, priceData, history, rateSummary) {
 }
 
 function sourceLabel(entry) {
-  if (entry?.source === "poe.ninja stash") return "poe.ninja";
+  if (entry?.source === "poe.ninja stash") return "poe.ninja listings";
   if (entry?.source === "GGG completed trades") return "GGG trades";
-  return entry?.source || "No live source";
+  return entry?.source || "Unknown source";
 }
 
 function flowLabel(value) {
@@ -138,7 +138,7 @@ function PoolTable({ rows, currency, divineExalted, chaosExalted }) {
         </th>)}</tr></thead>
         <tbody>
           {sorted.map((row) => <tr key={row.name}>
-            <td title={row.name}>{row.name}</td>
+            <td title={`${row.name} · ${sourceLabel(row.entry)}${row.entry.variant ? ` · ${row.entry.variant}` : ""}`}>{row.name}</td>
             <td>{fmtPrice(Number(row.entry.exalted) || 0, currency, divineExalted, chaosExalted)}</td>
             <td className={row.market.tone}>{row.market.count ? `${number(row.market.count, 0)} ${row.market.unit}` : row.market.label}</td>
             <td>{row.weight > 0 ? `${number(row.weight * 100, 1)}%` : "—"}</td>
@@ -151,13 +151,13 @@ function PoolTable({ rows, currency, divineExalted, chaosExalted }) {
   </div>;
 }
 
-function ChaseTile({ name, entry, currency, divineExalted, chaosExalted }) {
+function ChaseTile({ name, entry, reason, currency, divineExalted, chaosExalted }) {
   const market = liquidity(entry);
-  return <li>
-    <span title={name}>{name}</span>
-    <b>{fmtPrice(Number(entry.exalted) || 0, currency, divineExalted, chaosExalted)}</b>
+  return <li className="p2pf-chase-tile">
+    <span title={`${name} · ${reason} · ${sourceLabel(entry)}${entry.variant ? ` · ${entry.variant}` : ""}`}>{name}</span>
+    <b>{fmtPrice(Number(entry.exalted), currency, divineExalted, chaosExalted)}</b>
     <em className={market.tone}>{market.count ? `${number(market.count, 0)} ${market.unit}` : market.label}</em>
-    <i />
+    <small className="p2pf-chase-origin">{reason} · {sourceLabel(entry)}{entry.variant ? ` · ${entry.variant}` : ""}</small>
   </li>;
 }
 
@@ -199,7 +199,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
   const rows = useMemo(() => {
     const byFamily = new Map(families.map((family) => [family.id, family]));
     const ids = [...new Set([...FAMILY_ORDER, ...byFamily.keys()])]
-      .filter((id) => byFamily.has(id) || (pools[id]?.members.length > 0));
+      .filter((id) => byFamily.has(id) || (pools[id]?.members.length > 0) || (pools[id]?.chase.length > 0));
     return ids.map((id) => {
       const family = byFamily.get(id) || {
         id, label: FAMILY_LABELS[id] || id, baseline: null, baselineName: null, uniques: [],
@@ -300,11 +300,12 @@ export default function PopularFarms({ league, priceData, history, currency, cha
       <ul>
         <li>{FLOOR_NOTE}</li>
         <li>Basket weights come from traded supply, not from drop rates. No drop rate is used anywhere on this page.</li>
-        <li>Mechanic membership comes from GGG and RePoE metadata plus a small curated list for uniques that have no structural mechanic tag.</li>
+        <li>Mechanic baskets use GGG and RePoE metadata. Curated boss and chase rewards are kept separate from basket markets, regardless of liquidity. This is a market index, not a predicted loot haul.</li>
         {coverage.missing.length > 0 && <li>
           {coverage.missing.length} curated market {coverage.missing.length === 1 ? "name has" : "names have"} no quote in this league
           {" — "}{coverage.missing.slice(0, 6).map((item) => item.name).join(", ")}
-          {coverage.missing.length > 6 ? ` and ${coverage.missing.length - 6} more` : ""}. Those markets sit outside every basket rather than counting as zero.
+          {coverage.missing.length > 6 ? ` and ${coverage.missing.length - 6} more` : ""}. Missing prices are unknown, never zero.
+          <details><summary>Show all missing reward quotes</summary>{coverage.missing.map((item) => <div key={`${item.mechanic}-${item.name}`}>{FAMILY_LABELS[item.mechanic]} · {item.name}</div>)}</details>
         </li>}
       </ul>
     </SourceStrip>
@@ -399,10 +400,11 @@ export default function PopularFarms({ league, priceData, history, currency, cha
           {!hasOutputPool(row.id) && <p className="p2pf-note">{NEUTRAL_NOTE}</p>}
           {DEFERRED[row.id] && <p className="p2pf-note">{DEFERRED[row.id]}</p>}
           {row.index?.excluded?.length > 0 && <p className="p2pf-note">Outside the index — no usable history or weight for this mode: {row.index.excluded.join(", ")}.</p>}
+          {row.pool?.unpriced.length > 0 && <p className="p2pf-note">Excluded — missing or invalid price: {row.pool.unpriced.join(", ")}.</p>}
           {row.pool?.caveat && <p className="p2pf-note">{row.pool.caveat}</p>}
           <footer>
             {row.top.length > 0 && <div className="p2pf-movers">
-              <span>Most valuable drops</span>
+              <span>Highest-priced basket markets</span>
               <ul>
                 {row.top.map((item) => <TopRow key={item.name} row={item} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}
               </ul>
@@ -415,10 +417,12 @@ export default function PopularFarms({ league, priceData, history, currency, cha
               </ul>
             </div>}
             {row.pool?.chase.length > 0 && <div className="p2pf-movers">
-              <span>Chase items · outside the index</span>
+              <span>Boss & chase rewards · outside the index</span>
               <ul>
-                {row.pool.chase.slice(0, 6).map(({ name, entry }) => <ChaseTile key={name} name={name} entry={entry} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}
+                {row.pool.chase.slice(0, 6).map(({ name, entry, reason }) => <ChaseTile key={name} name={name} entry={entry} reason={reason} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}
               </ul>
+              {row.pool.chase.length > 6 && <details className="p2pf-unique-details"><summary>Show {row.pool.chase.length - 6} more rewards</summary><ul>{row.pool.chase.slice(6).map((item) => <ChaseTile key={item.name} {...item} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}</ul></details>}
+              <p className="p2pf-note">Indicative market quotes; unique rolls and jewel passives can change the sale price. These rewards never contribute to the index, regardless of trade volume.</p>
             </div>}
             {row.uniques.length > 0 && <details className="p2pf-unique-details"><summary>Compare unique tablets <span>{row.uniques.length}</span></summary><div className="p2pf-uniques">{row.uniques.map(({ name, entry }) => <UniqueTabletTile key={name} name={name} entry={entry} baselineValue={row.baselineValue} currency={currency} divineExalted={divineExalted} chaosExalted={chaosExalted} />)}</div></details>}
           </footer>
@@ -430,6 +434,8 @@ export default function PopularFarms({ league, priceData, history, currency, cha
 }
 
 const css = `
+.p2pf-movers li.p2pf-chase-tile{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 8px}.p2pf-movers li.p2pf-chase-tile>span{grid-column:1/-1;white-space:normal;overflow:visible;font-weight:600}.p2pf-movers li.p2pf-chase-tile>b{text-align:left}.p2pf-movers li.p2pf-chase-tile>em{white-space:normal;text-align:right}
+.p2pf-movers li .p2pf-chase-origin{grid-column:1/-1;white-space:normal;color:#d8c5c4;font-size:12.5px;line-height:1.5;padding-bottom:5px}
 .p2pf-evidence{margin:0 16px 9px;padding:7px 9px;border:1px solid #442221;border-radius:5px;color:#e2e2e0;font-size:12.5px;line-height:1.5}.p2pf-evidence.limited{border-color:#70312f;color:#d98c89}.p2pf-evidence.active{border-color:#36553b;color:#e2e2e0}
 .p2pf-main{display:grid;gap:14px}.p2pf-head{display:grid;gap:22px;padding:20px 22px;border:1px solid #3e201f;border-radius:8px;background:linear-gradient(105deg,#170e0d,#0d0908)}.p2pf-head>div:first-child>span,.p2pf-tool>span{color:#e2e2e0;font-size:12.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.p2pf-head h2{margin:4px 0;color:#e2e2e0;font-size:27px}.p2pf-head p{max-width:700px;margin:0;color:#e2e2e0;font-size:13.5px}.p2pf-tools{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-top:16px;border-top:1px solid #392120}.p2pf-tool{display:grid;gap:5px}.p2pf-ranges button,.p2pf-sort button{padding:6px 10px}.p2pf-adjust{display:flex;align-items:center;gap:7px;padding-bottom:6px;color:#e2e2e0;font-size:12.5px;white-space:nowrap;cursor:pointer}.p2pf-adjust input{accent-color:#a43431}.p2pf-adjust.disabled{opacity:.45;cursor:not-allowed}.p2pf-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid #3d2120;border-radius:8px;background:#100b09}.p2pf-summary>div{display:grid;grid-template-columns:1fr;gap:4px 12px;padding:12px 16px;border-right:1px solid #301a1a}.p2pf-summary>div:last-child{border-right:0}.p2pf-summary span{grid-column:1/-1;color:#e2e2e0;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase}.p2pf-summary strong{color:#e2e2e0;font-size:22px;letter-spacing:-.03em}.p2pf-summary em{color:#e2e2e0;font-size:12.5px;font-style:normal;text-align:left}.p2pf-summary em.gain{color:#e2e2e0}.p2pf-summary em.loss{color:#e2e2e0}.p2pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px}.p2pf-card{min-width:0;overflow:hidden;border:1px solid #452120;border-top:2px solid var(--tone);border-radius:8px;background:linear-gradient(150deg,rgba(255,255,255,.015),transparent 45%),#110c0a}.p2pf-card>header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:15px 16px 7px}.p2pf-card>header>div:first-child{display:grid;grid-template-columns:auto 1fr;column-gap:8px}.p2pf-rank{grid-row:1/3;align-self:center;color:#e2e2e0;font-size:12.5px}.p2pf-card h3{margin:0;color:#e2e2e0;font-size:19px}.p2pf-card header em{color:#e2e2e0;font-size:12.5px;font-style:normal}.p2pf-value{display:grid;text-align:right}.p2pf-value strong{color:#e2e2e0;font-size:17px}.p2pf-value span{font-size:12.5px}.gain{color:#e2e2e0}.loss{color:#e2e2e0}.p2pf-badges{display:flex;flex-wrap:wrap;gap:5px;padding:0 16px 5px}.p2pf-badges span{padding:3px 6px;border:1px solid #3c2322;border-radius:999px;background:#170e0d;color:#e2e2e0;font-size:12.5px}.p2pf-badges .thin{border-color:#7b322f;color:#e2e2e0}.p2pf-badges .limited{border-color:#762d2a;color:#db8684}.p2pf-badges .active,.p2pf-badges .deep{border-color:#355c3a;color:#e2e2e0}.p2pf-badges .gain{border-color:#355c3a;color:#e2e2e0}.p2pf-badges .loss{border-color:#7b382d;color:#e2e2e0}.p2pf-chart{height:140px;margin:0 6px}.p2pf-chart-empty{display:grid;height:140px;padding:12px;place-items:center;text-align:center;color:#e2e2e0;font-size:12.5px}.p2pf-note{margin:0;padding:6px 16px 0;color:#e2e2e0;font-size:12.5px;line-height:1.45}.p2pf-card footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;padding:11px 16px 14px;margin-top:9px;border-top:1px solid #301a1a;color:#e2e2e0;font-size:12.5px}.p2pf-movers{display:grid;align-content:start;gap:5px;min-width:0}.p2pf-movers>span,.p2pf-uniques>span{color:#e2e2e0;font-size:12.5px;letter-spacing:.11em;text-transform:uppercase}.p2pf-movers ul{display:grid;gap:3px;margin:0;padding:0;list-style:none}.p2pf-movers li{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px;align-items:baseline}.p2pf-movers li i{font-style:normal;font-size:12.5px;text-align:right;min-width:34px;color:#e2e2e0}.p2pf-movers li i.gain{color:#e2e2e0}.p2pf-movers li i.loss{color:#e2e2e0}.p2pf-movers li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e2e2e0;font-size:12.5px}.p2pf-movers li b{color:#e2e2e0;font-size:12.5px;font-weight:600}.p2pf-movers li em{font-style:normal;font-size:12.5px;text-align:right}.p2pf-movers li em.thin{color:#e2e2e0}.p2pf-movers li em.limited{color:#db8684}.p2pf-movers li em.active{color:#e2e2e0}.p2pf-movers li em.unknown{color:#e2e2e0}.p2pf-uniques{display:grid;gap:7px;min-width:0}.p2pf-unique-tile{padding:8px;border:1px solid #351f1f;border-radius:6px;background:linear-gradient(120deg,#170e0d,#100b09)}.p2pf-unique-main{display:grid;gap:4px;min-width:0}.p2pf-unique-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.p2pf-unique-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e2e2e0;font-size:12.5px}.p2pf-unique-title b{flex-shrink:0;color:#e2e2e0;font-size:12.5px;font-weight:600}.p2pf-unique-meta,.p2pf-unique-delta{display:flex;justify-content:space-between;gap:8px}.p2pf-unique-meta span{color:#e2e2e0;font-size:12.5px}.p2pf-unique-meta .thin{color:#e2e2e0}.p2pf-unique-meta .limited{color:#db8684}.p2pf-unique-meta .active,.p2pf-unique-meta .deep{color:#e2e2e0}.p2pf-relative{position:relative;height:5px;overflow:hidden;border-radius:999px;background:#2a1717}.p2pf-relative i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--tone),#e06a66)}.p2pf-relative b{position:absolute;top:-2px;bottom:-2px;left:25%;width:1px;background:#f0cccb;opacity:.7}.p2pf-unique-delta span,.p2pf-unique-delta em{font-size:12.5px}.p2pf-unique-delta span{color:#e2e2e0}.p2pf-unique-delta em{font-style:normal;text-align:right}.p2pf-pool{padding:0 16px 14px}.p2pf-pool-toggle{width:100%;padding:6px 9px;border:1px solid #3c2322;border-radius:5px;background:#170e0d;color:#e2e2e0;font:inherit;font-size:12.5px;cursor:pointer}.p2pf-pool-toggle:hover{border-color:#7b2927;color:#e2e2e0}.p2pf-pool-scroll{max-height:320px;overflow:auto;margin-top:8px;border:1px solid #301a1a;border-radius:6px}.p2pf-pool-table{width:100%;border-collapse:collapse;font-size:12.5px}.p2pf-pool-table th{position:sticky;top:0;z-index:1;padding:0;background:#170e0d;text-align:right}.p2pf-pool-table th:first-child{text-align:left}.p2pf-pool-table th button{width:100%;padding:6px 8px;border:0;border-bottom:1px solid #3c2322;background:transparent;color:#e2e2e0;font:inherit;font-size:12.5px;letter-spacing:.09em;text-transform:uppercase;text-align:inherit;cursor:pointer}.p2pf-pool-table th button:hover{color:#e2e2e0}.p2pf-pool-table td{padding:4px 8px;border-bottom:1px solid #241313;color:#e2e2e0;text-align:right;white-space:nowrap}.p2pf-pool-table td:first-child{max-width:190px;overflow:hidden;text-overflow:ellipsis;text-align:left}.p2pf-pool-table tbody tr:last-child td{border-bottom:0}.p2pf-pool-table tbody tr:hover td{background:#170e0d}.p2pf-pool-table .thin{color:#e2e2e0}.p2pf-pool-table .limited{color:#db8684}.p2pf-pool-table .active{color:#e2e2e0}.p2pf-pool-table .gain{color:#e2e2e0}.p2pf-pool-table .loss{color:#e2e2e0}.p2pf-ranges{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px}.p2pf-unique-details summary{padding:10px 0;color:#e2e2e0;font-size:12.5px;cursor:pointer}.p2pf-unique-details summary span{margin-left:6px;padding:2px 6px;border-radius:5px;background:#391c1b}.p2pf-unique-details[open] summary{margin-bottom:8px}.p2pf-empty{padding:40px;border:1px solid #3e201f;border-radius:8px;text-align:center;color:#e2e2e0}@media(max-width:1100px){.p2pf-head{align-items:flex-start;flex-direction:column}.p2pf-tools{width:100%;flex-wrap:wrap}}@media(max-width:720px){.p2pf-summary{grid-template-columns:1fr}.p2pf-summary>div{border-right:0;border-bottom:1px solid #301a1a}.p2pf-summary>div:last-child{border-bottom:0}}@media(max-width:520px){.p2pf-grid{grid-template-columns:1fr}.p2pf-tools{align-items:flex-start;flex-direction:column}}
 .p2pf-summary{grid-template-columns:repeat(4,minmax(0,1fr))}

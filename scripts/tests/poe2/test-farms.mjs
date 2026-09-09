@@ -95,11 +95,11 @@ const breach = pools.breach;
 const names = breach.members.map((member) => member.name);
 ok(names.includes("Sibilant Catalyst") && names.includes("Breach Splinter") && names.includes("Breachstone"),
   "structural Breach markets join the pool");
-ok(names.includes("Breachlord Sac"),
-  "a curated name with cleared volume joins the weighted pool rather than the chase list");
+ok(!names.includes("Breachlord Sac"),
+  "cleared volume cannot promote a chase reward into the index");
 ok(!names.includes("Xoph's Blood") && !names.includes("Nightfall"),
   "stash-quoted uniques stay out of the volume-weighted pool");
-ok(breach.chase.map((item) => item.name).sort().join() === "Nightfall,Xoph's Blood",
+ok(breach.chase.map((item) => item.name).sort().join() === "Breachlord Sac,Nightfall,Xoph's Blood",
   "stash-quoted uniques surface as chase items");
 ok(!Object.values(pools).some((pool) => pool.members.some((member) => member.name === "Emergent Vigour")),
   "a PoE2Scout family never places an item in a mechanic pool");
@@ -122,6 +122,27 @@ ok(coverage.missing.every((item) => item.name && item.mechanic),
   "every missing curated name is reported by name and mechanic");
 ok(coverage.missing.some((item) => item.name === "Xoph's Blood"),
   "a curated name that matched nothing is named, not dropped");
+
+/* Classification follows reward identity, independent of price feed and volume. */
+const audit = mechanicPools({
+  "Head of the King": ggg("Ritual", { exalted: 100, volume1H: 999 }),
+  "Raven's Reflection": ggg("Delirium", { exalted: 50, volume1H: 999 }),
+  "Expedition Logbook": ggg("Expedition", { exalted: 20, volume1H: 2 }),
+  "Ancient Collarbone": ggg("Abyss", { exalted: 20, volume1H: 2 }),
+  "Atziri's Rule": stash("UniqueWeapons", { exalted: 20 }),
+  "Olroth's Conviction": ggg("LineageSupportGems", { exalted: 30, volume1H: 5 }),
+  "Jiquani's Thesis": ggg("SoulCores", { exalted: 1000, volume1H: 5, metadataPath: "Metadata/Items/SoulCores/ThesisOfSouls" }),
+  "Broken quote": ggg("Breach", { exalted: 0 }),
+  "Invalid quote": ggg("Breach", { exalted: Infinity }),
+});
+for (const [id, name] of [["ritual", "Head of the King"], ["delirium", "Raven's Reflection"], ["vaal", "Atziri's Rule"], ["vaal", "Jiquani's Thesis"], ["expedition", "Olroth's Conviction"]]) {
+  ok(audit[id].chase.some((item) => item.name === name && item.reason) && !audit[id].members.some((item) => item.name === name), `${name} stays outside the baseline with an explanation`);
+}
+ok(audit.expedition.members.some((item) => item.name === "Expedition Logbook"), "logbooks remain ordinary Expedition basket markets");
+ok(audit.abyss.members.some((item) => item.name === "Ancient Collarbone"), "shared ordinary bones are not made boss-exclusive");
+ok(audit.breach.members.length === 0 && audit.breach.unpriced.length === 2, "invalid and zero prices are disclosed and excluded");
+ok(curatedCoverage({ Nightfall: { exalted: 0 } }).matched === 0, "a zero quote is missing coverage, not a valid price");
+ok(pools.expedition.chase.some((item) => item.name === "Emergent Vigour"), "explicit boss curation can identify a reward independently of an unreliable market family");
 
 /* ---- weights ---- */
 
