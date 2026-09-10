@@ -419,7 +419,7 @@ Boss reward names retain their sources in `bosses/bossData.js`.
 
 Only positive finite quotes enter either priced list. `curatedCoverage` reports
 missing/invalid named quotes, including catalogue items absent from the selected
-league, without substituting a proxy or zero. Cards expose all chase rewards,
+league, without substituting a proxy or zero. Cards use at most two columns on wide screens and one on smaller screens. Boss/chase rewards and detailed exclusions are expandable; the headline keeps entry cost, basket movement and concentration visible. Cards expose all chase rewards,
 exclusion reasons, source labels and quoted variants. Generic unique/jewel quotes
 are indicative; they do not establish the sale price of a particular roll.
 
