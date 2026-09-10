@@ -43,10 +43,17 @@ export function AppTabs({ className = "", label = "Views", children }) {
           {buttons.map((button, index) => <option key={button.key} value={index}>{buttonText(button.props.children)}</option>)}
         </select>
       </label>
-      {buttons.map((button, index) => cloneElement(button, {
-        "aria-current": index === selected ? "page" : undefined,
-        onClick: (event) => openView(index, event),
-      }))}
+      {buttons.map((button, index) => {
+        const name = button.props["aria-label"] || buttonText(button.props.children);
+        const initials = name.trim().split(/\s+/).map((word) => word[0]).join("").toUpperCase();
+        return cloneElement(button, {
+          "aria-current": index === selected ? "page" : undefined,
+          "aria-label": name,
+          title: name,
+          onClick: (event) => openView(index, event),
+          children: <><span className="app-tab-label">{button.props.children}</span><span className="app-tab-initials" aria-hidden="true">{initials}</span></>,
+        });
+      })}
     </nav>
   );
 }
