@@ -246,7 +246,7 @@
     border-radius: 12px;
     background: linear-gradient(160deg, #1d0f0e, #100c0a 45%);
   }
-  .app-tabs::before { content: "WORKSPACE"; padding: 0 12px 17px; color: #e2e2e0; font-size:12.5px; font-weight: 600; letter-spacing: .16em; }
+
   .app-shell-page .app-tabs button { width: 100%; text-align: left; padding: 12px; font-size: 13px; }
   .app-tabs button.on { box-shadow: inset 3px 0 #ef4943, inset 0 0 0 1px #652d2b; }
   .app-tabs::after { content: "VAAL STREET"; margin-top: auto; padding: 28px 12px 0; color: #e2e2e0; font-size:12.5px; letter-spacing: .18em; }
@@ -315,3 +315,18 @@
 }
 
 .dry-streak{margin:18px 0;padding:20px;border:1px solid #73403e;border-radius:10px;background:#171111;color:#eeeeec}.dry-streak h3{margin:0;font-size:20px}.dry-streak p{font-size:13px;line-height:1.55;color:#ddd}.dry-streak-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:12px;margin:16px 0}.dry-streak label{display:grid;gap:7px;font-size:13px}.dry-streak input,.dry-streak select{box-sizing:border-box;width:100%;min-width:0;padding:10px;border:1px solid #95605d;border-radius:6px;background:#100c0c;color:#fff;font:inherit}.dry-streak-stats,.dry-streak-milestones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.dry-streak-stats>div,.dry-streak-milestones>div{display:grid;gap:7px;padding:14px;background:#241515;border-radius:7px;overflow-wrap:anywhere}.dry-streak-stats strong{font-size:26px;color:#fff}.dry-streak-stats span,.dry-streak-milestones{font-size:13px}.dry-streak-milestones{margin-top:12px}.dry-streak-milestones>div{background:#121010;border:1px solid #513333}@media(max-width:650px){.dry-streak-stats,.dry-streak-milestones{grid-template-columns:1fr}}
+
+/* Collapse only the desktop sidebar; compact navigation remains available. */
+.app-sidebar-heading { display: none; }
+@media (min-width: 1100px) {
+  .app-sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 2px 12px 12px; }
+  .app-sidebar-heading > span { color: #e2e2e0; font-size: 12.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+  .app-shell-page .app-tabs .app-sidebar-toggle { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 36px; padding: 0; border: 1px solid #653331; border-radius: 6px; background: #281514; color: #f5e9e7; cursor: pointer; }
+  .app-shell-page .app-tabs .app-sidebar-toggle:hover { background: #562423; border-color: #c65c56; }
+  .app-shell-page:has(.app-tabs--collapsed) { padding-left: 94px; }
+  .app-shell-page .app-tabs--collapsed { width: 56px; bottom: auto; padding: 10px; }
+  .app-tabs--collapsed .app-sidebar-heading { padding: 0; }
+  .app-tabs--collapsed .app-sidebar-heading > span,
+  .app-shell-page .app-tabs--collapsed > button,
+  .app-tabs--collapsed::after { display: none; }
+}

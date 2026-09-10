@@ -1,4 +1,8 @@
-import { Children, cloneElement, isValidElement } from "react";
+import { Children, cloneElement, isValidElement, useState } from "react";
+
+import { createJsonStore } from "../storage/jsonStore.js";
+
+const sidebarStore = createJsonStore({ feature: "sidebar-collapsed" });
 
 export function AppHeader({ className = "", brandClassName = "", controlsClassName = "", subtitle, children }) {
   return (
@@ -13,6 +17,8 @@ export function AppHeader({ className = "", brandClassName = "", controlsClassNa
 }
 
 export function AppTabs({ className = "", label = "Views", children }) {
+  const [collapsed, setCollapsed] = useState(() => sidebarStore.load(false) === true);
+  const toggleSidebar = () => setCollapsed((value) => { sidebarStore.save(!value); return !value; });
   const buttons = Children.toArray(children).filter(isValidElement);
   const selected = buttons.findIndex((button) => button.props.className?.split(" ").includes("on"));
   const buttonText = (content) => Children.toArray(content).map((child) =>
@@ -24,7 +30,13 @@ export function AppTabs({ className = "", label = "Views", children }) {
   };
 
   return (
-    <nav className={`app-tabs ${className}`.trim()} aria-label={label}>
+    <nav className={`app-tabs ${collapsed ? "app-tabs--collapsed" : ""} ${className}`.trim()} aria-label={label}>
+      <div className="app-sidebar-heading">
+        <span>Workspace</span>
+        <button type="button" className="app-sidebar-toggle" onClick={toggleSidebar} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d={collapsed ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"}/></svg>
+        </button>
+      </div>
       <label className="app-mobile-nav">
         <span>Explore</span>
         <select value={selected < 0 ? "" : selected} onChange={(event) => openView(Number(event.target.value), event)}>

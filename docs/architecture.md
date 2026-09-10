@@ -1073,6 +1073,9 @@ At 1100px and wider, navigation is a fixed left rail. Medium widths use the
 horizontal navigation; up to 720px it becomes an Explore select. All forms use
 the same page handlers and return to the top when a section is selected.
 Desktop buttons expose the current page with `aria-current`.
+The shared `AppTabs` desktop sidebar has a collapse/expand control. Its boolean
+preference uses `vaal-street.shared.sidebar-collapsed.v1`; compact navigation
+ignores the collapsed state so all views remain reachable on smaller screens.
 Game-specific header artwork and feature layouts remain in the game workspace,
 so PoE 2 can keep its dense boss ranking/detail layout without diverging from
 PoE 1's outer scale. The PoE 2 shell also owns its Ardura background treatment
