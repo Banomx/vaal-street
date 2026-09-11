@@ -352,11 +352,10 @@ async function main() {
   await writeJson(join(OUT, "index.json"), { schemaVersion: POE2_SCHEMA_VERSION, generatedAt: new Date().toISOString(), leagues });
 }
 
-/* Generate into staging, gate the result, promote only on success.
-
-   A failed snapshot must fail the workflow. GitHub Pages keeps the previous
-   successful deployment when a run fails, so exiting non-zero leaves the last
-   good site up; exiting 0 on a half-built tree replaces it with the damage. */
+/* Generate into staging, gate the result, and promote only on success.
+   Failure leaves FINAL_OUT intact and exits non-zero. CI preserves that
+   validated fallback before reporting the failed refresh, independently of
+   the other game's collection and the site deployment. */
 async function run() {
   const cleanup = await clearAbandonedStages(FINAL_OUT);
   if (cleanup.recovered) console.log(`Recovered the previous PoE 2 dataset after an interrupted promotion.`);

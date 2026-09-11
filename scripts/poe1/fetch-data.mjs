@@ -1915,10 +1915,9 @@ async function main() {
   console.log(`Done. Wrote ${written.length} league(s) (${fresh} fresh) to ${OUT}`);
 }
 
-/* Generate into staging, gate the result, and only then replace the published
-   tree. A run that cannot pass its own gates exits non-zero and leaves the
-   previous deployment live — GitHub Pages only uploads after a successful
-   workflow, so failing loudly is strictly safer than publishing the damage. */
+/* Generate into staging, gate the result, and promote only on success.
+   Failure leaves FINAL_OUT intact. CI saves that validated fallback separately
+   from site deployment, so the other game's update can still be published. */
 async function run() {
   const cleanup = await clearAbandonedStages(FINAL_OUT);
   if (cleanup.recovered) console.log(`Recovered the previous PoE 1 dataset after an interrupted promotion.`);

@@ -71,9 +71,10 @@ Neither fetcher writes into `public/data/<game>/` while it runs. `createStage()`
 in `scripts/shared/dataset.mjs` makes a sibling `.staging-<pid>-<n>` directory,
 the run generates into that, and only a run that passes its own gates is
 promoted over the published tree by an atomic rename. A run that fails discards
-its staging directory, exits non-zero and leaves the previous deployment live —
-GitHub Pages only uploads after a successful workflow, so failing loudly is
-strictly safer than publishing damage. Abandoned staging directories from a
+its staging directory, exits non-zero and leaves the validated baseline intact.
+The workflow saves that fallback and can publish it alongside the other game's
+successful update, while still reporting the refresh failure. Invalid or missing
+fallback data blocks the site build. Abandoned staging directories from a
 killed run are cleared at the start of the next one. If a process died after
 moving the live tree to `.previous-*` but before installing staging, the newest
 previous tree is restored first; it is never deleted as ordinary scratch data
@@ -116,41 +117,57 @@ updates are reviewed and tested before merging.
 
 `Code checks` runs tests, dataset validation and a build on pull requests and
 main pushes without fetching market data or granting deployment permissions.
-The deployment workflow tests code before collecting data, then validates the
-generated dataset and file contracts before building. Builds have a 45-minute
-timeout and deployments 10 minutes. Only the deployment job receives Pages
-write and identity-token permissions; the build receives Pages read access.
-Pages runs are serialized without cancelling an active snapshot/deployment.
-GitHub may still replace pending runs or delay scheduled runs; this is an
-hourly best-effort collector, not a guaranteed record of every hour.
+The deployment workflow runs code tests independently of a two-game snapshot
+matrix (`fail-fast: false`). Each game merges deployed and checked-in data in
+reuse mode, unions any saved recovery seed, and validates that baseline before
+fetching. Pushes only reuse data; scheduled and manual runs refresh it. Fetchers
+still stage and validate changes before promotion. A failed refresh retains the
+validated baseline and reports a failed job after saving its artifact.
 
-Successful validation during a scheduled run in the 00 UTC hour, or a manual
-run, uploads `market-data-<run-id>-<attempt>` with 30-day retention. This contains
-the complete `public/data` tree, including raw history and quality reports.
-It is a daily recovery copy separate from the Pages upload; a failed or missed
-run does not produce a backup. Check the Actions artifact list after rollout.
+Every validated game dataset is uploaded before the site build as
+`market-data-<game>-<run-id>-<attempt>` with three-day retention (30 days for
+manual runs and the 00 UTC hour). Each artifact root
+contains that game's index and league directories. A separate per-game Actions
+cache stores the same data under `.market-recovery/<game>/`; subsequent runs
+restore the latest matching cache and merge observations with the repository and
+live deployment, never blindly overwrite them. Caches can be evicted; they are
+an additional recovery source, not a durable archive. Artifacts remain available
+for manual recovery when the cache or site is unavailable.
 
-For recovery, download and extract a `market-data-*` artifact. Its root contains
-`poe1/` and `poe2/`. Inventory local and deployed histories by timestamp and
-point count, then use the existing merger with the extracted directory:
+The build requires passing code tests and both game artifacts, revalidates the
+combined dataset and file contracts, then builds the site. A failed refresh can
+therefore publish one game's fresh data alongside the other's retained data.
+Missing artifacts or failed validation block publication. The workflow still
+reports failure for the affected collection job; snapshot timestamps are not
+advanced to disguise old data. A build or Pages failure does not discard the
+already saved observations.
+
+Collection jobs have a 35-minute timeout, checks and builds 15 minutes, and
+Pages deployment 10 minutes. Only the deployment job receives Pages write and
+identity-token permissions. Runs remain serialized without cancelling active
+work. GitHub can delay or replace pending runs: hourly collection is best-effort,
+not a guarantee of every hourly observation.
+
+For manual recovery, extract each game artifact into a matching `poe1/` or
+`poe2/` subdirectory of a temporary recovery folder. Older combined
+`market-data-<run-id>-<attempt>` artifacts already contain both game folders.
+Inventory local and deployed histories by timestamp and point count, then run:
 
 ```bash
-node scripts/tools/merge-pages-artifact.mjs <extracted-market-data-directory>
+node scripts/tools/merge-pages-artifact.mjs <recovery-folder>
 npm test
 npm run validate
 npm run build
 ```
 
-Review the data diff before committing. A Pages artifact instead wraps these
-directories in `data/`; pass that inner directory. Recovery merges observations
-and rebuilds derived curves. Run only one local generator/recovery operation per
-output directory; workflow serialization does not lock separate local processes.
+Review the data diff before committing. A Pages artifact wraps the game folders
+in `data/`; pass that inner directory. Recovery merges observations and rebuilds
+derived curves. Run only one local generator/recovery operation per output
+directory; workflow serialization does not lock local processes.
 
-Both games still share one site release: a failed publication gate leaves the
-last successful release live. The browser exposes snapshot age, but this does
-not provide independent uptime alerting. Repository rules and Actions failure
-notification preferences are account settings, not established by these files.
-Long-term history backup beyond 30 days needs a separately managed archive.
+The browser exposes snapshot age; independent uptime alerting and Actions
+notification preferences are not configured by these files. Long-term backup
+beyond 30 days requires a separately managed archive.
 
 ### Carried-forward data is cleaned on the way in
 
@@ -683,9 +700,8 @@ files per league folder, and built by the same code path (`buildFamilyHistory`):
 ```
 
 `<key>-history.json` is derived, so it can be rebuilt; the other three cannot.
-The live deployment is the normal state store and each run recreates
-`public/data/poe1` from scratch. Checked-in history files are also accepted as
-recovery seeds: raw points merge by absolute timestamp with the deployed point
+The live deployment, checked-in history and restored per-game cache are
+recovery sources for the staged `public/data/poe1` tree: raw points merge by absolute timestamp with the deployed point
 winning an overlap, while a derived curve keeps whichever complete axis has
 more points until the next fetch rebuilds it. Three consequences drive the
 design:
