@@ -187,7 +187,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
   const families = useMemo(() => buildTabletFamilies(markets), [markets]);
   const pools = useMemo(() => mechanicPools(markets), [markets]);
   const coverage = useMemo(() => curatedCoverage(markets), [markets]);
-  const [rangeHours, setRangeHours] = useState(4);
+  const [rangeHours, setRangeHours] = useState(24);
   const [divineAdjusted, setDivineAdjusted] = useState(false);
   const [sortMode, setSortMode] = useState("spread");
   const [weightMode, setWeightMode] = useState("supply");

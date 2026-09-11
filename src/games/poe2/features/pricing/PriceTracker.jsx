@@ -38,7 +38,7 @@ export default function PriceTracker({ league, priceData, history, currency, rat
     ...Object.keys(history?.series || {}),
   ])].sort((a, b) => a.localeCompare(b)), [history, markets]);
   const [item, setItem] = useState("");
-  const [rangeHours, setRangeHours] = useState(null);
+  const [rangeHours, setRangeHours] = useState(24);
   const [divineAdjusted, setDivineAdjusted] = useState(false);
 
   useEffect(() => {

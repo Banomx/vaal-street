@@ -1073,6 +1073,7 @@ At 1100px and wider, navigation is a fixed left rail. Medium widths use the
 horizontal navigation; up to 720px it becomes an Explore select. All forms use
 the same page handlers and return to the top when a section is selected.
 Desktop buttons expose the current page with `aria-current`.
+Market time-range selectors default to 24h in both games; selecting another range remains available within each view.
 The shared `AppTabs` desktop sidebar collapses into square initial buttons (O, PF,
 BP, etc.), retaining navigation, full accessible names and hover titles. Its boolean
 preference uses `vaal-street.shared.sidebar-collapsed.v1`; compact navigation

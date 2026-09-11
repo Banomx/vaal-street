@@ -82,7 +82,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
   const [sort, setSort] = useState("turnover");
   const [minimum, setMinimum] = useState(1000);
   const [minimumUnits, setMinimumUnits] = useState(10);
-  const [rangeHours, setRangeHours] = useState(4);
+  const [rangeHours, setRangeHours] = useState(24);
   const [divineAdjusted, setDivineAdjusted] = useState(false);
   const [plannedUnits, setPlannedUnits] = useState(1);
   const [participation, setParticipation] = useState(.8);
