@@ -293,6 +293,7 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   if (process.env.DATA_MODE === "reuse" && await reuseDeployment()) return;
 
+  const previousIndex = await readJsonFile(join(OUT, "index.json"));
   const response = await getJson(`${API}/leagues`);
   const names = selectTrackedLeagues(response?.economyLeagues || response?.leagues || response, Number(process.env.POE2_LEAGUE_LIMIT || 2));
   if (!names.length) throw new Error("poe.ninja returned no PoE 2 leagues");
@@ -338,6 +339,15 @@ async function main() {
       const preview = coverage.missing.slice(0, 20).map((item) => `${item.item}${item.variant ? ` (${item.variant})` : ""}`).join(", ");
       console.warn(`${name}: ${coverage.missing.length} boss-market item(s) unpriced: ${preview}${coverage.missing.length > 20 ? `, +${coverage.missing.length - 20} more` : ""}`);
     }
+  }
+  // The upstream list describes active markets, not permission to retire stored
+  // leagues. Staging already contains their original snapshots and histories.
+  const refreshed = new Set(leagues.map((league) => league.slug));
+  for (const previous of previousIndex?.leagues || []) {
+    if (refreshed.has(previous.slug)) continue;
+    leagues.push({ ...previous, files: await existingLeagueFiles(previous.slug) });
+    refreshed.add(previous.slug);
+    console.log(`Retained ${previous.name}: existing snapshot and history (not refreshed)`);
   }
   await writeJson(join(OUT, "index.json"), { schemaVersion: POE2_SCHEMA_VERSION, generatedAt: new Date().toISOString(), leagues });
 }

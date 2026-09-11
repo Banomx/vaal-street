@@ -301,7 +301,13 @@ data belongs in a database/API.
 
 The PoE 2 pipeline is intentionally separate. `scripts/poe2/fetch-data.mjs`
 writes a normalized current market catalogue and a compact price timeline for
-the active challenge league and Standard:
+the active challenge league and Standard. Fresh runs also retain every previous
+manifest entry not refreshed, referencing its existing staged files without
+changing its quotes, timestamps or history. The upstream active-league list is
+not a retirement list; omitting an older league must not trigger `league-collapse`.
+Missing or invalid retained data still fails validation rather than being hidden.
+
+Per-league files:
 
 ```text
 prices.json           merged current prices plus independent source quotes

@@ -19,7 +19,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 let fails = 0;
 const ok = (condition, message) => { if (!condition) { fails++; console.log("FAIL:", message); } };
@@ -155,10 +155,39 @@ const { code } = await new Promise((resolve) => {
     "-e", "globalThis.fetch = async () => { throw new Error('network down'); }; await import(process.env.POE2_ENTRY);",
   ], {
     cwd: ROOT,
-    env: { ...process.env, POE2_ENTRY: path.join(ROOT, "scripts", "poe2", "fetch-data.mjs"), DATA_OUT: OUT_DIR, DATA_MODE: "fetch" },
+    env: { ...process.env, POE2_ENTRY: pathToFileURL(path.join(ROOT, "scripts", "poe2", "fetch-data.mjs")).href, DATA_OUT: OUT_DIR, DATA_MODE: "fetch" },
   }, (error) => resolve({ code: error?.code ?? 0 }));
 });
 ok(code === 1, `a fetch that cannot reach any source must exit non-zero even with a local index present, got ${code}`);
+
+/* Reproduce the deployment failure: three retained leagues, two active feeds. */
+const beforeRetained = await readFile(path.join(OUT_DIR, "runes-of-aldur", "price-history.json"), "utf8");
+const beforeRetainedPrices = await readFile(path.join(OUT_DIR, "runes-of-aldur", "prices.json"), "utf8");
+await mkdir(path.join(OUT_DIR, "forbidden-rites"), { recursive: true });
+await writeFile(path.join(OUT_DIR, "forbidden-rites", "prices.json"), JSON.stringify({ schemaVersion: 1, generatedAt: ago(1), league: "Forbidden Rites", divineExalted: 400, prices: { "Chaos Orb": { exalted: 10 } } }));
+await writeFile(path.join(OUT_DIR, "forbidden-rites", "price-history.json"), JSON.stringify({ ...deployedHistory, league: "Forbidden Rites" }));
+await writeFile(path.join(OUT_DIR, "index.json"), JSON.stringify({ ...index, leagues: [{ name: "Forbidden Rites", slug: "forbidden-rites", group: "current", files: { prices: "prices.json", priceHistory: "price-history.json" } }, ...index.leagues] }));
+const freshScript = `
+  globalThis.fetch = async (url) => {
+    const u = new URL(String(url));
+    const json = (value) => new Response(JSON.stringify(value), { status: 200 });
+    if (u.hostname === 'poe.ninja' && u.pathname.endsWith('/leagues')) return json(['Forbidden Rites', 'Standard']);
+    if (u.hostname === 'poe.ninja' && u.pathname.includes('/exchange/')) return json({ core: { primary: 'divine', rates: { exalted: 400 } }, items: [{ id: 'chaos', name: 'Chaos Orb' }], lines: [{ id: 'chaos', primaryValue: u.searchParams.get('league') === 'Standard' ? .05 : .1, count: 10 }] });
+    if (u.hostname === 'poe.ninja') return json({ lines: [] });
+    return new Response('unavailable', { status: 404 });
+  };
+  await import(process.env.POE2_ENTRY);
+`;
+const fresh = await new Promise((resolve) => execFile(process.execPath, ['--input-type=module', '-e', freshScript], {
+  cwd: ROOT, env: { ...process.env, POE2_ENTRY: pathToFileURL(path.join(ROOT, 'scripts', 'poe2', 'fetch-data.mjs')).href, DATA_OUT: OUT_DIR, DATA_MODE: 'fetch', PAGES_BASE_URL: '' },
+}, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stdout, stderr })));
+ok(fresh.code === 0, `fresh fetch retains three leagues instead of failing league-collapse: ${fresh.stderr}`);
+const refreshedIndex = await read('index.json');
+ok(refreshedIndex.leagues.length === 3 && new Set(refreshedIndex.leagues.map((l) => l.slug)).size === 3, 'active and retained leagues appear exactly once');
+ok(await readFile(path.join(OUT_DIR, 'runes-of-aldur', 'price-history.json'), 'utf8') === beforeRetained, 'retained league history is byte-for-byte unchanged');
+ok(await readFile(path.join(OUT_DIR, 'runes-of-aldur', 'prices.json'), 'utf8') === beforeRetainedPrices, 'retained league quote and timestamp are unchanged');
+ok((await read('forbidden-rites', 'prices.json')).prices['Chaos Orb'].exalted === 40, 'active challenge league gets its fresh quote');
+ok((await read('standard', 'prices.json')).prices['Chaos Orb'].exalted === 20, 'Standard gets its own fresh quote');
 
 if (fails) { console.log(`${fails} FAILURES`); process.exit(1); }
 console.log("PoE 2 reuse and failure handling passed.");
