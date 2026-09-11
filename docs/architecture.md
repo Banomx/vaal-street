@@ -108,6 +108,10 @@ days for older samples, and no requirement beyond 430 days. Expected daily
 compaction therefore publishes; lost recent samples or a vanished history file
 fail, even if new points keep the total count unchanged.
 
+PoE 2 price and exchange history merges reject conflicting named leagues.
+The merged timestamp is the newest valid document or observation timestamp,
+independent of input order; overlapping quote precedence remains caller-defined.
+
 ### CI, deployment and recovery
 
 Node 24 LTS is declared in `.nvmrc` and `package.json`; both workflows read that
@@ -477,6 +481,10 @@ the user supplies a full cost. Local inputs reset when the selected boss changes
 
 Popular farms offers 1h, 2h, 4h, 8h, 12h, 24h, 48h, 3d, 7d, 14d, 30d and All.
 Short windows still require enough stored observations to report movement.
+Shared navigation supports arrow keys and Home/End to move focus, with Enter
+to open a view. Loading placeholders are announced as status and respect
+reduced-motion preferences. PoE 2 waits for its league snapshot before showing
+market cards, so loading does not resemble an empty market.
 Unique-tablet comparisons expand on demand; output baskets and their detailed
 market tables retain their existing calculations.
 

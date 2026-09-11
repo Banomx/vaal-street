@@ -9,7 +9,7 @@ import BossProfit from "./features/bosses/BossProfit.jsx";
 import Delve from "./features/delve/Delve.jsx";
 import Gems from "./features/gems/Gems.jsx";
 import GameSwitcher from "../../shared/ui/GameSwitcher.jsx";
-import { AppHeader, AppTabs, SourceStrip } from "../../shared/ui/AppShell.jsx";
+import { AppHeader, AppTabs, SourceStrip, LoadingPanel } from "../../shared/ui/AppShell.jsx";
 import SnapshotNotice from "../../shared/ui/SnapshotNotice.jsx";
 import {
   POE1_API_BASES, POE1_EXCHANGE_BASES, POE1_LEAGUE_FILES, POE1_SCHEMA_VERSIONS, POE1_STATIC_BASE,
@@ -1004,7 +1004,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
           hourly job may be mid-deployment; reloading in a few minutes is the usual fix.
         </SourceStrip>
       )}
-      {mode === "connecting" && !OWN_BAR[tab] && tab !== "gems" && <SourceStrip className="app-source-strip--spaced st-banner st-quiet">Loading the latest snapshot…</SourceStrip>}
+      {mode === "connecting" && !OWN_BAR[tab] && tab !== "gems" && <LoadingPanel label="Loading the latest market snapshot…" />}
       {mode === "live" && !OWN_BAR[tab] && tab !== "gems" && (
         <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
           {dataSource === "static"

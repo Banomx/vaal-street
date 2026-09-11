@@ -55,8 +55,18 @@ function historyFromRows(rows, { league = "", generatedAt = null, tabletBaseline
   };
 }
 
+// Input order decides conflicting observations, not the age of the merged file.
+export function mergedHistoryMetadata(documents, timestamps = []) {
+  const leagues = [...new Set(documents.map((doc) => String(doc.league || "").trim()).filter(Boolean))];
+  if (leagues.length > 1) throw new Error(`Cannot merge history from different leagues: ${leagues.join(", ")}`);
+  const observed = [...documents.map((doc) => doc.generatedAt), ...timestamps]
+    .map((at) => Date.parse(at)).filter(Number.isFinite);
+  return { league: leagues[0] || "", generatedAt: observed.length ? new Date(Math.max(...observed)).toISOString() : null };
+}
+
 export function mergePriceHistories(...histories) {
   const documents = histories.filter(Boolean);
+  const metadata = mergedHistoryMetadata(documents);
   const rows = new Map();
   for (const history of documents) {
     for (const [timestamp, row] of rowsFromHistory(history)) {
@@ -69,8 +79,7 @@ export function mergePriceHistories(...histories) {
   }
   const newest = documents[documents.length - 1] || {};
   return historyFromRows(rows, {
-    league: newest.league || documents.find((history) => history?.league)?.league || "",
-    generatedAt: newest.generatedAt,
+    ...mergedHistoryMetadata([metadata], [...rows.keys()]),
     tabletBaselineVersion: newest.tabletBaselineVersion || documents.find((history) => history?.tabletBaselineVersion)?.tabletBaselineVersion || null,
   });
 }

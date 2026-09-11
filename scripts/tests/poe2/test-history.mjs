@@ -137,3 +137,16 @@ assert.deepEqual(thinExchangeHistory(oldExchange, { nowMs: now }).snapshots.map(
 ], "exchange pairs use the same seven-day hourly then daily retention contract");
 
 console.log("PoE 2 price history passed.");
+
+// A recovery seed may be newer than the last successful site deployment.
+for (const merge of [mergePriceHistories, mergeExchangeHistories]) {
+  const newer = { league: "Test League", generatedAt: "2026-08-21T12:00:00Z" };
+  const older = { league: "Test League", generatedAt: "2026-08-20T12:00:00Z" };
+  assert.equal(merge(newer, older).generatedAt, "2026-08-21T12:00:00.000Z");
+  assert.equal(merge(older, newer).generatedAt, "2026-08-21T12:00:00.000Z");
+  assert.throws(() => merge(newer, { ...older, league: "Standard" }), /different leagues/);
+}
+assert.equal(mergePriceHistories({ ...history, generatedAt: "2026-08-19T00:00:00Z" }).generatedAt,
+  history.timestamps.at(-1), "metadata cannot predate its newest observation");
+assert.equal(mergeExchangeHistories({ ...exchangeHistory, generatedAt: "2026-08-19T00:00:00Z" }).generatedAt,
+  exchangeHistory.snapshots.at(-1).at);

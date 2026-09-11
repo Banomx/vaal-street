@@ -1,4 +1,4 @@
-import { PRICE_HISTORY_HOURLY_HOURS, PRICE_HISTORY_MAX_DAYS } from "./history.mjs";
+import { mergedHistoryMetadata, PRICE_HISTORY_HOURLY_HOURS, PRICE_HISTORY_MAX_DAYS } from "./history.mjs";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -47,6 +47,7 @@ function historyFromRows(rows, { league = "", generatedAt = null, items = {} } =
 
 export function mergeExchangeHistories(...histories) {
   const documents = histories.filter(Boolean);
+  const metadata = mergedHistoryMetadata(documents);
   const rows = new Map();
   let items = {};
   for (const history of documents) {
@@ -55,10 +56,8 @@ export function mergeExchangeHistories(...histories) {
     }
     items = { ...items, ...(history.items || {}) };
   }
-  const newest = documents[documents.length - 1] || {};
   return historyFromRows(rows, {
-    league: newest.league || documents.find((history) => history?.league)?.league || "",
-    generatedAt: newest.generatedAt,
+    ...mergedHistoryMetadata([metadata], [...rows.keys()]),
     items,
   });
 }

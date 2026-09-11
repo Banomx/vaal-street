@@ -1,4 +1,4 @@
-import { Children, cloneElement, isValidElement, useState } from "react";
+import { Children, cloneElement, isValidElement, useState, useRef } from "react";
 
 import { createJsonStore } from "../storage/jsonStore.js";
 
@@ -17,6 +17,7 @@ export function AppHeader({ className = "", brandClassName = "", controlsClassNa
 }
 
 export function AppTabs({ className = "", label = "Views", children }) {
+  const navRef = useRef(null);
   const [collapsed, setCollapsed] = useState(() => sidebarStore.load(false) === true);
   const toggleSidebar = () => setCollapsed((value) => { sidebarStore.save(!value); return !value; });
   const buttons = Children.toArray(children).filter(isValidElement);
@@ -30,7 +31,7 @@ export function AppTabs({ className = "", label = "Views", children }) {
   };
 
   return (
-    <nav className={`app-tabs ${collapsed ? "app-tabs--collapsed" : ""} ${className}`.trim()} aria-label={label}>
+    <nav ref={navRef} className={`app-tabs ${collapsed ? "app-tabs--collapsed" : ""} ${className}`.trim()} aria-label={label}>
       <div className="app-sidebar-heading">
         <span>Workspace</span>
         <button type="button" className="app-sidebar-toggle" onClick={toggleSidebar} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
@@ -50,6 +51,17 @@ export function AppTabs({ className = "", label = "Views", children }) {
           "aria-current": index === selected ? "page" : undefined,
           "aria-label": name,
           title: name,
+          onKeyDown: (event) => {
+            button.props.onKeyDown?.(event);
+            if (event.defaultPrevented || !["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+            const links = [...navRef.current.querySelectorAll(":scope > button:not(:disabled)")];
+            const current = links.indexOf(event.currentTarget);
+            if (current < 0) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? 0 : event.key === "End" ? links.length - 1
+              : (current + (["ArrowDown", "ArrowRight"].includes(event.key) ? 1 : -1) + links.length) % links.length;
+            links[next]?.focus();
+          },
           onClick: (event) => openView(index, event),
           children: <><span className="app-tab-label">{button.props.children}</span><span className="app-tab-initials" aria-hidden="true">{initials}</span></>,
         });
@@ -64,4 +76,13 @@ export function SourceStrip({ className = "", tone = "quiet", children }) {
       {children}
     </div>
   );
+}
+
+export function LoadingPanel({ label = "Loading market data…" }) {
+  return <section className="app-loading-panel" role="status" aria-live="polite" aria-busy="true">
+    <div className="app-loading-label"><span aria-hidden="true" />{label}</div>
+    <div className="app-loading-preview" aria-hidden="true">
+      {[0, 1, 2].map((item) => <div key={item}><i /><i /><i /></div>)}
+    </div>
+  </section>;
 }

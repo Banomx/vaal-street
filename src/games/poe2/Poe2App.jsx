@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import GameSwitcher from "../../shared/ui/GameSwitcher.jsx";
-import { AppHeader, AppTabs, SourceStrip } from "../../shared/ui/AppShell.jsx";
+import { AppHeader, AppTabs, SourceStrip, LoadingPanel } from "../../shared/ui/AppShell.jsx";
 import SnapshotNotice from "../../shared/ui/SnapshotNotice.jsx";
 import BossProfit from "./features/bosses/BossProfit.jsx";
 import Overview from "./features/overview/Overview.jsx";
@@ -182,6 +182,8 @@ export default function Poe2App({ activeGame, onGameChange }) {
           </SourceStrip>
         )}
       </div>
+      {prices === null && <LoadingPanel label={`Loading ${league || "PoE 2"} markets…`} />}
+      {prices !== null && <>
       {tab === "overview" && <Overview league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary}
         onOpenTab={(next, target) => { setBossTarget(target || null); setTab(next); window.scrollTo({ top: 0, behavior: "instant" }); }} />}
       {tab === "farms" && <PopularFarms league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency}
@@ -189,6 +191,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
       {tab === "bosses" && <BossProfit initialBossId={bossTarget} league={league || "Standard"} priceData={prices} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "exchange" && <CurrencyExchange league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} history={exchangeHistory} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "prices" && <PriceTracker league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency} rateSummary={rates.summary} />}
+      </>}
       {verdict?.level === "notice" && <div className="p2-notices"><SnapshotNotice verdict={verdict} /></div>}
       <footer className="p2-art-credit" aria-label="Artwork credit">
         Background artwork <strong>© Grinding Gear Games</strong>
