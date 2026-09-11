@@ -61,7 +61,7 @@ export function realPct(v1, r1, v2, r2) {
 export function fmtRate(v) { return v >= 1000 ? `${(v / 1000).toFixed(2)}k` : Math.round(v).toString(); }
 
 export function PctBadge({ v, real }) {
-  if (v == null || !isFinite(v)) return <span className="st-pct flat">—</span>;
+  if (v == null || !isFinite(v)) return <span className="st-pct flat" title="No usable comparison for this window — missing history, not zero change" aria-label="Change unavailable">—</span>;
   const cls = v > 0.5 ? "up" : v < -0.5 ? "down" : "flat";
   const arrow = v > 0.5 ? "▲" : v < -0.5 ? "▼" : "•";
   return (

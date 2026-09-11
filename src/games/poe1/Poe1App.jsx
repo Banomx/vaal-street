@@ -1109,6 +1109,11 @@ export default function Poe1App({ activeGame, onGameChange }) {
                 </div>
               </div>
             )}
+            {(tab === "prices" || tab === "farms" || isCat) && badgeSource?.length > 0 && !badgeSource.some((item) => Number.isFinite(item[activeKey])) && (
+              <p style={{ flexBasis: "100%", margin: 0, color: "#ffd18a", fontSize: 13 }} role="status">
+                No usable {chgWindow} comparison in the stored snapshots. A dash means missing history, not 0% change. Try another window; current prices are still shown.
+              </p>
+            )}
           </div>
         );
       })()}
@@ -1721,7 +1726,7 @@ const css = `
 .bp-hidden-note em { display: block; color: #e2e2e0; font-style: italic; cursor: help; }
 .st-pct { font-size:12.5px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; margin-right: 6px; white-space: nowrap; }
 .st-pct.up { color: #8fd47f; }
-.st-pct.down { color: #e2e2e0; }
+.st-pct.down { color: #ff9292; }
 .st-pct.flat { color: #e2e2e0; }
 /* A divine-adjusted figure is a different measurement, not a different value —
    the marker keeps it from being read as the chaos change. */
@@ -1860,7 +1865,7 @@ const css = `
 }
 .st-farms-h { font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: #e2e2e0; margin: 0 0 8px; }
 .st-farms-h.up-h { color: #8fd47f; }
-.st-farms-h.down-h { color: #e2e2e0; }
+.st-farms-h.down-h { color: #ff9292; }
 .st-farms-empty { font-size: 13px; color: #e2e2e0; padding: 8px 2px; }
 .st-mover {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 130px) auto; align-items: center;
@@ -1908,7 +1913,7 @@ const css = `
 .ov-feature-number { display: flex; flex-wrap: wrap; gap: 7px; align-items: baseline; }
 .ov-feature-number strong { color: #e2e2e0; font-size: 34px; font-weight: 650; letter-spacing: -.03em; }
 .ov-feature-number strong.up { color: #e2e2e0; }
-.ov-feature-number strong.down { color: #e2e2e0; }
+.ov-feature-number strong.down { color: #ff9292; }
 .ov-feature-number span { color: #e2e2e0; font-size:12.5px; }
 .ov-feature > p { max-width: 760px; margin: 8px 0; color: #e2e2e0; font-size: 13px; line-height: 1.45; }
 .ov-feature-bottom { display: flex; justify-content: space-between; gap: 10px; align-items: end; }
@@ -1931,11 +1936,11 @@ const css = `
 .ov-kind { color: #f7928f; font-size:12.5px; font-weight: 500; letter-spacing: .09em; text-transform: uppercase; }
 .ov-value { grid-column: 2; grid-row: 1 / 3; color: #e2e2e0; font-size: 14px; font-weight: 500; text-align: right; white-space: nowrap; }
 .ov-value.up { color: #e2e2e0; }
-.ov-value.down { color: #e2e2e0; }
+.ov-value.down { color: #ff9292; }
 /* The downward panel keeps the upward panel's layout. Only the accent colour
    separates the two, so the eye can compare the same positions on both. */
 .ov-head-down { margin-top: 14px; }
-.ov-head-down .ov-kicker { color: #e2e2e0; }
+.ov-head-down .ov-kicker { color: #ff9292; }
 .ov-down .ov-feature {
   border-left-color: #c2423e;
   background: radial-gradient(circle at 88% 22%, rgba(212,127,127,.15), transparent 26%), linear-gradient(125deg, #1b0b0b, #100b09 68%);

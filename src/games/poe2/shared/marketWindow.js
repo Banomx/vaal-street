@@ -5,6 +5,6 @@ export function windowEvidence(points = [], rangeHours = null, latestAt = null) 
   const stale = times.length > 0 && Number.isFinite(latestAt) && latestAt - times.at(-1) > 2 * 3600e3;
   const partial = !!rangeHours && hours + Math.min(1, rangeHours * .1) < rangeHours;
   const label = times.length < 2 ? `${times.length} sample${times.length === 1 ? "" : "s"} · building history`
-    : `${hours.toLocaleString(undefined, { maximumFractionDigits: 1 })}h observed · ${times.length} samples${partial ? " · partial window" : ""}${stale ? " · last trade is older" : ""}`;
+    : `${hours.toLocaleString(undefined, { maximumFractionDigits: 1 })}h observed · ${times.length} samples${partial ? ` · partial ${rangeHours}h window` : ""}${stale ? " · last trade is older" : ""}`;
   return { hours, samples: times.length, partial, stale, label };
 }

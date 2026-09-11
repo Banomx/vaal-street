@@ -727,6 +727,9 @@ Short change windows remain absent until a snapshot of roughly the right age
 exists; they are never estimated from the daily poe.ninja sparkline, and a
 window will not resolve against a point much older than itself — after a missed
 run the badge goes blank instead of quoting a four-hour-old move as a 1h one.
+Missing-change badges explain that a dash means unavailable history, not zero
+movement; the shared PoE 1 controls also explain when no item has a comparison
+for the selected window. Negative movement uses a readable red accent.
 
 `scripts/tests/poe1/test-history.mjs` runs the whole layer against a stubbed deployment:
 backfill reuse, recovery merging, stitching, the shared axis, carry-forward and
