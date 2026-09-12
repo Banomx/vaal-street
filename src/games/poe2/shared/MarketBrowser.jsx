@@ -3,6 +3,7 @@ import { groupMarkets, marketCategory, marketSubcategory, MARKET_CATEGORIES, MAR
 
 export default function MarketBrowser({ names, entries = {}, selectedName, onSelect, preferredName = "Divine Orb", sticky = false }) {
   const groups = useMemo(() => groupMarkets(names, entries), [entries, names]);
+  const [sort, setSort] = useState("name");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [subcategory, setSubcategory] = useState("all");
@@ -15,8 +16,14 @@ export default function MarketBrowser({ names, entries = {}, selectedName, onSel
     const categoryNames = subcategory === "all"
       ? groups[category] || groups.all
       : groups.subgroups[category]?.[subcategory] || [];
-    return needle ? categoryNames.filter((name) => name.toLowerCase().includes(needle)) : categoryNames;
-  }, [category, groups, query, subcategory]);
+    const terms = needle.split(/\s+/).filter(Boolean);
+    const matches = categoryNames.filter((name) => {
+      const entry = entries[name] || {};
+      const searchable = [name, entry.itemClass, entry.marketFamily, ...(Array.isArray(entry.tags) ? entry.tags : [])].join(" ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").toLowerCase();
+      return terms.every((term) => searchable.includes(term));
+    });
+    return [...matches].sort((a, b) => sort === "reverse" ? b.localeCompare(a) : a.localeCompare(b));
+  }, [category, entries, groups, query, sort, subcategory]);
 
   useEffect(() => {
     if (!selectedName || !names.includes(selectedName)) return;
@@ -35,7 +42,7 @@ export default function MarketBrowser({ names, entries = {}, selectedName, onSel
 
   useEffect(() => {
     if (!visibleNames.length) return;
-    if (externalSelection.current === selectedName) {
+    if (externalSelection.current && externalSelection.current === selectedName) {
       if (visibleNames.includes(selectedName)) externalSelection.current = "";
       return;
     }
@@ -61,7 +68,7 @@ export default function MarketBrowser({ names, entries = {}, selectedName, onSel
 
   return <aside className={`p2mb-browser ${sticky ? "sticky" : ""}`} aria-label="Market browser">
     <style>{css}</style>
-    <label className="p2mb-search"><span>Find an item</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search market names" /></label>
+    <div className="p2mb-search"><label><span>Find an item</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, type or tag…" /></label><div className="p2mb-search-tools"><span>{names.length.toLocaleString()} tracked items</span><button type="button" onClick={() => { setQuery(""); setCategory("all"); setSubcategory("all"); setExpandedCategory(null); }}>Reset filters</button></div></div>
     <nav className="p2mb-categories" aria-label="Item categories">
       {MARKET_CATEGORIES.filter(([id]) => id === "all" || groups[id].length).map(([id, label]) => <div className="p2mb-category-branch" key={id}>
         <button type="button" aria-pressed={category === id} aria-expanded={MARKET_SUBCATEGORIES[id] ? expandedCategory === id : undefined} title={label} className={category === id ? "on" : ""} onClick={() => selectCategory(id)}>
@@ -75,10 +82,10 @@ export default function MarketBrowser({ names, entries = {}, selectedName, onSel
       </div>)}
     </nav>
     <div className="p2mb-results">
-      <header><span>Items</span><em>{visibleNames.length}</em></header>
-      <div className="p2mb-items" role="listbox" aria-label="Items in selected category">
-        {visibleNames.map((name) => <button type="button" role="option" aria-selected={selectedName === name} title={name} key={name} className={selectedName === name ? "on" : ""} onClick={() => selectName(name)}>{name}</button>)}
-        {!visibleNames.length && <p>No items match this search.</p>}
+      <header><span aria-live="polite">{visibleNames.length.toLocaleString()} {visibleNames.length === 1 ? "result" : "results"}</span><select aria-label="Sort items" value={sort} onChange={(event) => setSort(event.target.value)}><option value="name">A–Z</option><option value="reverse">Z–A</option></select></header>
+      <div className="p2mb-items" role="group" aria-label="Items in selected category">
+        {visibleNames.map((name) => <button type="button" aria-pressed={selectedName === name} title={name} key={name} className={selectedName === name ? "on" : ""} onClick={() => selectName(name)}>{entries[name]?.icon && <img src={entries[name].icon} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} />}<span>{name}<small>{MARKET_CATEGORIES.find(([id]) => id === marketCategory(name, entries[name]))?.[1] || "Market item"}</small></span></button>)}
+        {!visibleNames.length && <p>No matches in this category. Try fewer words or reset the filters.</p>}
       </div>
     </div>
   </aside>;
@@ -88,8 +95,8 @@ const css = `
 .p2mb-browser{display:grid;grid-template-columns:minmax(138px,.85fr) minmax(0,1.15fr);grid-template-rows:auto minmax(0,1fr);align-items:stretch;gap:12px;min-width:0;height:548px;max-height:calc(100vh - 24px);padding:14px;border:1px solid #4a2321;border-radius:8px;background:#110c0a}
 .p2mb-browser.sticky{position:sticky;top:12px}
 .p2mb-search{display:grid;grid-column:1/-1;gap:5px}
-.p2mb-search>span,.p2mb-results header>span{color:#e2e2e0;font-size:12.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
-.p2mb-search input{box-sizing:border-box;width:100%;min-width:0;padding:9px;border:1px solid #512523;border-radius:5px;background:#0d0908;color:#e2e2e0}
+.p2mb-search label>span,.p2mb-results header>span{color:#e2e2e0;font-size:12.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.p2mb-search label{display:grid;gap:8px}.p2mb-search-tools{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#ccc;font-size:12.5px}.p2mb-search-tools button{border:0;background:transparent;color:#ffaaa8;cursor:pointer;padding:8px}.p2mb-results header select{padding:6px;border:1px solid #734442;border-radius:6px;background:#201516;color:#fff}.p2mb-search input{box-sizing:border-box;width:100%;min-width:0;padding:9px;border:1px solid #512523;border-radius:5px;background:#0d0908;color:#e2e2e0}
 .p2mb-categories,.p2mb-category-branch,.p2mb-subcategories{display:grid;align-content:start;gap:3px;min-width:0}
 .p2mb-categories{min-height:0;overflow:auto;padding-right:2px}
 .p2mb-categories button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;padding:7px 9px;border:1px solid transparent;border-radius:4px;background:transparent;color:#e2e2e0;cursor:pointer;text-align:left}
@@ -104,8 +111,8 @@ const css = `
 .p2mb-results{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0}
 .p2mb-results header{display:flex;align-items:center;justify-content:space-between;min-height:29px;padding:0 8px;border-bottom:1px solid #301a1a}
 .p2mb-items{display:block;min-width:0;min-height:0;overflow:auto;padding-top:8px}
-.p2mb-items button{display:block;box-sizing:border-box;width:100%;min-width:0;overflow:hidden;padding:7px 8px;border:0;border-left:2px solid transparent;background:transparent;color:#e2e2e0;cursor:pointer;font-size:12.5px;line-height:1.3;text-align:left;text-overflow:ellipsis;white-space:nowrap}
-.p2mb-items button:hover{background:#190d0c;color:#e2e2e0}
+.p2mb-items button{display:flex;align-items:center;gap:10px;min-height:54px;box-sizing:border-box;width:100%;min-width:0;overflow:hidden;padding:7px 8px;border:0;border-left:2px solid transparent;background:transparent;color:#e2e2e0;cursor:pointer;font-size:12.5px;line-height:1.3;text-align:left;text-overflow:ellipsis;white-space:nowrap}
+.p2mb-items button img{width:30px;height:30px;object-fit:contain;flex-shrink:0}.p2mb-items button>span{min-width:0;white-space:normal;overflow-wrap:anywhere}.p2mb-items button small{display:block;margin-top:4px;font-size:12px;color:#c8babb}.p2mb-items button:hover{background:#190d0c;color:#e2e2e0}
 .p2mb-items button.on{border-left-color:#d23c37;background:#230f0f;color:#e2e2e0}
 .p2mb-items p{margin:10px 8px;color:#e2e2e0;font-size:12.5px}
 @media(max-width:620px){.p2mb-browser{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr);height:auto;max-height:none}.p2mb-browser.sticky{position:static}.p2mb-search{grid-column:auto}.p2mb-categories{max-height:260px}.p2mb-items{max-height:320px}}

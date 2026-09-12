@@ -7,7 +7,7 @@ export const MARKET_CATEGORIES = [
 export const MARKET_SUBCATEGORIES = {
   currency: [["orbs", "Orbs"], ["shards", "Shards"], ["quality", "Quality currency"], ["other", "Other currency"]],
   crafting: [["essences", "Essences"], ["runes", "Runes"], ["catalysts", "Catalysts"], ["soul-cores", "Soul Cores"], ["delirium", "Delirium liquids"], ["infusers", "Infusers"], ["metals", "Metals, ores & flux"], ["other", "Other crafting"]],
-  gems: [["uncut", "Uncut gems"], ["lineage", "Lineage supports"]],
+  gems: [["uncut", "Uncut gems"], ["lineage", "Lineage supports"], ["other", "Other gems"]],
   equipment: [
     ["weapons", "Weapons"], ["body-armour", "Body armour"], ["helmets", "Helmets"], ["gloves", "Gloves"], ["boots", "Boots"],
     ["offhands", "Shields & offhands"], ["rings", "Rings"], ["amulets", "Amulets"], ["belts", "Belts"],
@@ -78,7 +78,10 @@ export function marketSubcategory(category, name, entry = {}) {
     if (/\b(alloy|ore|flux|verisium)\b/.test(`${structural} ${itemName}`)) return "metals";
     if (/\b(delirium|mushrune|liquid)\b/.test(`${structural} ${itemName}`)) return "delirium";
   }
-  if (category === "gems") return /\buncut\b/.test(combined) ? "uncut" : "lineage";
+  if (category === "gems") {
+    if (/\buncut\b/.test(combined)) return "uncut";
+    if (/\blineage\b/.test(combined)) return "lineage";
+  }
   if (category === "equipment") {
     if (WEAPON.test(fields)) return "weapons";
     if (/\bbody armour\b/.test(fields)) return "body-armour";
@@ -124,7 +127,10 @@ export function groupMarkets(names, prices = {}) {
     const category = marketCategory(name, prices[name]);
     groups.all.push(name);
     groups[category].push(name);
-    if (groups.subgroups[category]) groups.subgroups[category][marketSubcategory(category, name, prices[name])].push(name);
+    if (groups.subgroups[category]) {
+      const subcategory = marketSubcategory(category, name, prices[name]);
+      (groups.subgroups[category][subcategory] ??= []).push(name);
+    }
   }
   return groups;
 }

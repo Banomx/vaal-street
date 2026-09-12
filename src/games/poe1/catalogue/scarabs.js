@@ -45,23 +45,8 @@ export const GROUPS = {
   Universal: ["Scarab of Monstrous Lineage", "Scarab of Adversaries", "Scarab of Divinity", "Scarab of Hunted Traitors", "Scarab of Stability", "Scarab of the Commander", "Scarab of Evolution", "Scarab of Wisps", "Scarab of the Sinistral", "Scarab of the Dextral", "Scarab of Radiant Storms"],
 };
 
-/* Anything the feeds price that is NOT in the list above cannot drop any more.
-   The old Breach set is the clearest case: poe.ninja still quotes Breach
-   Scarab, of Splintering, of Lordship and of Snares alongside the five that
-   replaced them, because they still sit in stashes and still trade in the
-   permanent leagues. Nine rows under one mechanic, four of which nobody can
-   farm.
-
-   This is a rule rather than a list of retired names on purpose — a list only
-   ever covers the retirements someone remembered to write down, and every
-   league adds more. The cost is the other direction: a scarab GGG adds
-   mid-league reads as legacy until this catalogue is updated, so the UI shows
-   how many rows it is holding back instead of hiding them silently. */
-export const CURRENT_SCARABS = new Set(Object.values(GROUPS).flat());
-
-export function isCurrentScarab(name) {
-  return CURRENT_SCARABS.has(name);
-}
+/* GROUPS is a demo/reference catalogue, never a production allowlist.
+   A market quote alone cannot establish whether an item still drops. */
 
 /* Assign any scarab name (incl. ones poe.ninja adds later) to a group. */
 export function groupForName(name) {
@@ -69,6 +54,6 @@ export function groupForName(name) {
   if (/^Horned Scarab/.test(name)) return "Horned";
   if (/^Scarab of/.test(name)) return "Universal";
   if (/^Influencing Scarab/.test(name)) return "Influence";
-  const m = name.match(/^(\w+) Scarab/);
+  const m = String(name || "").match(/^(.+?) Scarab(?:\s|$)/);
   return m ? m[1] : "Universal";
 }

@@ -1028,29 +1028,18 @@ Trarthan scarabs charted correctly before anything knew they existed.
 `GROUP_TONES` in `src/games/poe1/Poe1App.jsx` is cosmetic; an unknown group renders in the
 default colour.
 
-`src/games/poe1/catalogue/scarabs.js` holds the full catalogue anyway, checked against poedb's
-Scarab item class — poedb is generated from the game files, and the wiki runs a
-league behind on scarab reworks. Three things read it: demo mode builds its
-snapshot from it, it pins the mechanic for names the regex would guess wrong,
-and `isCurrentScarab()` decides what the browse views show.
+`GROUPS` in `src/games/poe1/catalogue/scarabs.js` seeds demos and pins familiar
+mechanic labels. It is not a production allowlist: every scarab in the validated
+snapshot enters browsing, movement and farm rankings. New multi-word mechanic
+names group automatically. Still-traded retired items remain visible; the UI
+explicitly separates market availability from drop availability.
 
-That last one exists because **the feeds price every scarab that still trades,
-including the retired sets**. poe.ninja quotes Breach Scarab, of Splintering,
-of Lordship and of Snares next to the five that replaced them — nine rows under
-one mechanic, four of which nobody can farm, and a set total inflated by a
-third. Mechanics, movers and Popular farms therefore read the current catalogue
-only. `items` stays whole underneath, because saved strategies and price
-lookups have to keep working for whatever someone owns.
-
-Deliberately a rule and not a list of retired names: a list only covers the
-retirements someone remembered to write down, and every league adds more. It
-cuts the other way too — a scarab GGG adds mid-league stays out of the tab
-until this catalogue is updated, which is the trade accepted for a browse view
-that matches the game. The catalogue-drift report names anything new on the run
-it appears, so the signal to update is already there.
-`scripts/tests/poe1/test-catalogue.mjs` asserts the count (118), that no scarab sits in
-two mechanics, that every name maps back to its own group, and that the retired
-Breach set groups as Breach while reading as not current.
+PoE 2 market browsing searches names, item classes, source families and tags
+within the selected category, with alphabetical sorting, item icons and a filter
+reset. Unknown gem subtypes remain in Other gems; unfamiliar items remain in
+Other rather than being dropped. New items in supported feeds require no manual
+list update. New endpoint families, changed response contracts, boss drop pools
+and drop probabilities still require source-backed adapter or curated-data updates.
 
 What is not automatic is a **rename**. Curated data references items by display
 name — the `bosses/bossData.js` drop tables and `delve/delveData.js` biome

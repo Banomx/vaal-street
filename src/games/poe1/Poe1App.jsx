@@ -19,7 +19,7 @@ import { isUsable, leagueFileUrl, loadDocument, summarize, worstLevel } from "..
 import { SMART_DIV_AT, fmtChaos, fmtDiv, fmtPrice, unitFor, unitForSeries } from "./features/pricing/money.js";
 import { CHANGE_KEYS, CHANGE_WINDOW_OPTIONS, nearestRateWindow, weightedChange } from "./features/pricing/marketWindows.js";
 import { TAB_CATEGORIES } from "./catalogue/categories.js";
-import { GROUPS, groupForName, isCurrentScarab } from "./catalogue/scarabs.js";
+import { GROUPS, groupForName } from "./catalogue/scarabs.js";
 import {
   FARM_STRATEGY_COUNT_LIMIT, computeFarmStrategy, defaultFarmStrategy,
   loadFarmStrategies, makeFarmStrategyId, sanitizeFarmStrategy, saveFarmStrategies,
@@ -724,17 +724,10 @@ export default function Poe1App({ activeGame, onGameChange }) {
     ? `${STATIC_BASE}/${encodeURIComponent(staticSlugsRef.current[league])}`
     : null;
 
-  /* The feeds price every scarab that still trades, which in a permanent
-     league means the retired sets too — the old Breach four sit right next to
-     the five that replaced them. Browsing and ranking use the current
-     catalogue only, so a mechanic's set total is the set you can actually
-     farm. `items` stays whole underneath: saved strategies and price lookups
-     have to keep working for whatever someone owns. */
-  const currentItems = useMemo(() => items.filter((i) => isCurrentScarab(i.name)), [items]);
-
+  // Browse every snapshot item, including newly introduced and still-traded items.
   const groups = useMemo(() => {
     const byGroup = {};
-    for (const it of currentItems) { if (!byGroup[it.group]) byGroup[it.group] = []; byGroup[it.group].push(it); }
+    for (const it of items) { if (!byGroup[it.group]) byGroup[it.group] = []; byGroup[it.group].push(it); }
     let arr = Object.entries(byGroup).map(([name, members]) => {
       const changes = {};
       for (const key of Object.values(CHANGE_KEYS)) {
@@ -751,7 +744,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
     if (!showHorned) arr = arr.filter((g) => g.name !== "Horned");
     arr.sort((a, b) => (sortDir === "desc" ? b.total - a.total : a.total - b.total));
     return arr;
-  }, [currentItems, sortDir, showUniversal, showHorned]);
+  }, [items, sortDir, showUniversal, showHorned]);
 
   const openGroupData = openGroup ? groups.find((g) => g.name === openGroup) : null;
 
@@ -1302,6 +1295,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       )}
 
       {/* ---------- mechanic grid ---------- */}
+      {(tab === "prices" || tab === "farms") && <p className="st-cat-note">{items.length} traded scarabs · New items appear automatically with each snapshot. Market listings can include retired items; prices do not confirm drop availability.</p>}
       {tab === "prices" && !visibleGroups.length && (
         <div className="st-cat-note">No scarab or mechanic matches “{scarabFilter}”.</div>
       )}

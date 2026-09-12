@@ -4,7 +4,7 @@ import {
   identityKind, similarity, stableId,
 } from "../../../src/games/poe1/catalogue/catalogue.js";
 import { CATEGORIES, CATEGORY_BY_KEY, FETCHED_CATEGORIES, TAB_CATEGORIES } from "../../../src/games/poe1/catalogue/categories.js";
-import { CURRENT_SCARABS, GROUPS, groupForName, isCurrentScarab } from "../../../src/games/poe1/catalogue/scarabs.js";
+import { GROUPS, groupForName } from "../../../src/games/poe1/catalogue/scarabs.js";
 
 /* ---- category catalogue ---- */
 assert.ok(CATEGORIES.length >= 5);
@@ -20,35 +20,13 @@ assert.ok(!FETCHED_CATEGORIES.some((c) => c.key === "scarabs"), "scarabs keep th
 assert.deepEqual(Object.keys(TAB_CATEGORIES), ["astrolabes", "catalysts"]);
 assert.ok(TAB_CATEGORIES.catalysts.re.test("Turbulent Catalyst"));
 
-/* ---- scarab catalogue ----
-   Checked against poedb's Scarab item class, which is generated from the game
-   files. The count is asserted because both failures are silent: a retired
-   scarab left in makes a mechanic look bigger than the set you can farm, and
-   one GGG adds that is missing here reads as legacy and gets filtered out of
-   the tab. */
+/* The reference catalogue seeds demos; it never limits production markets. */
 const scarabNames = Object.values(GROUPS).flat();
-assert.equal(scarabNames.length, 118, "poedb lists 118 droppable scarabs");
-assert.equal(new Set(scarabNames).size, scarabNames.length, "no scarab is listed under two mechanics");
-assert.equal(CURRENT_SCARABS.size, 118);
+assert.equal(new Set(scarabNames).size, scarabNames.length, "no duplicate reference names");
 for (const [group, names] of Object.entries(GROUPS)) {
-  assert.ok(names.length, `${group} has members`);
-  for (const name of names) assert.equal(groupForName(name), group, `${name} maps back to ${group}`);
+  for (const name of names) assert.equal(groupForName(name), group);
 }
-
-/* The retired Breach set is what the feeds actually serve alongside the live
-   one — nine rows under one mechanic, four of which nobody can farm. */
-assert.equal(GROUPS.Breach.length, 5);
-for (const gone of ["Breach Scarab", "Breach Scarab of Splintering", "Breach Scarab of Lordship",
-                    "Breach Scarab of Snares", "Breach Scarab of the Dreamer"]) {
-  assert.equal(isCurrentScarab(gone), false, `${gone} no longer drops`);
-  assert.equal(groupForName(gone), "Breach", "but it still belongs to Breach when a snapshot prices it");
-}
-// Other reworks the same rule covers, without anyone listing them by hand.
-assert.equal(isCurrentScarab("Abyss Scarab of Edifice"), false, "3.29 replaced it with 'of Crystals'");
-assert.equal(isCurrentScarab("Abyss Scarab of the Consort"), true);
-assert.equal(isCurrentScarab("Legion Scarab of The Sekhema"), false);
-assert.equal(isCurrentScarab("Trarthan Scarab of Renown"), true);
-
+assert.equal(groupForName("New League Scarab of Tomorrow"), "New League");
 // Anything new keeps grouping itself without a code change.
 assert.equal(groupForName("Trarthan Scarab of Renown"), "Trarthan");
 assert.equal(groupForName("Whatever Scarab of Tomorrow"), "Whatever");

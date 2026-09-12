@@ -336,3 +336,8 @@ assert.equal(tabletStates["Breach Tablet"].variant, "Normal");
 assert.equal(tabletStates["Breach Tablet"].variants.rare.exalted, 8, "the other rarities stay visible as context");
 
 console.log("PoE 2 item state passed.");
+
+// New gem types stay visible without being mislabelled as Lineage supports.
+assert.equal(marketSubcategory("gems", "Future Skill", { itemClass: "Active Skill Gem" }), "other");
+assert.deepEqual(groupMarkets(["Future Skill"], { "Future Skill": { itemClass: "Active Skill Gem" } }).subgroups.gems.other, ["Future Skill"]);
+assert.deepEqual(groupMarkets(["Unfamiliar Item"], {}).other, ["Unfamiliar Item"]);
