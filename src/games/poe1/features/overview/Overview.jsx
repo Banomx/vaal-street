@@ -507,7 +507,7 @@ export default function Overview({
           <span>Highest boss net / kill</span><strong>{bestBoss ? fmtPrice(bestBoss.net, currency, divineRate) : "—"}</strong><small>{bestBoss?.boss?.name || "Waiting for prices"}</small>
         </button>
         <button className="overview-stat" onClick={() => onOpenTab("gems")}>
-          <span>Highest gem profit / hour</span><strong>{pools.gems.up[0] ? fmtPrice(pools.gems.up[0].profitPerHour, currency, divineRate) : "—"}</strong><small>Per socket · your levelling settings</small>
+          <span>Highest gem profit / hour</span><strong>{pools.gems.up[0] ? fmtPrice(pools.gems.up[0].profitPerHour, currency, divineRate) : "—"}</strong><small>{pools.gems.up[0]?.name || "Waiting for prices"}<br />Per socket · your levelling settings</small>
         </button>
         <button className="overview-stat" onClick={() => onOpenTab("watcher")}>
           <span>Saved strategies</span><strong>{strategyRows.length}<em> / 10</em></strong><small>{strategyRows.length ? "Track your setup costs" : "Build your first farming setup"}</small>
