@@ -411,7 +411,7 @@ test("thin markets are hidden until you ask for them", () => {
   // A profit resting on four listings is the common case here, so the list
   // opens on the trades that can actually clear.
   assert.equal(DEFAULTS.hideThin, true);
-  assert.equal(DEFAULTS.thinListings, 5);
+  assert.equal(DEFAULTS.thinListings, 10);
   assert.equal(DEFAULTS.xpQuality, 30, "20 from prisms plus 10 from a matching socket");
   assert.equal(sanitizeSettings({}).hideThin, true);
   assert.equal(sanitizeSettings({ hideThin: false }).hideThin, false);

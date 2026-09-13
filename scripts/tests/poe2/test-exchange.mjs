@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { assessExchangeMarket, strongestEvidenceRoute } from "../../../src/games/poe2/features/exchange/exchangeDesk.js";
+import { assessExchangeMarket, assessRouteDepth, strongestEvidenceRoute } from "../../../src/games/poe2/features/exchange/exchangeDesk.js";
 import { windowEvidence } from "../../../src/games/poe2/shared/marketWindow.js";
 import { appendExchangeSnapshot } from "../../poe2/exchange-history.mjs";
 import { buildGggExchangeSnapshot, DIVINE_ID, EXALTED_ID } from "../../poe2/ggg-exchange.mjs";
@@ -165,3 +165,16 @@ assert.equal(windowEvidence([{ at: 0 }, { at: 40 * 3600e3 }], 48).partial, true,
   "40 hours of event data are explicitly partial for a 48-hour window");
 
 console.log("PoE 2 Currency Exchange desk passed.");
+
+const depthPeers = [10, 30, 100, 500, 1000, 10000, 20000, 30000].map((volume, i) => ({ quoteId: String(i), itemVolume: volume, limitingTurnoverExalted: volume * 100, rangePercent: 3.2 }));
+assert.equal(assessRouteDepth(depthPeers[6], depthPeers).level, "high");
+assert.equal(assessRouteDepth(depthPeers[7], depthPeers).level, "high", "multiple deep routes can rank High despite wide ranges");
+assert.equal(assessExchangeRoute(depthPeers[7]).level, "low", "wide-range confidence stays low independently of depth");
+assert.equal(assessRouteDepth(depthPeers[3], depthPeers).level, "medium");
+assert.equal(assessRouteDepth(depthPeers[0], depthPeers).level, "low");
+assert.deepEqual(assessRouteDepth(depthPeers[6], depthPeers), assessRouteDepth(depthPeers[6], [...depthPeers].reverse()), "buy/sell sorting does not change depth");
+assert.equal(assessRouteDepth({itemVolume: null, limitingTurnoverExalted: 10000}, depthPeers).level, "unknown");
+assert.equal(assessRouteDepth({itemVolume: 1, limitingTurnoverExalted: 10}, []).level, "low", "tiny cohorts never promote thin trades");
+assert.equal(assessRouteDepth(depthPeers[6], [depthPeers[6]]).level, "high");
+assert.equal(assessRouteDepth(depthPeers[6], Array(5).fill(depthPeers[6])).level, "medium", "equal peers receive equal middle ranks");
+assert.equal(assessRouteDepth({...depthPeers[7], itemVolume: 6}, depthPeers).level, "low", "high turnover cannot mask low unit depth");

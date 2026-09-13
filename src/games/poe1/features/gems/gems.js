@@ -43,10 +43,9 @@ export const CORRUPT = {
 export const DEFAULTS = {
   /* Below this many listings a market is called thin. poe.ninja's price is a
      listing floor, so a handful of asks can be one optimistic seller — which
-     is exactly the case where a paper profit does not clear. Five is where the
-     quote stops being one person's opinion; raise it if you want the filter
-     stricter. */
-  thinListings: 5,
+     is why the default filters markets below ten listings. The threshold
+     is editable and does not guarantee liquidity. */
+  thinListings: 10,
   /* On by default. A gem whose profit rests on a market with a handful of
      listings is the common case, not the exception, and showing those first
      makes the whole list read as free money. Untick it to see them. */

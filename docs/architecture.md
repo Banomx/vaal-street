@@ -670,7 +670,13 @@ turnover floors (with confidence minimums of 5 units/hour and 100 Exalted/hour)
 with completed-range width and cross-route disagreement; extreme
 gaps are marked low confidence instead of styled as profit. The best-observed
 card shows those inputs as separate numeric tags, while every route row carries
-its own compact depth/range confidence badge. A separate strongest-evidence
+separate depth and confidence badges. Depth uses the weaker midrank of completed
+item units and limiting Exalted turnover across all valid routes for the selected
+item/hour, before filtering, sorting or pagination. High requires both ranks at
+or above 75%, plus 25 units/h and 500 Exalted/h; Medium starts at 25%. Below
+5 units/h or 100 Exalted/h is Low. Ties share a rank. Fewer than four valid routes
+use absolute flow bands; missing flow is Unknown. Wide price ranges still lower
+confidence independently of relative depth. A separate strongest-evidence
 comparison favors confidence, then limiting turnover, then narrower range.
 Small-market discovery sets both views to 100 Exalted/hour and 5 units/hour;
 lowering filters never removes the confidence minimums. Pinned comparisons and

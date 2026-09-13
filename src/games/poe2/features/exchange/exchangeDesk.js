@@ -157,6 +157,33 @@ export function filterExchangeRowsByTurnover(rows, minimumTurnoverExalted = 0, {
   });
 }
 
+// Compare same-item/hour routes; unit counts across different items are not comparable.
+export function assessRouteDepth(route, peers = []) {
+  const valid = (entry) => Number.isFinite(entry?.itemVolume) && entry.itemVolume > 0
+    && Number.isFinite(entry?.limitingTurnoverExalted) && entry.limitingTurnoverExalted > 0;
+  if (!valid(route)) return { level: "unknown", label: "Unknown", reason: "Completed units or turnover unavailable" };
+  const cohort = peers.filter(valid);
+  const units = route.itemVolume;
+  const turnover = route.limitingTurnoverExalted;
+  if (units < 5 || turnover < 100) return { level: "low", label: "Low", reason: "Below 5 completed units/h or 100 Exalted/h" };
+  if (cohort.length < 4) {
+    const level = units >= 25 && turnover >= 500 ? "high" : "medium";
+    return { level, label: level === "high" ? "High" : "Medium", reason: "Fewer than four routes: absolute bands (High: 25 units/h and 500 Exalted/h)" };
+  }
+  // Midranks keep tied markets equal rather than promoting every tie to High.
+  const rank = (key) => {
+    const below = cohort.filter((entry) => entry[key] < route[key]).length;
+    const equal = cohort.filter((entry) => entry[key] === route[key]).length;
+    return Math.min(1, Math.max(0, (below + Math.max(0, equal - 1) / 2) / (cohort.length - 1)));
+  };
+  const score = Math.min(rank("itemVolume"), rank("limitingTurnoverExalted"));
+  const level = score >= .75 && units >= 25 && turnover >= 500 ? "high" : score >= .25 ? "medium" : "low";
+  return {
+    level, label: level === "high" ? "High" : level === "medium" ? "Medium" : "Low",
+    reason: "Relative depth across " + cohort.length + " same-item/hour routes: weaker unit/turnover rank " + Math.round(score * 100) + "%. High: both in the top quarter, at least 25 units/h and 500 Exalted/h. Medium: rank at least 25%. Price range is separate.",
+  };
+}
+
 export function assessExchangeRoute(route, {
   minTurnoverExalted = 1000,
   minItemVolume = 10,
