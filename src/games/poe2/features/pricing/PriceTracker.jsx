@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
+import Watchlist from "../watchlist/Watchlist.jsx";
 import MarketBrowser from "../../shared/MarketBrowser.jsx";
 import { marketCategory, marketSubcategory, MARKET_CATEGORIES, MARKET_SUBCATEGORIES } from "./marketCategories.js";
 import { buildPriceTimeline, formatPriceTimestamp } from "./priceTimeline.js";
@@ -23,13 +24,13 @@ function sourceText(league, priceData, history, rateSummary) {
   return `Stored PoE 2 market timeline · ${league} · ${count} ${count === 1 ? "snapshot" : "snapshots"} · updated ${formatPriceTimestamp(priceData.generatedAt)}${rateSummary ? ` · ${rateSummary}` : ""}`;
 }
 
-export default function PriceTracker({ league, priceData, history, currency, rateSummary }) {
+export default function PriceTracker({ initialName = "", league, priceData, history, currency, rateSummary }) {
   const markets = useMemo(() => priceData && priceData !== "missing" ? priceData.prices || {} : {}, [priceData]);
   const names = useMemo(() => [...new Set([
     ...Object.keys(markets),
     ...Object.keys(history?.series || {}),
   ])].sort((a, b) => a.localeCompare(b)), [history, markets]);
-  const [item, setItem] = useState("");
+  const [item, setItem] = useState(initialName);
   const [rangeHours, setRangeHours] = useState(24);
   const [divineAdjusted, setDivineAdjusted] = useState(false);
 
@@ -59,6 +60,7 @@ export default function PriceTracker({ league, priceData, history, currency, rat
         <div><span>PoE 2 market history</span><h2>Price tracker</h2><p>Every hourly market snapshot is retained as a compact timeline for charts and future tools.</p></div>
       </header>
 
+      <Watchlist key={league} league={league} item={item} priceData={priceData} onSelect={setItem} />
       <div className="p2pt-workspace">
         <MarketBrowser names={names} entries={markets} selectedName={item} onSelect={setItem} sticky />
 

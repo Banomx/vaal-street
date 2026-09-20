@@ -1,0 +1,10 @@
+.p2-watch{padding:18px 20px;border:1px solid #633738;border-radius:10px;background:#171010;color:#eee}
+.p2-watch header,.p2-watch-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.p2-watch h3{margin:0;font-size:18px}.p2-watch h3 small{font-size:13px;color:#cbb}.p2-watch p{font-size:13px;line-height:1.5;margin:7px 0}
+.p2-watch button,.p2-watch select,.p2-watch input{border:1px solid #784846;border-radius:6px;background:#241515;color:#fff;padding:8px 10px;font:inherit;font-size:13px;min-width:0}
+.p2-watch button{cursor:pointer}.p2-watch button:disabled{opacity:.55}.p2-watch-list{display:grid;gap:8px;margin-top:12px}
+.p2-watch article{display:grid;grid-template-columns:minmax(140px,1.5fr) minmax(100px,1fr) repeat(3,minmax(100px,.8fr)) auto;gap:12px;align-items:center;padding:14px;border:1px solid #49302f;border-radius:7px;background:#110e0d}
+.p2-watch article.target-met{border-color:#649970;background:#122018}.p2-watch article small{display:block;margin-top:5px;font-size:12.5px}
+.p2-watch label{display:grid;gap:5px;font-size:12.5px}.p2-watch .p2-watch-item{text-align:left;border:0;background:transparent;padding:0;font-weight:600}
+@media(max-width:1100px){.p2-watch article{grid-template-columns:repeat(3,minmax(0,1fr))}.p2-watch-item{grid-column:span 2}}
+@media(max-width:520px){.p2-watch article{grid-template-columns:repeat(2,minmax(0,1fr))}.p2-watch article>div{grid-column:span 2}}

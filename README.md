@@ -1,7 +1,7 @@
 # Vaal Street
 
 Path of Exile 1 farming profitability and market price tools, plus an isolated
-Path of Exile 2 boss-profit workspace.
+Path of Exile 2 market-tools workspace.
 
 The site opens on a compact **Overview** briefing. It reuses the existing scarab
 movement, boss EV, Delve biome and category-price calculations in a selectable
@@ -238,6 +238,12 @@ Completed Currency Exchange trades come from GGG's hourly PoE 2 feed first;
 poe.ninja's documented PoE 2 exchange and stash endpoints fill current exchange gaps and non-exchange items.
 [PoE2Scout](https://api.poe2scout.com/swagger/index.html) is the final gap-fill
 for names neither source prices; it never overwrites GGG or poe.ninja data.
+
+PoE 2 **Unusual activity** highlights completed-trade volume spikes against each
+item’s recent baseline. **Route consistency** in Exchange shows how often the
+selected route beat direct Exalted. In **Price tracker**, use **Watch selected
+item** to save league-specific items and optional price targets in your browser.
+Targets are checked against loaded snapshots; there are no background notifications.
 
 The PoE 2 **Currency Exchange** tab uses GGG's completed hourly pair graph rather
 than listing data. Its route finder compares every direct item/quote pair whose

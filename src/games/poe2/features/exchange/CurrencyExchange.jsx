@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
+import RouteConsistency from "./RouteConsistency.jsx";
 import MarketBrowser from "../../shared/MarketBrowser.jsx";
 import { windowEvidence } from "../../shared/marketWindow.js";
 import { assessExchangeMarket, assessRouteDepth, strongestEvidenceRoute } from "./exchangeDesk.js";
@@ -72,12 +73,12 @@ function routeEvidence(route, { minTurnoverExalted, minItemVolume, routeGap = 0 
   ];
 }
 
-export default function CurrencyExchange({ league, priceData, exchange, history, currency, chaosExalted, rateSummary }) {
+export default function CurrencyExchange({ initialItemId = "", league, priceData, exchange, history, currency, chaosExalted, rateSummary }) {
   const rows = useMemo(() => buildExchangeRows(exchange, priceData), [exchange, priceData]);
   const overview = useMemo(() => buildExchangeOverview(rows, history), [history, rows]);
   const detailRef = useRef(null);
   const workbenchRef = useRef(null);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(initialItemId);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("turnover");
   const [minimum, setMinimum] = useState(1000);
@@ -275,6 +276,7 @@ export default function CurrencyExchange({ league, priceData, exchange, history,
             <label><span>Your assumed share of hourly flow</span><input type="number" min="0.1" max="100" step="0.1" list="p2ex-flow-presets" value={Number((participation * 100).toFixed(2))} onChange={(event) => setParticipation(Math.min(1, Math.max(.001, (Number(event.target.value) || .1) / 100)))} /><small>Clear-time assumption only · units/h and ex/h show the full observed market</small><datalist id="p2ex-flow-presets"><option value="1" /><option value="5" /><option value="10" /><option value="25" /><option value="50" /><option value="75" /><option value="80" /><option value="90" /><option value="100" /></datalist></label>
           </div>
           {selected ? <>
+            <RouteConsistency history={history} itemId={selectedId} route={trackedRoute} side={tradeSide} minItemVolume={routeMinimumUnits} minTurnoverExalted={routeMinimum} />
             {recommendedRoute ? <div className={`p2ex-recommendation evidence-${confidence.level}`}>
               <div><span>Best observed route</span><strong>{tradeSide === "buy" ? "Pay" : "Receive"} {number(recommendedRoute.rateQuotePerItem * plannedUnits)} {recommendedRoute.quoteName}</strong><small>{number(recommendedRoute.rateQuotePerItem)} per item · {number(execution.completedValue, 0)} Exalted equivalent</small><div className="p2ex-confidence-tags"><em className={`p2ex-confidence ${confidence.level}`}>Overall: {shortConfidence(confidence.level)}</em>{bestRouteEvidence.map((tag) => <span className={tag.tone} title={tag.title} key={tag.title}>{tag.text}</span>)}</div></div>
               <dl><div><dt>Versus direct Exalted</dt><dd className={routeImprovement > 0 ? "gain" : ""}>{routeImprovement == null ? "No direct pair" : routeImprovement > .0005 ? `${percent(routeImprovement)} observed edge` : "Same observed route"}</dd></div><div><dt>Clear time at {number(participation * 100, 1)}% share</dt><dd>{duration(execution.hoursToClear)}</dd></div><div><dt>Observed value range</dt><dd>{number(execution.lowValue, 0)}–{number(execution.highValue, 0)} ex</dd></div></dl>

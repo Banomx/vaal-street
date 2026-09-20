@@ -292,6 +292,7 @@ src/
       features/farms/          tablet entry cost against mechanic return indices
       features/exchange/       completed-pair analysis and Currency Exchange UI
       features/pricing/        PoE 2 market timeline UI and selectors
+      features/watchlist/      league-scoped saved items and snapshot targets
 ```
 
 A module may import from its own game or from `src/shared`; game directories do
@@ -705,6 +706,34 @@ The Exchange picker uses the same metadata-driven category and subcategory rules
 as Price Tracker rather than maintaining an exchange-only taxonomy. Specific
 GGG tags such as catalysts take precedence over broad structural classes, and
 league mechanics have separate subcategories rather than combined buckets.
+
+PoE 2 **Unusual activity** derives candidates from every item in the latest
+completed exchange hour. Item units are summed across its pairs and compared
+with the median of positive observed hourly totals from the preceding 24 hours.
+At least six baseline hours are required; missing pairs are unknown, never zero.
+The default filters are 2x typical units and at least 10 units in the latest hour.
+Price context compares the latest normalized price with its earlier median when
+at least six earlier price samples exist. Low unit baselines and stale history
+are labelled explicitly. Chart and route actions open the selected item.
+
+**Route consistency** follows the selected Exchange route over the last 24
+hours of stored history. Each sample compares it with direct Exalted in the
+same hour, using same-hour conversion legs and the selected depth floors
+(minimum 5 item units/hour and 100 Exalted/hour). A win means at least 1% more
+received when selling or 1% less paid when buying. The score is wins divided by
+comparable hours, shown after six samples, alongside median edge and a trailing
+hourly winning streak. Gaps break the streak. Ranges wider than 50% are counted
+separately; consistency does not establish executable prices. Both signals
+deduplicate hourly buckets and anchor their window to the latest stored hour.
+
+The Price tracker **Watchlist** saves up to 100 item names per league through
+createJsonStore, with feature key watchlist.<encoded league> and game poe2.
+Optional inclusive above/below targets use an explicitly selected Exalted,
+Chaos or Divine unit, independent of chart display currency. Currency changes
+clear the old target. Targets are evaluated against the loaded price snapshot;
+missing quotes and quotes older than three hours cannot trigger them. Lists are
+browser-local, with a visible warning when storage fails, and do not send
+background notifications. No additional feed access or data files are needed.
 
 PoE 1 uses its own family-oriented history contract because it also stitches
 source backfills onto a league-day axis. Every PoE 1 family — scarabs and each

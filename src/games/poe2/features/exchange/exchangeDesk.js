@@ -453,3 +453,89 @@ export function findTriangleChecks(exchange, { minTurnoverExalted = 10, minGap =
   }
   return checks.sort((left, right) => Math.abs(right.gap) - Math.abs(left.gap));
 }
+
+
+// Only recent hourly observations are compared. A missing pair is unknown, not zero.
+function recentSignalHistory(history, hours) {
+  const prepared = prepareExchangeHistory(history);
+  const valid = prepared.snapshots.filter((snapshot) => Number.isFinite(snapshot.atMs))
+    .sort((a, b) => a.atMs - b.atMs);
+  const latestAt = valid.at(-1)?.atMs ?? null;
+  const buckets = new Map();
+  for (const snapshot of valid) {
+    if (snapshot.atMs > latestAt - hours * 3600e3) buckets.set(Math.floor(snapshot.atMs / 3600e3), snapshot);
+  }
+  return { ...prepared, snapshots: [...buckets.values()], latestAt };
+}
+
+export function buildUnusualActivity(history, { minimumMultiple = 2, minimumUnits = 10 } = {}) {
+  const prepared = recentSignalHistory(history, 25);
+  const latestAt = prepared.latestAt;
+  const totals = prepared.snapshots.map((snapshot) => {
+    const units = new Map();
+    for (const [index, values] of snapshot.pairs) {
+      const ids = prepared.keys[index]?.split("|");
+      if (ids?.length !== 2) continue;
+      ids.forEach((id, side) => {
+        const volume = positive(values[side + 1]);
+        if (volume) units.set(id, (units.get(id) || 0) + volume);
+      });
+    }
+    return { at: snapshot.atMs, units };
+  });
+  const latest = totals.at(-1);
+  let evaluated = 0;
+  let insufficient = 0;
+  const rows = [];
+  for (const [itemId, units] of latest?.units || []) {
+    const baselineValues = totals.slice(0, -1).map((hour) => hour.units.get(itemId)).filter((value) => value > 0);
+    if (baselineValues.length < 6) { insufficient++; continue; }
+    evaluated++;
+    const baseline = median(baselineValues);
+    const multiple = units / baseline;
+    if (units < minimumUnits || multiple < minimumMultiple) continue;
+    const prices = exchangeTimelineFromPrepared(prepared, itemId, 24).points;
+    const latestPrice = prices.find((point) => point.at === latestAt)?.price;
+    const earlierPrices = prices.filter((point) => point.at < latestAt).map((point) => point.price);
+    const priceMedian = earlierPrices.length >= 6 ? median(earlierPrices) : null;
+    rows.push({
+      itemId, name: history?.items?.[itemId]?.name || itemId.split("/").pop(),
+      units, baseline, multiple, samples: baselineValues.length,
+      priceChange: latestPrice > 0 && priceMedian > 0 ? latestPrice / priceMedian - 1 : null,
+    });
+  }
+  return { latestAt, evaluated, insufficient, rows: rows.sort((a, b) => b.multiple - a.multiple || a.name.localeCompare(b.name)) };
+}
+
+export function buildRouteConsistency(history, itemId, quoteId, {
+  side = "sell", minItemVolume = 10, minTurnoverExalted = 1000,
+} = {}) {
+  const prepared = recentSignalHistory(history, 24);
+  const empty = { samples: 0, wins: 0, score: null, medianEdge: null, streak: 0, wideRanges: 0, latestAt: prepared.latestAt };
+  if (!itemId || !quoteId) return { ...empty, reason: "Select a route to inspect its history." };
+  if (quoteId === EXALTED_ID) return { ...empty, reason: "Direct Exalted is the comparison baseline." };
+  const route = exchangeRouteTimelineFromPrepared(prepared, itemId, quoteId, 24);
+  const direct = new Map(exchangeRouteTimelineFromPrepared(prepared, itemId, EXALTED_ID, 24).points.map((point) => [point.at, point]));
+  const enough = (point) => point && point.itemVolume >= Math.max(5, minItemVolume)
+    && point.limitingTurnoverExalted >= Math.max(100, minTurnoverExalted);
+  const points = route.points.flatMap((point) => {
+    const reference = direct.get(point.at);
+    if (!enough(point) || !enough(reference)) return [];
+    const edge = side === "buy" ? 1 - point.price / reference.price : point.price / reference.price - 1;
+    return [{ at: point.at, edge, win: edge >= .01,
+      wide: point.high / point.low - 1 > .5 || reference.high / reference.low - 1 > .5 }];
+  });
+  const wins = points.filter((point) => point.win).length;
+  let streak = 0;
+  let expectedHour = Math.floor(prepared.latestAt / 3600e3);
+  for (const point of [...points].reverse()) {
+    if (!point.win || Math.floor(point.at / 3600e3) !== expectedHour) break;
+    streak++; expectedHour--;
+  }
+  return { ...empty, samples: points.length, wins,
+    score: points.length >= 6 ? wins / points.length : null,
+    medianEdge: points.length ? median(points.map((point) => point.edge)) : null,
+    streak, wideRanges: points.filter((point) => point.wide).length,
+    reason: points.length < 6 ? "At least six comparable hours are needed for a consistency score." : null,
+  };
+}

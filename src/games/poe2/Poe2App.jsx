@@ -6,6 +6,7 @@ import BossProfit from "./features/bosses/BossProfit.jsx";
 import Overview from "./features/overview/Overview.jsx";
 import PopularFarms from "./features/farms/PopularFarms.jsx";
 import PriceTracker from "./features/pricing/PriceTracker.jsx";
+import UnusualActivity from "./features/exchange/UnusualActivity.jsx";
 import CurrencyExchange from "./features/exchange/CurrencyExchange.jsx";
 import { POE2_LEAGUE_FILES, POE2_SCHEMA_VERSIONS, POE2_STATIC_BASE } from "./config.js";
 import { isUsable, leagueFileUrl, loadDocument, summarize } from "../../shared/data/snapshot.js";
@@ -51,6 +52,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
   const [verdict, setVerdict] = useState(null);
   const [currency, setCurrency] = useState("smart");
   const [tab, setTab] = useState("overview");
+  const [marketTarget, setMarketTarget] = useState(null);
   const [bossTarget, setBossTarget] = useState(null);
   const rates = marketRates(prices);
 
@@ -170,6 +172,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
         <button className={tab === "bosses" ? "on" : ""} onClick={() => setTab("bosses")}>Boss profit</button>
         <button className={tab === "exchange" ? "on" : ""} onClick={() => setTab("exchange")}>Exchange</button>
         <button className={tab === "prices" ? "on" : ""} onClick={() => setTab("prices")}>Price tracker</button>
+        <button className={tab === "activity" ? "on" : ""} onClick={() => setTab("activity")}>Unusual activity</button>
       </AppTabs>
       <div className="p2-notices">
         {verdict?.level !== "notice" && <SnapshotNotice verdict={verdict} />}
@@ -189,8 +192,9 @@ export default function Poe2App({ activeGame, onGameChange }) {
       {tab === "farms" && <PopularFarms league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency}
         chaosExalted={rates.chaosExalted} divineExalted={rates.divineExalted} rateSummary={rates.summary} />}
       {tab === "bosses" && <BossProfit initialBossId={bossTarget} league={league || "Standard"} priceData={prices} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
-      {tab === "exchange" && <CurrencyExchange league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} history={exchangeHistory} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
-      {tab === "prices" && <PriceTracker league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency} rateSummary={rates.summary} />}
+      {tab === "exchange" && <CurrencyExchange initialItemId={marketTarget?.itemId} league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} history={exchangeHistory} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
+      {tab === "prices" && <PriceTracker initialName={marketTarget?.name} league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency} rateSummary={rates.summary} />}
+      {tab === "activity" && <UnusualActivity league={league} history={exchangeHistory} onOpenMarket={(next, target) => { setMarketTarget(target); setTab(next); window.scrollTo({ top: 0, behavior: "instant" }); }} />}
       </>}
       {verdict?.level === "notice" && <div className="p2-notices"><SnapshotNotice verdict={verdict} /></div>}
       <footer className="p2-art-credit" aria-label="Artwork credit">
