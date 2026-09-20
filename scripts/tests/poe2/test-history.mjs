@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { appendPriceSnapshot, mergePriceHistories, thinPriceHistory } from "../../poe2/history.mjs";
 import { appendExchangeSnapshot, mergeExchangeHistories, thinExchangeHistory } from "../../poe2/exchange-history.mjs";
-import { buildPriceTimeline } from "../../../src/games/poe2/features/pricing/priceTimeline.js";
+import { buildPriceTimeline, formatPriceTimestamp } from "../../../src/games/poe2/features/pricing/priceTimeline.js";
 
 const snapshot = (generatedAt, prices, divineExalted = 400) => ({
   generatedAt,
@@ -150,3 +150,9 @@ assert.equal(mergePriceHistories({ ...history, generatedAt: "2026-08-19T00:00:00
   history.timestamps.at(-1), "metadata cannot predate its newest observation");
 assert.equal(mergeExchangeHistories({ ...exchangeHistory, generatedAt: "2026-08-19T00:00:00Z" }).generatedAt,
   exchangeHistory.snapshots.at(-1).at);
+
+assert.equal(formatPriceTimestamp("2026-09-20T01:17:46+02:00"), "2026-09-19 23:17:46 UTC");
+assert.equal(formatPriceTimestamp(Date.parse("2026-09-20T00:00:00Z"), {axis: true}), "09-20 00:00");
+assert.equal(formatPriceTimestamp("2026-09-20T00:00:00Z", {axis: true, dateOnly: true}), "2026-09-20");
+assert.equal(formatPriceTimestamp(null), "—");
+assert.equal(formatPriceTimestamp("invalid"), "—");

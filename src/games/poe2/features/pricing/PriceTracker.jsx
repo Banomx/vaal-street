@@ -3,7 +3,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import MarketBrowser from "../../shared/MarketBrowser.jsx";
 import { marketCategory, marketSubcategory, MARKET_CATEGORIES, MARKET_SUBCATEGORIES } from "./marketCategories.js";
-import { buildPriceTimeline } from "./priceTimeline.js";
+import { buildPriceTimeline, formatPriceTimestamp } from "./priceTimeline.js";
 
 const RANGES = [
   [24, "24h"],
@@ -16,19 +16,11 @@ function number(value, digits = 2) {
   return Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 }
 
-function timelineTick(value, rangeHours) {
-  const date = new Date(value);
-  if (rangeHours && rangeHours <= 168) {
-    return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit" });
-  }
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 function sourceText(league, priceData, history, rateSummary) {
   if (!priceData) return "Loading the current PoE 2 market catalogue…";
   if (priceData === "missing") return `PoE 2 market snapshot unavailable · ${league}`;
   const count = history?.timestamps?.length || 0;
-  return `Stored PoE 2 market timeline · ${league} · ${count} ${count === 1 ? "snapshot" : "snapshots"} · updated ${new Date(priceData.generatedAt).toLocaleString()}${rateSummary ? ` · ${rateSummary}` : ""}`;
+  return `Stored PoE 2 market timeline · ${league} · ${count} ${count === 1 ? "snapshot" : "snapshots"} · updated ${formatPriceTimestamp(priceData.generatedAt)}${rateSummary ? ` · ${rateSummary}` : ""}`;
 }
 
 export default function PriceTracker({ league, priceData, history, currency, rateSummary }) {
@@ -52,6 +44,7 @@ export default function PriceTracker({ league, priceData, history, currency, rat
   const currentSubcategoryId = marketSubcategory(currentCategoryId, item, current);
   const currentSubcategory = MARKET_SUBCATEGORIES[currentCategoryId]?.find(([id]) => id === currentSubcategoryId)?.[1];
   const last = timeline.points[timeline.points.length - 1];
+  const dateOnlyTicks = last && last.at - timeline.points[0].at > 7 * 24 * 60 * 60 * 1000;
   const change = divineAdjusted ? timeline.divineAdjustedChange : timeline.change;
 
   useEffect(() => {
@@ -94,11 +87,13 @@ export default function PriceTracker({ league, priceData, history, currency, rat
               <LineChart data={timeline.points} margin={{ top: 14, right: 20, bottom: 4, left: 4 }}>
                 <CartesianGrid stroke="#35231c" strokeDasharray="2 5" vertical={false} />
                 <XAxis dataKey="at" type="number" scale="time" domain={["dataMin", "dataMax"]} stroke="#806b62" fontSize={11}
-                  tickFormatter={(value) => timelineTick(value, rangeHours)} />
+                  tickCount={6} interval="preserveStartEnd" minTickGap={28} tickMargin={10} height={42}
+                  padding={{ left: 12, right: 12 }}
+                  tickFormatter={(value) => formatPriceTimestamp(value, { axis: true, dateOnly: dateOnlyTicks })} />
                 <YAxis stroke="#806b62" fontSize={11} width={58} tickFormatter={(value) => number(value, value < 10 ? 2 : 0)} domain={["auto", "auto"]} />
                 {divineAdjusted && <YAxis yAxisId="rate" orientation="right" stroke="#8f7eaf" fontSize={11} width={58} tickFormatter={(value) => number(value, 0)} domain={["auto", "auto"]} />}
                 <Tooltip contentStyle={{ background: "#160e0b", border: "1px solid #63351f", color: "#ead8cf" }}
-                  labelFormatter={(value) => new Date(value).toLocaleString()}
+                  labelFormatter={(value) => formatPriceTimestamp(value)}
                   formatter={(value, name) => name === "Divine rate" ? [`${number(value)} Exalted / Divine`, name] : [`${number(value)} ${timeline.unit}`, item]} />
                 <Line type="monotone" dataKey="value" stroke="#e36f3f" strokeWidth={2} dot={timeline.points.length < 40} activeDot={{ r: 4 }} connectNulls={false} animationDuration={1000} />
                 {divineAdjusted && <Line yAxisId="rate" type="monotone" dataKey="rate" name="Divine rate" stroke="#8f7eaf" strokeWidth={1.5} strokeDasharray="5 4" dot={false} connectNulls={false} animationDuration={1000} />}
@@ -106,7 +101,7 @@ export default function PriceTracker({ league, priceData, history, currency, rat
             </ResponsiveContainer>
           ) : <div className="p2pt-empty">{!item && names.length ? "Select an item from the market browser to see its price history." : history ? "This item has no stored points in the selected range." : "Price history starts with the next market snapshot."}</div>}
         </div>
-        <footer>{timeline.points.length < 2 ? "A trend appears after a second stored snapshot." : `${timeline.points.length} stored points shown.`} {divineAdjusted ? "The move compares Exalted price / Divine rate at both ends; the dashed line is Exalted per Divine. " : ""}The latest 7 days stay hourly; older history uses one point per UTC day.</footer>
+        <footer>Timeline in UTC. {timeline.points.length < 2 ? "A trend appears after a second stored snapshot." : `${timeline.points.length} stored points shown.`} {divineAdjusted ? "The move compares Exalted price / Divine rate at both ends; the dashed line is Exalted per Divine. " : ""}The latest 7 days stay hourly; older history uses one point per UTC day.</footer>
         </section>
       </div>
     </main>

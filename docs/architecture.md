@@ -328,6 +328,11 @@ changing its quotes, timestamps or history. The upstream active-league list is
 not a retirement list; omitting an older league must not trigger `league-collapse`.
 Missing or invalid retained data still fails validation rather than being hidden.
 
+The PoE 2 Price tracker formats axis labels, tooltips and update times as numeric
+UTC timestamps, independent of browser locale. The time axis targets six labels
+and hides labels that cannot maintain a 28px gap. Histories spanning at most
+seven days retain hours and minutes; longer spans show dates.
+
 Per-league files:
 
 ```text

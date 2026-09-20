@@ -1,3 +1,13 @@
+// Numeric UTC timestamps stay identical across browser languages and time zones.
+export function formatPriceTimestamp(value, { axis = false, dateOnly = false } = {}) {
+  if (value == null || value === "") return "—";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  const iso = date.toISOString();
+  if (!axis) return iso.slice(0, 19).replace("T", " ") + " UTC";
+  return dateOnly ? iso.slice(0, 10) : iso.slice(5, 16).replace("T", " ");
+}
+
 function finite(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
