@@ -210,7 +210,7 @@ const css = `
 body { margin:0; background:#090605; }
 button,select,input { font-family:inherit; }
 .p2-root {
-  --app-art: url("${import.meta.env.BASE_URL}assets/poe2-atziri-chamber.jpg");
+  --app-art: url("${new URL(import.meta.env.BASE_URL + "assets/poe2-atziri-chamber.jpg", document.baseURI).href}");
   --app-art-position: center 54%;
   --app-art-tint: #d8664e;
   --app-art-border: #713c31;

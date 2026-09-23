@@ -301,7 +301,7 @@
 .app-snapshot-notice details[open] .app-notice-toggle::after { transform:rotate(225deg); }
 .app-snapshot-notice details[open]>summary { padding-bottom:8px;border-bottom:1px solid currentColor; }
 .app-snapshot-notice details[open]>ul { margin-top:10px; }
-.overview-provenance { margin-top:22px;padding-top:16px;border-top:1px solid #513938; }
+.overview-provenance { margin:0 0 16px; }
 .overview-provenance .app-source-strip { margin:0; }
 .market-overview .overview-heading { margin-top:0; }
 .overview-stat { min-height:128px; }

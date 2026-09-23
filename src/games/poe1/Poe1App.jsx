@@ -1571,7 +1571,7 @@ const css = `
   font-display: swap;
 }
 .st-root {
-  --app-art: url("${import.meta.env.BASE_URL}assets/poe1-incursion.jpg");
+  --app-art: url("${new URL(import.meta.env.BASE_URL + "assets/poe1-incursion.jpg", document.baseURI).href}");
   --app-art-position: center 42%;
   --app-art-tint: #b47545;
   --app-art-border: #694632;

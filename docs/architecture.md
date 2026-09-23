@@ -1152,6 +1152,7 @@ reading surfaces. PoE 1 uses the Vaal mural from
 by Roman Kuprianov from the
 [GGG Fate of the Vaal showcase](https://www.pathofexile.com/forum/view-thread/3907125).
 Both originals are stored under `public/assets/` and credited in their game footer.
+Artwork URLs are resolved against `document.baseURI` before entering CSS custom properties, so the built stylesheet cannot resolve them relative to its own `assets/` directory.
 Mobile headers wrap controls below the brand without fixed backgrounds or animation.
 
 Supporting text uses near-white neutrals across tables, captions and controls;
@@ -1161,7 +1162,7 @@ Shared controls use visible Vaal-red borders, explicit active navigation and key
 focus states. Overview cards emphasize values and full-width tool actions; mobile
 summary cards stack below 720px. Transitions respect reduced-motion preferences.
 
-Overview pages place provenance below their main content. Snapshot notices use
+Overview pages place price sources, update time and exchange rates above the overview heading. Snapshot notices use
 native expandable details: warning titles stay visible and errors start expanded.
 On mobile, the view selector stays sticky while the workspace scrolls.
 
