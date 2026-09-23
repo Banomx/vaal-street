@@ -136,15 +136,6 @@ process.env.DATA_OUT = OUT_DIR;
 process.env.PAGES_BASE_URL = PAGES;
 const mod = await import("../../poe1/fetch-data.mjs");
 
-await (async () => {
-  const deadline = Date.now() + 120_000;
-  for (;;) {
-    try { await readFile(path.join(OUT_DIR, "index.json"), "utf8"); return; } catch { /* not yet */ }
-    if (Date.now() > deadline) throw new Error("snapshot did not finish within 120s");
-    await new Promise((r) => setTimeout(r, 200));
-  }
-})();
-
 /* ---- assertions ---- */
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log("FAIL:", m); } };

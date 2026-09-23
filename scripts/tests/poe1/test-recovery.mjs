@@ -144,16 +144,6 @@ process.env.PAGES_BASE_URL = PAGES;
 process.env.DATA_MODE = "reuse";
 await import("../../poe1/fetch-data.mjs");
 
-await (async () => {
-  const deadline = Date.now() + 60_000;
-  for (;;) {
-    const index = JSON.parse(await readFile(path.join(OUT_DIR, "index.json"), "utf8"));
-    if (Date.parse(index.generatedAt) > Date.parse(ago(0.1))) return;
-    if (Date.now() > deadline) throw new Error("reuse did not finish within 60s");
-    await new Promise((r) => setTimeout(r, 100));
-  }
-})();
-
 const read = async (...parts) => JSON.parse(await readFile(path.join(OUT_DIR, ...parts), "utf8"));
 const self = await read("Allflame", "scarabs-selfhistory.json");
 const snapshot = await read("Allflame", "scarabs.json");

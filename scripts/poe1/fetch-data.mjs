@@ -1946,4 +1946,5 @@ async function run() {
   }
 }
 
-run().catch((e) => { console.error(e); process.exit(1); });
+// Importers must wait for validation and directory promotion before reading output.
+await run().catch((e) => { console.error(e); process.exit(1); });

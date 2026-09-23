@@ -196,15 +196,6 @@ globalThis.fetch = async (url) => {
 process.env.DATA_OUT = OUT_DIR;
 await import("../../poe1/fetch-data.mjs");
 
-await (async () => {
-  const deadline = Date.now() + 120_000;
-  for (;;) {
-    try { await readFile(path.join(OUT_DIR, "index.json"), "utf8"); return; } catch { /* not yet */ }
-    if (Date.now() > deadline) throw new Error("snapshot did not finish within 120s");
-    await new Promise((r) => setTimeout(r, 200));
-  }
-})();
-
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log("FAIL:", m); } };
 const near = (a, b, eps = 0.01) => a != null && Math.abs(a - b) <= eps;
@@ -382,12 +373,6 @@ ok(hits.filter((h) => h === "api.poe.watch/get").length === 0,
   process.env.DATA_OUT = DIR2;
   const fresh = await import(`../../poe1/fetch-data.mjs?down=${Date.now()}`);
   void fresh;
-  const deadline = Date.now() + 120_000;
-  for (;;) {
-    try { await readFile(path.join(DIR2, "index.json"), "utf8"); break; } catch { /* not yet */ }
-    if (Date.now() > deadline) { ok(false, "fallback run did not finish"); break; }
-    await new Promise((r) => setTimeout(r, 200));
-  }
   try {
     const p2 = JSON.parse(await readFile(path.join(DIR2, "Allflame", "prices.json"), "utf8"));
     ok(near(p2.prices["Orb of Intention"]?.c, 26.4),

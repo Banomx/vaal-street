@@ -70,7 +70,8 @@ boss item came from a recent earlier hour.
 Neither fetcher writes into `public/data/<game>/` while it runs. `createStage()`
 in `scripts/shared/dataset.mjs` makes a sibling `.staging-<pid>-<n>` directory,
 the run generates into that, and only a run that passes its own gates is
-promoted over the published tree by an atomic rename. A run that fails discards
+promoted by moving the published tree aside, then renaming staging into place.
+A run that fails discards
 its staging directory, exits non-zero and leaves the validated baseline intact.
 The workflow saves that fallback and can publish it alongside the other game's
 successful update, while still reporting the refresh failure. Invalid or missing
@@ -78,7 +79,10 @@ fallback data blocks the site build. Abandoned staging directories from a
 killed run are cleared at the start of the next one. If a process died after
 moving the live tree to `.previous-*` but before installing staging, the newest
 previous tree is restored first; it is never deleted as ordinary scratch data
-while the final tree is absent.
+while the final tree is absent. The PoE 1 fetcher awaits the full run at module
+level, so fixture tests can await its import before reading output. Polling for
+`index.json` is not a completion signal: the old index exists before promotion
+and is briefly absent between the directory moves.
 
 The gates are `scripts/poe1/validate.mjs` and `scripts/poe2/validate.mjs`, both
 runnable on their own against the checked-in tree:
