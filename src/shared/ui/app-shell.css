@@ -354,3 +354,60 @@
 @media (prefers-reduced-motion: no-preference) { .app-loading-preview { animation: market-loading 1.6s ease-in-out infinite alternate; } }
 @keyframes market-loading { to { opacity: .45; } }
 @media (max-width: 600px) { .app-loading-preview { grid-template-columns: 1fr; }.app-loading-preview > div:not(:first-child) { display: none; } }
+
+/* Game-owned artwork decorates the shell; data surfaces remain solid. */
+.app-shell-page.app-art-theme {
+  background: linear-gradient(180deg, #0c0807a8, #0c0807ed 700px, #0c0807 1250px),
+    var(--app-art) center top / auto 1250px no-repeat, #0c0807;
+}
+.app-art-theme .app-header {
+  min-height: 154px;
+  padding: 26px;
+  align-items: flex-end;
+  border-color: var(--app-art-border);
+  background: linear-gradient(90deg, #0b0706c9, #0b07061a 48%, #0b0706b8),
+    linear-gradient(0deg, #0b0706c9, transparent 85%),
+    var(--app-art) var(--app-art-position) / cover no-repeat;
+  box-shadow: inset 0 1px #d89f6033, 0 16px 40px #0005;
+  backdrop-filter: none;
+}
+.app-art-theme .app-brand { border-left-color: var(--app-art-tint); }
+.app-art-theme .app-brand h1 { text-shadow: 0 2px 6px #000, 0 0 30px #000; }
+.app-art-theme .app-brand-subtitle { text-shadow: 0 1px 5px #000; }
+.app-art-theme .app-header-controls {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #ba826133;
+  border-radius: 9px;
+  background: #100b09eb;
+}
+.app-art-theme .app-tabs {
+  border-color: var(--app-art-border);
+  background: linear-gradient(180deg, #110c0bef, #110c0bdb),
+    var(--app-art) center / auto 1400px no-repeat;
+}
+.app-art-theme .app-sidebar-heading { color: #e4b891; }
+.app-art-theme .app-tabs > button.on {
+  background: linear-gradient(100deg, #552723, #281411);
+  box-shadow: inset 3px 0 var(--app-art-tint), inset 0 0 0 1px var(--app-art-border);
+}
+.app-art-theme .overview-heading {
+  border-color: var(--app-art-border);
+  border-top: 2px solid var(--app-art-tint);
+  background: linear-gradient(90deg, #17100ffa 35%, #17100fd9),
+    var(--app-art) center 65% / cover no-repeat;
+}
+.app-art-theme .overview-stat {
+  border-color: var(--app-art-border);
+  background: linear-gradient(135deg, #251813, #15100d 70%);
+  box-shadow: inset 0 2px var(--app-art-border);
+}
+.app-art-theme .app-source-strip { border-left: 2px solid var(--app-art-tint); }
+.app-art-theme .p2-art-credit a { color: inherit; text-decoration-color: var(--app-art-tint); text-underline-offset: 4px; }
+@media (max-width: 720px) {
+  .app-art-theme .app-header { min-height: 180px; padding: 20px 16px; gap: 24px; align-items: stretch; background-size: auto, auto, auto 160%; }
+  .app-art-theme .app-header-controls { width: 100%; min-width: 0; padding: 12px; gap: 12px; }
+  .app-art-theme .app-header-controls > * { min-width: 0; }
+  .app-art-theme .app-control select { min-width: 0; max-width: 100%; }
+  .app-art-theme .app-tabs { background: #17100f; }
+}

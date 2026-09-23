@@ -929,7 +929,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
 
   /* ---- render ---- */
   return (
-    <div className="app-shell-page st-root">
+    <div className="app-shell-page app-art-theme st-root">
       <style>{css}</style>
 
       <AppHeader className="st-head" brandClassName="st-title-block" controlsClassName="st-controls"
@@ -1555,7 +1555,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
         Exchange prices via <a href="https://www.pathofexile.com/developer/docs/reference#currencyexchange" target="_blank" rel="noopener noreferrer">GGG</a>
         {" · fallbacks via "}<a href="https://poe.watch" target="_blank" rel="noopener noreferrer">poe.watch</a>
         {" and "}<a href="https://poe.ninja" target="_blank" rel="noopener noreferrer">poe.ninja</a>
-        {" · Searing Exarch artwork © Grinding Gear Games · "}This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
+        {" · "}<a href="https://www.pathofexile.com/incursion" target="_blank" rel="noopener noreferrer">Incursion artwork © Grinding Gear Games</a>{" · "}This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
       </footer>
     </div>
   );
@@ -1571,16 +1571,11 @@ const css = `
   font-display: swap;
 }
 .st-root {
+  --app-art: url("${import.meta.env.BASE_URL}assets/poe1-incursion.jpg");
+  --app-art-position: center 42%;
+  --app-art-tint: #b47545;
+  --app-art-border: #694632;
   overflow-x: hidden;
-  background:
-    radial-gradient(1000px 480px at 62% -120px, rgba(122, 42, 19, 0.35) 0%, transparent 70%),
-    #0a0706;
-}
-.st-head {
-  border-bottom-color: #5c1a18;
-  background:
-    linear-gradient(90deg, rgba(9, 5, 4, .97) 0%, rgba(14, 7, 5, .90) 43%, rgba(25, 8, 4, .68) 73%, rgba(9, 5, 4, .92) 100%),
-    url("${import.meta.env.BASE_URL}assets/searing-exarch-header.jpg") center 30% / cover no-repeat;
 }
 .st-ctl select:disabled { opacity: 0.55; }
 .st-seg button:focus-visible, .st-ctl select:focus-visible, .st-card:focus-visible, .st-row:focus-visible, .st-close:focus-visible {

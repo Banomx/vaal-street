@@ -145,7 +145,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
   const currentOnly = prices && prices !== "missing" && !priceHistory;
 
   return (
-    <div className="app-shell-page p2-root">
+    <div className="app-shell-page app-art-theme p2-root">
       <style>{css}</style>
       <AppHeader className="p2-head" brandClassName="p2-title" controlsClassName="p2-controls"
         subtitle="Path of Exile 2 market tools">
@@ -198,7 +198,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
       </>}
       {verdict?.level === "notice" && <div className="p2-notices"><SnapshotNotice verdict={verdict} /></div>}
       <footer className="p2-art-credit" aria-label="Artwork credit">
-        Background artwork <strong>© Grinding Gear Games</strong>
+        <a href="https://www.pathofexile.com/forum/view-thread/3907125" target="_blank" rel="noopener noreferrer">Atziri&rsquo;s Chamber · Roman Kuprianov · © Grinding Gear Games</a>
       </footer>
     </div>
   );
@@ -210,22 +210,10 @@ const css = `
 body { margin:0; background:#090605; }
 button,select,input { font-family:inherit; }
 .p2-root {
-  position:relative;
-  isolation:isolate;
-  background-color:#090605;
-  background-image:
-    linear-gradient(180deg,rgba(9,6,5,.96) 0,rgba(9,6,5,.98) 54vh,#090605 108vh),
-    url("${import.meta.env.BASE_URL}assets/poe2-ardura-caravan.jpg");
-  background-position:center top;
-  background-repeat:no-repeat;
-  background-size:100% 110vh,cover;
-  background-attachment:fixed;
-}
-.p2-head {
-  border-bottom-color:#631c19;
-  background:linear-gradient(110deg,rgba(13,9,8,.88),rgba(37,16,11,.76) 72%,rgba(11,8,7,.9));
-  box-shadow:0 18px 44px rgba(0,0,0,.24);
-  backdrop-filter:blur(3px);
+  --app-art: url("${import.meta.env.BASE_URL}assets/poe2-atziri-chamber.jpg");
+  --app-art-position: center 54%;
+  --app-art-tint: #d8664e;
+  --app-art-border: #713c31;
 }
 .p2-tabs { background:rgba(16,10,8,.88); backdrop-filter:blur(3px); }
 .p2-notices { margin:0 auto; max-width:1180px; padding:0 18px; }
@@ -244,7 +232,6 @@ button,select,input { font-family:inherit; }
 }
 .p2-art-credit strong { color:#e2e2e0; font-weight:500; }
 @media (max-width:720px) {
-  .p2-root { background-position:58% top; background-size:100% 100vh,auto 100vh; }
   .p2-art-credit { text-align:center; }
 }
 `;

@@ -1144,14 +1144,18 @@ The shared `AppTabs` desktop sidebar collapses into square initial buttons (O, P
 BP, etc.), retaining navigation, full accessible names and hover titles. Its boolean
 preference uses `vaal-street.shared.sidebar-collapsed.v1`; compact navigation
 ignores the collapsed state so all views remain reachable on smaller screens.
-Game-specific header artwork and feature layouts remain in the game workspace,
-so PoE 2 can keep its dense boss ranking/detail layout without diverging from
-PoE 1's outer scale. The PoE 2 shell also owns its Ardura background treatment
-and the visible Grinding Gear Games artwork credit; neither is applied to the
-shared shell or PoE 1.
+Each game shell supplies its artwork URL, crop and accent through `--app-art*`
+variables. The shared `.app-art-theme` treatment carries it through the banner,
+page backdrop, sidebar and overview heading; prices and charts retain solid
+reading surfaces. PoE 1 uses the Vaal mural from
+[GGG Incursion](https://www.pathofexile.com/incursion). PoE 2 uses Atziri's Chamber
+by Roman Kuprianov from the
+[GGG Fate of the Vaal showcase](https://www.pathofexile.com/forum/view-thread/3907125).
+Both originals are stored under `public/assets/` and credited in their game footer.
+Mobile headers wrap controls below the brand without fixed backgrounds or animation.
 
 Supporting text uses near-white neutrals across tables, captions and controls;
-CSS captions use at least 12.5px. Headers and reading surfaces are opaque;
+CSS captions use at least 12.5px. Reading surfaces are opaque; artwork in headers has dark contrast overlays;
 source strips have opaque backgrounds for consistent readability.
 Shared controls use visible Vaal-red borders, explicit active navigation and keyboard
 focus states. Overview cards emphasize values and full-width tool actions; mobile
