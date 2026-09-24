@@ -1151,7 +1151,7 @@ by Roman Kuprianov from the
 [GGG Fate of the Vaal showcase](https://www.pathofexile.com/forum/view-thread/3907125).
 Both originals are stored under `public/assets/` and credited in their game footer.
 Artwork URLs are resolved against `document.baseURI` before entering CSS custom properties, so the built stylesheet cannot resolve them relative to its own `assets/` directory.
-Both games use compact headers over the page artwork. Mobile headers wrap controls below the brand; the decorative layer has a fixed 600px height without affecting page width, scroll position or interaction.
+Both games use compact headers over the page artwork. PoE 2 reduces artwork saturation and fades it with fixed pixel stops below the header, keeping bright highlights out of gaps between data panels even on wide screens. Mobile headers wrap controls below the brand; the decorative layer has a fixed 600px height without affecting page width, scroll position or interaction.
 
 Supporting text uses near-white neutrals across tables, captions and controls;
 CSS captions use at least 12.5px. Reading surfaces are opaque. A dark gradient and text shadows preserve contrast over the artwork. Overview source information is unboxed; other source strips retain opaque backgrounds.

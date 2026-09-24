@@ -215,6 +215,11 @@ button,select,input { font-family:inherit; }
   --app-art-tint: #d8664e;
   --app-art-border: #713c31;
 }
+/* Keep the scene near the header, but quiet its highlights between data panels. */
+.p2-root.app-art-theme::before {
+  filter: saturate(.65);
+  mask-image: linear-gradient(#000 0, #000b 160px, #0003 360px, #0001 650px, transparent 1000px);
+}
 .p2-tabs { background:rgba(16,10,8,.88); backdrop-filter:blur(3px); }
 .p2-notices { margin:0 auto; max-width:1180px; padding:0 18px; }
 .p2-notices:empty { display:none; }
