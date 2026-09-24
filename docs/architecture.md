@@ -1144,20 +1144,17 @@ The shared `AppTabs` desktop sidebar collapses into square initial buttons (O, P
 BP, etc.), retaining navigation, full accessible names and hover titles. Its boolean
 preference uses `vaal-street.shared.sidebar-collapsed.v1`; compact navigation
 ignores the collapsed state so all views remain reachable on smaller screens.
-Each game shell supplies its artwork URL, crop and accent through `--app-art*`
-variables. The shared `.app-art-theme` treatment carries it through the banner,
-page backdrop, sidebar and overview heading; prices and charts retain solid
-reading surfaces. PoE 1 uses the Vaal mural from
+Each game shell supplies its artwork URL, aspect ratio and accent through `--app-art*`
+variables. The shared `.app-art-theme::before` renders one continuous page backdrop, preserving the original aspect ratio on desktop and fading into the page. Headers and overview headings are transparent; artwork is never repeated inside panels. Prices and charts retain solid reading surfaces. PoE 1 uses the Vaal mural from
 [GGG Incursion](https://www.pathofexile.com/incursion). PoE 2 uses Atziri's Chamber
 by Roman Kuprianov from the
 [GGG Fate of the Vaal showcase](https://www.pathofexile.com/forum/view-thread/3907125).
 Both originals are stored under `public/assets/` and credited in their game footer.
 Artwork URLs are resolved against `document.baseURI` before entering CSS custom properties, so the built stylesheet cannot resolve them relative to its own `assets/` directory.
-PoE 1 uses a taller responsive banner to reveal more of the Incursion mural. Mobile headers wrap controls below the brand without fixed backgrounds or animation.
+Both games use compact headers over the page artwork. Mobile headers wrap controls below the brand; the decorative layer has a fixed 600px height without affecting page width, scroll position or interaction.
 
 Supporting text uses near-white neutrals across tables, captions and controls;
-CSS captions use at least 12.5px. Reading surfaces are opaque; artwork in headers has dark contrast overlays;
-source strips have opaque backgrounds for consistent readability.
+CSS captions use at least 12.5px. Reading surfaces are opaque. A dark gradient and text shadows preserve contrast over the artwork. Overview source information is unboxed; other source strips retain opaque backgrounds.
 Shared controls use visible Vaal-red borders, explicit active navigation and keyboard
 focus states. Overview cards emphasize values and full-width tool actions; mobile
 summary cards stack below 720px. Transitions respect reduced-motion preferences.

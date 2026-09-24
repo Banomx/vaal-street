@@ -157,7 +157,7 @@ GGG exchange tests passed
 PoE 1 source evidence passed.
 Current leagues via /poe1/api/economy/leagues
 Leagues: Allflame
-GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790262000)
 poe.watch leagues: Allflame
 poe.watch status: 99/100 stashes processed, change 1-2-3-4-5…
   poe.watch: 26 rows over 8 categories via /compact, 25 names
@@ -229,15 +229,15 @@ poe.watch status: 99/100 stashes processed, change 1-2-3-4-5…
   resonators: 1 items, no previous snapshot to compare against
   resonators: 1 items (0 priced by GGG), 1 history series
 - Allflame: 2 scarabs, 2 history series, 1 div = 222c, rate history 1pt (self)
-Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-watch-test-6hjvLa.staging-6304-1790267071289
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-watch-test-JECTaP.staging-23452-1790269710472
   [warning] source-request-failed: Allflame/sources.json records 9 failed request(s)
   [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
 Quality: warning (2 warning, 0 degraded, 0 failure)
-Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-watch-test-6hjvLa.
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-watch-test-JECTaP.
     poe.watch /compact?league=Allflame — HTTP 500 for /compact?league=Allflame
 Current leagues via /poe1/api/economy/leagues
 Leagues: Allflame
-GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790262000)
 poe.watch unreachable — this run is poe.ninja only
   exchange primary is Chaos Orb; chaos divisor 1
   name dictionary: 1 currency/fragment names
@@ -301,18 +301,18 @@ poe.watch unreachable — this run is poe.ninja only
   resonators: 1 items, no previous snapshot to compare against
   resonators: 1 items (0 priced by GGG), 1 history series
 - Allflame: 2 scarabs, 2 history series, 1 div = 173c, rate history 1pt (self)
-Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-watch-down-Gf5RMS.staging-6304-1790267086676
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-watch-down-vc6kGw.staging-23452-1790269725826
   [warning] source-request-failed: Allflame/sources.json records 4 failed request(s)
   [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
 Quality: warning (2 warning, 0 degraded, 0 failure)
-Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-watch-down-Gf5RMS.
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-watch-down-vc6kGw.
 
 price map: 28 names, divine 222c
 
 All checks passed.
 Current leagues via /poe1/api/economy/leagues
 Leagues: Allflame
-GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790262000)
 poe.watch leagues: Allflame
 poe.watch status: 1/1 stashes processed, change 1…
   poe.watch: 6 rows over 6 categories via /compact, 6 names
@@ -381,11 +381,11 @@ poe.watch status: 1/1 stashes processed, change 1…
   resonators: 2 items, no previous snapshot to compare against
   resonators: 2 items (0 priced by GGG), 2 history series
 - Allflame: 2 scarabs, 2 history series, 1 div = 1300c, rate history 1pt (self)
-Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-fetch-test-oYMwL6.staging-15844-1790267100144
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-fetch-test-kJD0jI.staging-23796-1790269739316
   [warning] source-request-failed: Allflame/sources.json records 3 failed request(s)
   [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
 Quality: warning (2 warning, 0 degraded, 0 failure)
-Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-fetch-test-oYMwL6.
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-fetch-test-kJD0jI.
 
 price map: 40 names, chaos=1, divine=1300c
 
@@ -393,7 +393,7 @@ All checks passed.
 Found 1 checked-in history recovery file(s).
 Current leagues via /poe1/api/economy/leagues
 Leagues: Allflame
-GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790262000)
     poe.watch /leagues — HTTP 404 for /leagues
 poe.watch unreachable — this run is poe.ninja only
   exchange primary is Exalted Orb; chaos divisor 0.1
@@ -455,11 +455,11 @@ poe.watch unreachable — this run is poe.ninja only
   fossils: no data for Allflame
   resonators: no data for Allflame
 - Allflame: 1 scarabs, 1 history series, 1 div = 1300c, rate history 7pt (self)
-Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-history-test-BVB5XO.staging-15036-1790267113344
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-history-test-c0u5f1.staging-21340-1790269752465
   [warning] source-request-failed: Allflame/sources.json records 4 failed request(s)
   [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
 Quality: warning (2 warning, 0 degraded, 0 failure)
-Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-history-test-BVB5XO.
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-history-test-c0u5f1.
 
 9 stitched scarab points, 7 accumulated, axis "league day"
 
@@ -473,11 +473,11 @@ Rebuilt 2 derived history file(s) from the merged raw snapshots.
 Code-only deploy: reused deployed data, no new snapshot taken.
   [degraded] stale-leagues: 1 of 2 league(s) are stale
 Quality: degraded (0 warning, 1 degraded, 0 failure)
-Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\vs-recovery-n9uxaW.
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\vs-recovery-YuApt2.
 PoE 1 history recovery passed.
 Current leagues via /poe1/api/economy/leagues
 Leagues: Allflame
-GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790262000)
     poe.watch /leagues — HTTP 404 for /leagues
 poe.watch unreachable — this run is poe.ninja only
   exchange primary is Exalted Orb; chaos divisor 0.1
@@ -539,11 +539,11 @@ poe.watch unreachable — this run is poe.ninja only
   fossils: no data for Allflame
   resonators: no data for Allflame
 - Allflame: 1 scarabs, 1 history series, 1 div = 1300c, rate history 11pt (ninja+self)
-Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-rate-test-dGcCuu.staging-4312-1790267128856
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-rate-test-aJQAEa.staging-11272-1790269767963
   [warning] source-request-failed: Allflame/sources.json records 3 failed request(s)
   [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
 Quality: warning (2 warning, 0 degraded, 0 failure)
-Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-rate-test-dGcCuu.
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-rate-test-aJQAEa.
 
 chaos 20.0% vs divine -7.7% over 48h · 11 rate points
 
@@ -564,5 +564,5 @@ runes-of-aldur: cleaned carried prices — 1 placeholder item name(s), 1 entry/e
 Reused Runes of Aldur: 11 price point(s), 0 exchange snapshot(s) — restored 10 point(s) the deployment had lost
 Reused Standard: 1 price point(s), 0 exchange snapshot(s) — restored 1 point(s) the deployment had lost
 Quality: ok (0 warning, 0 degraded, 0 failure)
-Promoted the staged PoE 2 dataset to C:\Users\Banom\AppData\Local\Temp\vs-poe2-reuse-rOr2el.
+Promoted the staged PoE 2 dataset to C:\Users\Banom\AppData\Local\Temp\vs-poe2-reuse-yj3C26.
 PoE 2 reuse and failure handling passed.
