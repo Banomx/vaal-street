@@ -15,8 +15,8 @@ for(const game of ['poe1','poe2']){
  await evalJs(`localStorage.setItem('vaal-street.shared.active-game.v1',JSON.stringify('${game}'));location.reload()`);
  await new Promise(r=>setTimeout(r,2500));
  await evalJs('document.fonts.ready');
- const checks=await evalJs(`(async()=>{const h=document.querySelector('.app-header');const source=document.querySelector('.overview-provenance');const heading=document.querySelector('.overview-heading');const url=getComputedStyle(h).getPropertyValue('--app-art').split('"')[1];const res=await fetch(url);return {artStatus:res.status,artType:res.headers.get('content-type'),sourceAboveHeading:source.getBoundingClientRect().top<heading.getBoundingClientRect().top};})()`);
- console.log(game,'Production checks',checks);if(checks?.artStatus!==200||!checks?.artType?.startsWith('image/')||!checks?.sourceAboveHeading)process.exitCode=1;
+ const checks=await evalJs(`(async()=>{const h=document.querySelector('.app-header');const source=document.querySelector('.overview-provenance');const heading=document.querySelector('.overview-heading');const url=getComputedStyle(h).getPropertyValue('--app-art').split('"')[1];const res=await fetch(url);return {artStatus:res.status,artType:res.headers.get('content-type'),sourceBelowHeading:source.getBoundingClientRect().top>=heading.getBoundingClientRect().bottom};})()`);
+ console.log(game,'Production checks',checks);if(checks?.artStatus!==200||!checks?.artType?.startsWith('image/')||!checks?.sourceBelowHeading)process.exitCode=1;
  const shot=await send('Page.captureScreenshot',{format:'png'});
  await writeFile(new URL(`./production-${game}-desktop.png`,import.meta.url),Buffer.from(shot.data,'base64'));
  console.log(game,await evalJs(`JSON.stringify({title:document.querySelector('.app-brand-subtitle')?.textContent,art:getComputedStyle(document.querySelector('.app-header')).backgroundImage,overflow:document.documentElement.scrollWidth>innerWidth})`));

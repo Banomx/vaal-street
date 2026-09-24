@@ -1,0 +1,568 @@
+
+> vaal-street@0.1.0 test
+> npm run test:shared && npm run test:poe1 && npm run test:poe2
+
+
+> vaal-street@0.1.0 test:shared
+> node scripts/tests/shared/test-dry-streak.mjs && node scripts/tests/shared/test-publication.mjs && node scripts/tests/shared/test-history-recovery.mjs && node scripts/tests/shared/test-snapshot.mjs && node scripts/tests/shared/test-contracts.mjs
+
+Dry-streak probabilities and confidence thresholds passed.
+Publication gates passed.
+Saved history survives a failed site deployment and repeated restore.
+Snapshot contract tests passed.
+File contract tests passed (56 files across 10 leagues, 128 manifest entries).
+
+> vaal-street@0.1.0 test:poe1
+> node scripts/tests/poe1/test-money.mjs && node scripts/tests/poe1/test-boss.mjs && node scripts/tests/poe1/test-delve.mjs && node scripts/tests/poe1/test-gems.mjs && node scripts/tests/poe1/test-farm-strategy.mjs && node scripts/tests/poe1/test-overview-trends.mjs && node scripts/tests/poe1/test-catalogue.mjs && node scripts/tests/poe1/test-price-check.mjs && node scripts/tests/poe1/test-ggg-exchange.mjs && node scripts/tests/poe1/test-evidence.mjs && node scripts/tests/poe1/test-poewatch.mjs && node scripts/tests/poe1/test-fetch-shapes.mjs && node scripts/tests/poe1/test-history.mjs && node scripts/tests/poe1/test-recovery.mjs && node scripts/tests/poe1/test-rate.mjs
+
+
+smart cut: 2 div = 360c at 180c/div
+
+All checks passed.
+dataset: 33 bosses, 74 groups, 354 drop lines
+  by source: ledger 27, wiki 1, estimate 5
+shaper: gross 183c, entry 40c, net 143c, 15 kph
+exceptional gems: 28 mapped across 31 bosses
+profit chance: guaranteed 100%, lottery 10% over 10 runs -> 1% over 1, 40% over 50
+reset scope: 33 bosses, 263 distinct items
+
+All checks passed.
+delve dataset
+  ok  every biome has a sane depth ramp
+  ok  city biomes have a boss and no fossil pool; the others are the reverse
+  ok  the six exclusive fossils each belong to exactly one biome
+  ok  every fossil sits in at least one biome, and every pool name is a known fossil
+  ok  every exclusive node in NODES matches its biome's declared node
+  ok  every guide yield names a real fallback and declares where it came from
+  ok  the guide baseline has no hidden extra fossil or boss-frequency knob
+  ok  all six exclusive encounters carry the data-mined tier, weight and minimum depth
+  ok  boss drop rates keep sampled values and visibly marked estimates separate
+  ok  each boss has a guaranteed 100% unique pool and separate additional rolls
+  ok  unrated drop lines use the requested marked 3% default
+  ok  no declared price is stale or undated
+depth -> weight
+  ok  weights are exact at both ends of the ramp
+  ok  Mines ramps down, not up
+  ok  the ramp is monotonic
+  ok  shares sum to 1 and the deep-mine city shares match the wiki weights
+  ok  current data-mined city biome ramps finish at their effect depths
+  ok  community depth curves start at unlock and reach their declared caps
+biome value
+  ok  pool range and node values use the declared scenarios
+  ok  community Depth EV blends the special node against a stash, nothing else
+  ok  depth EV needs the target and the stash priced, not the biome's own list
+  ok  range median averages the two middle values for an even pool
+  ok  nothing in the biome maths depends on a node frequency any more
+  ok  city bosses are not mixed into the fossil-target model
+  ok  turning off fractured walls drops the wall-locked fossils from the pool
+  ok  fractured walls are a biome property, not a fossil one
+  ok  a Smuggler's Stash prices the generic pool for the whole mine, not one biome
+  ok  the stash pool ignores the wall setting and survives an inverted range
+  ok  the stash is one figure for the mine, so every biome shares it
+  ok  the exclusive node is worth far more than an ordinary one, which is the point of the tab
+  ok  an unpriced fossil is excluded from the range, not counted as zero
+  ok  the stash share is the mine-wide complement of the special-node curve
+  ok  a stash is scored and normalised on the same opportunity scale as a biome
+  ok  the stash keeps an opportunity score at the special-node cap
+  ok  pool lists come back dearest first, with unpriced fossils at the end
+  ok  a fractured wall holds exactly the fossils nothing else drops
+  ok  a wall is scored on its own per-node share, outside the special/stash split
+  ok  a cluster's value series needs two priced days and never plots a zero
+  ok  the stash share tracks depth: mostly stashes shallow, mostly special at the cap
+  ok  opportunity is relative, normalised and excludes cities
+  ok  missing target prices produce zero indices instead of NaN
+  ok  a biome's node curve re-prices its exclusive target on each day
+  ok  a city biome gets no curve rather than a flat lie
+  ok  one data point is not a curve
+bosses
+  ok  Ahuatotli's EV is the sum of chance x price
+  ok  a per-line pool-share override moves the EV
+  ok  old chance-based pool overrides migrate without changing saved profiles
+  ok  boss rows expose city share and the labelled community encounter model
+  ok  minimum depth gates availability
+  ok  a single kill's median sits below the mean when one line carries the EV
+  ok  Kurgal drops the Inevitable Eye alone, not an average of all four
+  ok  a synthetic drop keeps its average — the floor rule is for single items
+  ok  the Aul line prices the complete 17-aura market as a strict arithmetic average
+  ok  Kurgal keeps same-item socket variants beside each other
+  ok  one-kill simulation rolls the actual synthetic variant, not a fixed average item
+  ok  the simulation is seeded, so it doesn't flicker between renders
+  ok  a rate above 100% pays out more than one copy
+settings
+  ok  sanitize clamps depth and drops junk
+sample profiles
+  ok  the guide profile carries no fake observations or timed rate
+  ok  custom observations replace guide quantities and produce a finite personal pace
+  ok  zero-count categories fall back independently and zero-fossil nodes are valid
+  ok  a timed dry route remains a valid zero-rate personal sample
+  ok  sample sanitising clamps depths and observations
+  ok  price overrides survive a round trip, stay positive and win over the snapshot
+  ok  fossil rows come back priced and sorted
+
+all delve tests passed
+variant parsing
+  ok  poe.ninja's variant strings round-trip
+  ok  alternate quality is recognised so it can be excluded, not mixed in
+gem construction
+  ok  the level and quality caps are read off what poe.ninja lists
+  ok  a Vaal gem is an outcome, never a row, and a level-1-only gem is neither
+corruption weights
+  ok  the four effects are equal and the sub-rolls are 50/50
+  ok  +1 level is 1/8 on a gem with a Vaal version
+  ok  +1 level stays 1/8 when there is no Vaal version to become
+  ok  the strict reading puts +1 level at 1/6 instead
+  ok  quality up from 20% lands on 23% eight rolls in ten
+  ok  quality down from 20% is 10-19% uniform
+  ok  a roll that cannot change anything folds into no change
+quoting
+  ok  an exact variant is quoted exactly, with its listing count
+  ok  an unlisted quality walks DOWN to the nearest listed one and says so
+  ok  a variant with nothing below it is unpriced rather than guessed
+input cost
+  ok  the cheaper of the two routes wins, and the row says which
+  ok  a gem whose quality does nothing buys no prisms
+  ok  an override replaces the input cost and is flagged
+expected value
+  ok  Cyclone's corruption EV is the hand-worked figure
+  ok  the return is measured against everything you spent, orb included
+  ok  a support gem's missing Vaal outcome shows up in the EV
+  ok  levelling and selling wins when corruption is a coin flip on a cheap gem
+  ok  the downside is named rather than buried in the mean
+  ok  the thinnest market on the route is what the row reports
+  ok  an override on an outcome moves the EV
+  ok  a band has no single market, so it takes no override
+whole snapshot
+  ok  computeGems prices every levellable gem and nothing else
+  ok  Awakened Enlighten's EV survives poe.ninja listing no quality variants
+levelling time
+  ok  a family is picked by level cap plus the support flag, never by name
+  ok  the support flag comes off the name pattern, not a list
+  ok  quality buys experience on exactly six gems and no others
+  ok  the measured rate turns experience into minutes
+  ok  an edited total is used instead of the wiki baseline
+  ok  profit per hour inverts the ranking when the fat gem is the slow one
+  ok  an exceptional gem is slow despite its quality bonus
+settings
+  ok  thin markets are hidden until you ask for them
+  ok  settings are clamped and unknown keys are dropped
+  ok  experience overrides are kept per known family and nothing else
+
+all gem tests passed
+Farming strategy tests passed
+Overview trend tests passed
+Catalogue tests passed
+Catalogue identity tests passed
+Price check tests passed
+GGG exchange tests passed
+PoE 1 source evidence passed.
+Current leagues via /poe1/api/economy/leagues
+Leagues: Allflame
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+poe.watch leagues: Allflame
+poe.watch status: 99/100 stashes processed, change 1-2-3-4-5…
+  poe.watch: 26 rows over 8 categories via /compact, 25 names
+  poe.watch exchange: 4 traded pairs — volume-weighted trade prices override listing means where they overlap
+  poe.watch divine rate: 222c via exchange ratios (Divine Orb's own listing says 173c — thin, so not preferred)
+  exchange primary is Chaos Orb; chaos divisor 1
+  name dictionary: 1 currency/fragment names
+  prices via exchange overview (league=Allflame, 2 items)
+  scarabs: 2 items, no previous snapshot to compare against
+    poe.watch filled 17 name(s) poe.ninja did not price
+    feeds disagree on 1 name(s) (selection uses trust, freshness and liquidity):
+      Orb of Intention: poe.watch 290c vs poe.ninja 26.4c (10.98x)
+    no data for: exch:Omen, exch:Tattoo, exch:AllflameEmber, exch:Runegraft, exch:DjinnCoin, exch:DivinationCard, exch:Artifact, exch:Oil, exch:DeliriumOrb, exch:Essence, UniqueWeapon, UniqueArmour, UniqueAccessory, UniqueFlask, UniqueJewel, SkillGem, Map, UniqueMap, BlightedMap, BlightRavagedMap, Invitation, Vial, Beast, UniqueRelic
+    sources: exch:Currency 6, exch:Fragment 1, exch:Scarab 2, exch:Astrolabe 1, exch:Fossil 1, exch:Resonator 1, stash:Currency 1, stash:Fragment 1, poe.watch 25
+    poe.watch active price: applied to 0/5 configured name(s), 5 request(s) failed
+  prices: 28 names across 9 sources (league=Allflame)
+    Allflame: 24/25 delve fossils unpriced: Aberrant Fossil, Aetheric Fossil, Bloodstained Fossil, Bound Fossil, Corroded Fossil, Deft Fossil, Dense Fossil, Faceted Fossil, Fractured Fossil, Frigid Fossil, Fundamental Fossil, Gilded Fossil, Glyphic Fossil, Jagged Fossil, Lucent Fossil, Metallic Fossil, Opulent Fossil, Prismatic Fossil, Pristine Fossil, Sanctified Fossil, Scorched Fossil, Serrated Fossil, Shuddering Fossil, Tangled Fossil
+    Allflame: boss items with NO PRICE (43) — closest priced names alongside:
+      Al-Hezmin's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      An Audience with the King  [entry: King in the Mists]  ->  nothing similar is priced
+      Awakening Fragment  [entry: Uber Sirus]  ->  Reverent Fragment
+      Baran's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb | Watcher's Eye | Shaper's Touch
+      Blazing Fragment  [entry: Uber Searing Exarch]  ->  Reverent Fragment
+      Cortex  [entry: Venarius (Cortex)]  ->  nothing similar is priced
+      Cosmic Fragment  [entry: Uber Shaper]  ->  Reverent Fragment
+      Decaying Fragment  [entry: Uber Uber Elder]  ->  Reverent Fragment
+      Devouring Fragment  [entry: Uber Eater of Worlds]  ->  Reverent Fragment
+      Drox's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb | Watcher's Eye | Shaper's Touch
+      Echo of Loneliness  [entry: Incarnation of Neglect]  ->  Orb of Intention
+      Echo of Reverence  [entry: Incarnation of Dread]  ->  Orb of Intention
+      Echo of Trauma  [entry: Incarnation of Fear]  ->  Orb of Intention
+      Fragment of Constriction  [entry: The Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Emptiness  [entry: Uber Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Enslavement  [entry: The Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Eradication  [entry: The Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Knowledge  [entry: Uber Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Purification  [entry: The Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Shape  [entry: Uber Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Terror  [entry: Uber Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of the Chimera  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Hydra  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Minotaur  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Phoenix  [entry: The Shaper]  ->  nothing similar is priced
+      Hivebrain Gland  [entry: Esh-Tul]  ->  nothing similar is priced
+      Incandescent Invitation  [entry: The Searing Exarch]  ->  nothing similar is priced
+      Lonely Fragment  [entry: Uber Incarnation of Neglect]  ->  Reverent Fragment
+      Mortal Grief  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Hope  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Ignorance  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Rage  [entry: Uber Atziri]  ->  nothing similar is priced
+      Nightmare Map  [entry: Sanctuary]  ->  nothing similar is priced
+      Polaric Invitation  [entry: The Black Star]  ->  nothing similar is priced
+      Reality Fragment  [entry: Uber Maven]  ->  Reverent Fragment
+      Sacred Blossom  [entry: Oshabi, Avatar of the Grove]  ->  nothing similar is priced
+      Screaming Invitation  [entry: The Eater of Worlds]  ->  nothing similar is priced
+      Syndicate Medallion  [entry: Catarina, Master of Undeath]  ->  nothing similar is priced
+      Synthesising Fragment  [entry: Uber Venarius]  ->  Reverent Fragment
+      The Maven's Writ  [entry: The Maven]  ->  nothing similar is priced
+      Traumatic Fragment  [entry: Uber Incarnation of Fear]  ->  Reverent Fragment
+      Veritania's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb | Watcher's Eye | Shaper's Touch
+      Writhing Invitation  [entry: The Infinite Hunger]  ->  nothing similar is priced
+  gems: no data for Allflame
+  astrolabes: 1 items, no previous snapshot to compare against
+  astrolabes: 1 items (0 priced by GGG), 1 history series
+  catalysts: 1 items, no previous snapshot to compare against
+  catalysts: 1 items (0 priced by GGG), 1 history series
+  fossils: 1 items, no previous snapshot to compare against
+  fossils: 1 items (0 priced by GGG), 1 history series
+  resonators: 1 items, no previous snapshot to compare against
+  resonators: 1 items (0 priced by GGG), 1 history series
+- Allflame: 2 scarabs, 2 history series, 1 div = 222c, rate history 1pt (self)
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-watch-test-6hjvLa.staging-6304-1790267071289
+  [warning] source-request-failed: Allflame/sources.json records 9 failed request(s)
+  [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
+Quality: warning (2 warning, 0 degraded, 0 failure)
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-watch-test-6hjvLa.
+    poe.watch /compact?league=Allflame — HTTP 500 for /compact?league=Allflame
+Current leagues via /poe1/api/economy/leagues
+Leagues: Allflame
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+poe.watch unreachable — this run is poe.ninja only
+  exchange primary is Chaos Orb; chaos divisor 1
+  name dictionary: 1 currency/fragment names
+  prices via exchange overview (league=Allflame, 2 items)
+  scarabs: 2 items, no previous snapshot to compare against
+    no data for: exch:Omen, exch:Tattoo, exch:AllflameEmber, exch:Runegraft, exch:DjinnCoin, exch:DivinationCard, exch:Artifact, exch:Oil, exch:DeliriumOrb, exch:Essence, UniqueWeapon, UniqueArmour, UniqueAccessory, UniqueFlask, UniqueJewel, SkillGem, Map, UniqueMap, BlightedMap, BlightRavagedMap, Invitation, Vial, Beast, UniqueRelic
+    sources: exch:Currency 6, exch:Fragment 1, exch:Scarab 2, exch:Astrolabe 1, exch:Fossil 1, exch:Resonator 1, stash:Currency 1, stash:Fragment 1
+  prices: 11 names across 8 sources (league=Allflame)
+    Allflame: 24/25 delve fossils unpriced: Aberrant Fossil, Aetheric Fossil, Bloodstained Fossil, Bound Fossil, Corroded Fossil, Deft Fossil, Dense Fossil, Faceted Fossil, Fractured Fossil, Frigid Fossil, Fundamental Fossil, Gilded Fossil, Glyphic Fossil, Jagged Fossil, Lucent Fossil, Metallic Fossil, Opulent Fossil, Prismatic Fossil, Pristine Fossil, Sanctified Fossil, Scorched Fossil, Serrated Fossil, Shuddering Fossil, Tangled Fossil
+    Allflame: boss items with NO PRICE (43) — closest priced names alongside:
+      Al-Hezmin's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      An Audience with the King  [entry: King in the Mists]  ->  nothing similar is priced
+      Awakening Fragment  [entry: Uber Sirus]  ->  Reverent Fragment
+      Baran's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb
+      Blazing Fragment  [entry: Uber Searing Exarch]  ->  Reverent Fragment
+      Cortex  [entry: Venarius (Cortex)]  ->  nothing similar is priced
+      Cosmic Fragment  [entry: Uber Shaper]  ->  Reverent Fragment
+      Decaying Fragment  [entry: Uber Uber Elder]  ->  Reverent Fragment
+      Devouring Fragment  [entry: Uber Eater of Worlds]  ->  Reverent Fragment
+      Drox's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb
+      Echo of Loneliness  [entry: Incarnation of Neglect]  ->  Orb of Intention
+      Echo of Reverence  [entry: Incarnation of Dread]  ->  Orb of Intention
+      Echo of Trauma  [entry: Incarnation of Fear]  ->  Orb of Intention
+      Fragment of Constriction  [entry: The Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Emptiness  [entry: Uber Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Enslavement  [entry: The Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Eradication  [entry: The Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Knowledge  [entry: Uber Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Purification  [entry: The Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Shape  [entry: Uber Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of Terror  [entry: Uber Elder]  ->  Orb of Intention | Reverent Fragment
+      Fragment of the Chimera  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Hydra  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Minotaur  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Phoenix  [entry: The Shaper]  ->  nothing similar is priced
+      Hivebrain Gland  [entry: Esh-Tul]  ->  nothing similar is priced
+      Incandescent Invitation  [entry: The Searing Exarch]  ->  nothing similar is priced
+      Lonely Fragment  [entry: Uber Incarnation of Neglect]  ->  Reverent Fragment
+      Mortal Grief  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Hope  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Ignorance  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Rage  [entry: Uber Atziri]  ->  nothing similar is priced
+      Nightmare Map  [entry: Sanctuary]  ->  nothing similar is priced
+      Polaric Invitation  [entry: The Black Star]  ->  nothing similar is priced
+      Reality Fragment  [entry: Uber Maven]  ->  Reverent Fragment
+      Sacred Blossom  [entry: Oshabi, Avatar of the Grove]  ->  nothing similar is priced
+      Screaming Invitation  [entry: The Eater of Worlds]  ->  nothing similar is priced
+      Syndicate Medallion  [entry: Catarina, Master of Undeath]  ->  nothing similar is priced
+      Synthesising Fragment  [entry: Uber Venarius]  ->  Reverent Fragment
+      The Maven's Writ  [entry: The Maven]  ->  nothing similar is priced
+      Traumatic Fragment  [entry: Uber Incarnation of Fear]  ->  Reverent Fragment
+      Veritania's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb
+      Writhing Invitation  [entry: The Infinite Hunger]  ->  nothing similar is priced
+  gems: no data for Allflame
+  astrolabes: 1 items, no previous snapshot to compare against
+  astrolabes: 1 items (0 priced by GGG), 1 history series
+  catalysts: 1 items, no previous snapshot to compare against
+  catalysts: 1 items (0 priced by GGG), 1 history series
+  fossils: 1 items, no previous snapshot to compare against
+  fossils: 1 items (0 priced by GGG), 1 history series
+  resonators: 1 items, no previous snapshot to compare against
+  resonators: 1 items (0 priced by GGG), 1 history series
+- Allflame: 2 scarabs, 2 history series, 1 div = 173c, rate history 1pt (self)
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-watch-down-Gf5RMS.staging-6304-1790267086676
+  [warning] source-request-failed: Allflame/sources.json records 4 failed request(s)
+  [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
+Quality: warning (2 warning, 0 degraded, 0 failure)
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-watch-down-Gf5RMS.
+
+price map: 28 names, divine 222c
+
+All checks passed.
+Current leagues via /poe1/api/economy/leagues
+Leagues: Allflame
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+poe.watch leagues: Allflame
+poe.watch status: 1/1 stashes processed, change 1…
+  poe.watch: 6 rows over 6 categories via /compact, 6 names
+  poe.watch exchange: 0 traded pairs (none; listing means only)
+  poe.watch divine rate: 1300c via Divine Orb listing (thin) (Divine Orb's own listing says 1300c — thin, so not preferred)
+  exchange primary is Exalted Orb; chaos divisor 0.1
+  name dictionary: 6 currency/fragment names
+  prices via exchange overview (league=Allflame, 2 items)
+  scarabs: 2 items, no previous snapshot to compare against
+    tier 17 map listings: Nightmare Map 32c
+    stash Currency filled 1 name(s) the exchange did not list
+    stash Fragment filled 1 name(s) the exchange did not list
+    poe.watch filled 1 name(s) poe.ninja did not price
+    feeds disagree on 4 name(s) (selection uses trust, freshness and liquidity):
+      Cinderswallow Urn: poe.watch 777c vs poe.ninja 12c (64.75x)
+      Reverent Fragment: poe.watch 777c vs poe.ninja 79c (9.84x)
+      Starforge: poe.watch 900c vs poe.ninja 4200c (4.67x)
+      Divination Scarab of Pilfering: poe.watch 777c vs poe.ninja 180c (4.32x)
+    no data for: exch:Tattoo, exch:AllflameEmber, exch:Runegraft, exch:DjinnCoin, exch:Artifact, exch:Oil, exch:DeliriumOrb, exch:Essence, UniqueAccessory, UniqueFlask, UniqueJewel, UniqueMap, BlightedMap, BlightRavagedMap, Vial, Beast, UniqueRelic
+    sources: exch:Currency 7, exch:Fragment 5, exch:Scarab 2, exch:Astrolabe 3, exch:Omen 1, exch:DivinationCard 1, exch:Fossil 3, exch:Resonator 2, UniqueWeapon 2, UniqueArmour 7, SkillGem 10, Map 1, Invitation 4, stash:Currency 4, stash:Fragment 2, poe.watch 6
+    poe.watch active price: applied to 0/0 configured name(s)
+  prices: 40 names across 16 sources (league=Allflame)
+    Allflame: 3 priced item(s) have roll variants: Atziri's Splendour (3), Cinderswallow Urn (3), Cyclone (5)
+    Allflame: 22/25 delve fossils unpriced: Aetheric Fossil, Bloodstained Fossil, Bound Fossil, Corroded Fossil, Deft Fossil, Dense Fossil, Faceted Fossil, Fractured Fossil, Fundamental Fossil, Gilded Fossil, Glyphic Fossil, Jagged Fossil, Lucent Fossil, Metallic Fossil, Opulent Fossil, Prismatic Fossil, Pristine Fossil, Sanctified Fossil, Scorched Fossil, Serrated Fossil, Shuddering Fossil, Tangled Fossil
+    Allflame: boss items with NO PRICE (33) — closest priced names alongside:
+      Al-Hezmin's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      An Audience with the King  [entry: King in the Mists]  ->  nothing similar is priced
+      Awakening Fragment  [entry: Uber Sirus]  ->  Reverent Fragment | Lonely Fragment | Traumatic Fragment
+      Baran's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb | Gemcutter's Prism | Shaper's Touch
+      Blazing Fragment  [entry: Uber Searing Exarch]  ->  Reverent Fragment | Lonely Fragment | Traumatic Fragment
+      Cortex  [entry: Venarius (Cortex)]  ->  nothing similar is priced
+      Decaying Fragment  [entry: Uber Uber Elder]  ->  Reverent Fragment | Lonely Fragment | Traumatic Fragment
+      Devouring Fragment  [entry: Uber Eater of Worlds]  ->  Reverent Fragment | Lonely Fragment | Traumatic Fragment
+      Drox's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb | Gemcutter's Prism | Shaper's Touch
+      Echo of Loneliness  [entry: Incarnation of Neglect]  ->  Echo of Trauma | Orb of Intention | Orb of Remembrance
+      Echo of Reverence  [entry: Incarnation of Dread]  ->  Echo of Trauma | Orb of Intention | Orb of Remembrance
+      Fragment of Constriction  [entry: The Elder]  ->  Orb of Intention | Orb of Remembrance | Reverent Fragment
+      Fragment of Emptiness  [entry: Uber Elder]  ->  Orb of Intention | Orb of Remembrance | Reverent Fragment
+      Fragment of Enslavement  [entry: The Elder]  ->  Orb of Intention | Orb of Remembrance | Reverent Fragment
+      Fragment of Eradication  [entry: The Elder]  ->  Orb of Intention | Orb of Remembrance | Reverent Fragment
+      Fragment of Knowledge  [entry: Uber Elder]  ->  Orb of Intention | Orb of Remembrance | Reverent Fragment
+      Fragment of Purification  [entry: The Elder]  ->  Orb of Intention | Orb of Remembrance | Reverent Fragment
+      Fragment of Shape  [entry: Uber Elder]  ->  Orb of Intention | Orb of Remembrance | Reverent Fragment
+      Fragment of Terror  [entry: Uber Elder]  ->  Orb of Intention | Orb of Remembrance | Reverent Fragment
+      Fragment of the Chimera  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Hydra  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Minotaur  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Phoenix  [entry: The Shaper]  ->  nothing similar is priced
+      Hivebrain Gland  [entry: Esh-Tul]  ->  nothing similar is priced
+      Mortal Grief  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Hope  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Ignorance  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Rage  [entry: Uber Atziri]  ->  nothing similar is priced
+      Reality Fragment  [entry: Uber Maven]  ->  Reverent Fragment | Lonely Fragment | Traumatic Fragment
+      Sacred Blossom  [entry: Oshabi, Avatar of the Grove]  ->  nothing similar is priced
+      Syndicate Medallion  [entry: Catarina, Master of Undeath]  ->  nothing similar is priced
+      Synthesising Fragment  [entry: Uber Venarius]  ->  Reverent Fragment | Lonely Fragment | Traumatic Fragment
+      Veritania's Crest  [entry: Sirus, Awakener of Worlds]  ->  Awakener's Orb | Gemcutter's Prism | Shaper's Touch
+  gems: 4 names, 9 variants (league=Allflame, 1 alternate-quality rows skipped)
+  gems: 1 priced, 1 history point(s), 1 GCP 3c, 1 Vaal Orb 5c
+  astrolabes: 3 items, no previous snapshot to compare against
+  astrolabes: 3 items (0 priced by GGG), 3 history series
+  catalysts: no data for Allflame
+  fossils: 3 items, no previous snapshot to compare against
+  fossils: 3 items (0 priced by GGG), 3 history series
+  resonators: 2 items, no previous snapshot to compare against
+  resonators: 2 items (0 priced by GGG), 2 history series
+- Allflame: 2 scarabs, 2 history series, 1 div = 1300c, rate history 1pt (self)
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-fetch-test-oYMwL6.staging-15844-1790267100144
+  [warning] source-request-failed: Allflame/sources.json records 3 failed request(s)
+  [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
+Quality: warning (2 warning, 0 degraded, 0 failure)
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-fetch-test-oYMwL6.
+
+price map: 40 names, chaos=1, divine=1300c
+
+All checks passed.
+Found 1 checked-in history recovery file(s).
+Current leagues via /poe1/api/economy/leagues
+Leagues: Allflame
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+    poe.watch /leagues — HTTP 404 for /leagues
+poe.watch unreachable — this run is poe.ninja only
+  exchange primary is Exalted Orb; chaos divisor 0.1
+  prices via exchange overview (league=Allflame, 1 items)
+  scarabs: 1 items, no previous snapshot to compare against
+    no data for: exch:Fragment, exch:Omen, exch:Tattoo, exch:AllflameEmber, exch:Runegraft, exch:DjinnCoin, exch:DivinationCard, exch:Artifact, exch:Oil, exch:DeliriumOrb, exch:Fossil, exch:Resonator, exch:Essence, UniqueWeapon, UniqueArmour, UniqueAccessory, UniqueFlask, UniqueJewel, SkillGem, Map, UniqueMap, BlightedMap, BlightRavagedMap, Invitation, Vial, Beast, UniqueRelic, stash:Currency, stash:Fragment
+    sources: exch:Currency 2, exch:Scarab 1, exch:Astrolabe 1
+  prices: 4 names across 3 sources (league=Allflame)
+    Allflame: 25/25 delve fossils unpriced: Aberrant Fossil, Aetheric Fossil, Bloodstained Fossil, Bound Fossil, Corroded Fossil, Deft Fossil, Dense Fossil, Faceted Fossil, Fractured Fossil, Frigid Fossil, Fundamental Fossil, Gilded Fossil, Glyphic Fossil, Hollow Fossil, Jagged Fossil, Lucent Fossil, Metallic Fossil, Opulent Fossil, Prismatic Fossil, Pristine Fossil, Sanctified Fossil, Scorched Fossil, Serrated Fossil, Shuddering Fossil, Tangled Fossil
+    Allflame: boss items with NO PRICE (44) — closest priced names alongside:
+      Al-Hezmin's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      An Audience with the King  [entry: King in the Mists]  ->  nothing similar is priced
+      Awakening Fragment  [entry: Uber Sirus]  ->  nothing similar is priced
+      Baran's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      Blazing Fragment  [entry: Uber Searing Exarch]  ->  nothing similar is priced
+      Cortex  [entry: Venarius (Cortex)]  ->  nothing similar is priced
+      Cosmic Fragment  [entry: Uber Shaper]  ->  nothing similar is priced
+      Decaying Fragment  [entry: Uber Uber Elder]  ->  nothing similar is priced
+      Devouring Fragment  [entry: Uber Eater of Worlds]  ->  nothing similar is priced
+      Drox's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      Echo of Loneliness  [entry: Incarnation of Neglect]  ->  nothing similar is priced
+      Echo of Reverence  [entry: Incarnation of Dread]  ->  nothing similar is priced
+      Echo of Trauma  [entry: Incarnation of Fear]  ->  nothing similar is priced
+      Fragment of Constriction  [entry: The Elder]  ->  nothing similar is priced
+      Fragment of Emptiness  [entry: Uber Elder]  ->  nothing similar is priced
+      Fragment of Enslavement  [entry: The Elder]  ->  nothing similar is priced
+      Fragment of Eradication  [entry: The Elder]  ->  nothing similar is priced
+      Fragment of Knowledge  [entry: Uber Elder]  ->  nothing similar is priced
+      Fragment of Purification  [entry: The Elder]  ->  nothing similar is priced
+      Fragment of Shape  [entry: Uber Elder]  ->  nothing similar is priced
+      Fragment of Terror  [entry: Uber Elder]  ->  nothing similar is priced
+      Fragment of the Chimera  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Hydra  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Minotaur  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Phoenix  [entry: The Shaper]  ->  nothing similar is priced
+      Hivebrain Gland  [entry: Esh-Tul]  ->  nothing similar is priced
+      Incandescent Invitation  [entry: The Searing Exarch]  ->  nothing similar is priced
+      Lonely Fragment  [entry: Uber Incarnation of Neglect]  ->  nothing similar is priced
+      Mortal Grief  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Hope  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Ignorance  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Rage  [entry: Uber Atziri]  ->  nothing similar is priced
+      Nightmare Map  [entry: Sanctuary]  ->  nothing similar is priced
+      Polaric Invitation  [entry: The Black Star]  ->  nothing similar is priced
+      Reality Fragment  [entry: Uber Maven]  ->  nothing similar is priced
+      Reverent Fragment  [entry: Uber Incarnation of Dread]  ->  nothing similar is priced
+      Sacred Blossom  [entry: Oshabi, Avatar of the Grove]  ->  nothing similar is priced
+      Screaming Invitation  [entry: The Eater of Worlds]  ->  nothing similar is priced
+      Syndicate Medallion  [entry: Catarina, Master of Undeath]  ->  nothing similar is priced
+      Synthesising Fragment  [entry: Uber Venarius]  ->  nothing similar is priced
+      The Maven's Writ  [entry: The Maven]  ->  nothing similar is priced
+      Traumatic Fragment  [entry: Uber Incarnation of Fear]  ->  nothing similar is priced
+      Veritania's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      Writhing Invitation  [entry: The Infinite Hunger]  ->  nothing similar is priced
+  gems: no data for Allflame
+  astrolabes: 1 items, no previous snapshot to compare against
+  astrolabes: 1 items (0 priced by GGG), 1 history series
+  catalysts: no data for Allflame — kept the 3 deployed file(s)
+  fossils: no data for Allflame
+  resonators: no data for Allflame
+- Allflame: 1 scarabs, 1 history series, 1 div = 1300c, rate history 7pt (self)
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-history-test-BVB5XO.staging-15036-1790267113344
+  [warning] source-request-failed: Allflame/sources.json records 4 failed request(s)
+  [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
+Quality: warning (2 warning, 0 degraded, 0 failure)
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-history-test-BVB5XO.
+
+9 stitched scarab points, 7 accumulated, axis "league day"
+
+All checks passed.
+Found 2 checked-in history recovery file(s).
+  Allflame: cleaned carried-forward data — prices.json: 1 price(s) quoted at zero or worse; scarabs-selfhistory.json: 1 stored value(s) at zero or worse
+- Allflame: reused 3 deployed file(s)
+- Hardcore: no deployed data — kept the checked-in recovery snapshot, marked stale
+Merged 2 checked-in history recovery file(s).
+Rebuilt 2 derived history file(s) from the merged raw snapshots.
+Code-only deploy: reused deployed data, no new snapshot taken.
+  [degraded] stale-leagues: 1 of 2 league(s) are stale
+Quality: degraded (0 warning, 1 degraded, 0 failure)
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\vs-recovery-n9uxaW.
+PoE 1 history recovery passed.
+Current leagues via /poe1/api/economy/leagues
+Leagues: Allflame
+GGG Currency Exchange unavailable — fallbacks only (HTTP 404 for https://web.poecdn.com/api/currency-exchange/1790258400)
+    poe.watch /leagues — HTTP 404 for /leagues
+poe.watch unreachable — this run is poe.ninja only
+  exchange primary is Exalted Orb; chaos divisor 0.1
+  prices via exchange overview (league=Allflame, 1 items)
+  scarabs: 1 items, no previous snapshot to compare against
+    no data for: exch:Fragment, exch:Omen, exch:Tattoo, exch:AllflameEmber, exch:Runegraft, exch:DjinnCoin, exch:DivinationCard, exch:Artifact, exch:Oil, exch:DeliriumOrb, exch:Fossil, exch:Resonator, exch:Essence, UniqueWeapon, UniqueArmour, UniqueAccessory, UniqueFlask, UniqueJewel, SkillGem, Map, UniqueMap, BlightedMap, BlightRavagedMap, Invitation, Vial, Beast, UniqueRelic, stash:Currency, stash:Fragment
+    sources: exch:Currency 2, exch:Scarab 1, exch:Astrolabe 1
+  prices: 4 names across 3 sources (league=Allflame)
+    Allflame: 25/25 delve fossils unpriced: Aberrant Fossil, Aetheric Fossil, Bloodstained Fossil, Bound Fossil, Corroded Fossil, Deft Fossil, Dense Fossil, Faceted Fossil, Fractured Fossil, Frigid Fossil, Fundamental Fossil, Gilded Fossil, Glyphic Fossil, Hollow Fossil, Jagged Fossil, Lucent Fossil, Metallic Fossil, Opulent Fossil, Prismatic Fossil, Pristine Fossil, Sanctified Fossil, Scorched Fossil, Serrated Fossil, Shuddering Fossil, Tangled Fossil
+    Allflame: boss items with NO PRICE (44) — closest priced names alongside:
+      Al-Hezmin's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      An Audience with the King  [entry: King in the Mists]  ->  nothing similar is priced
+      Awakening Fragment  [entry: Uber Sirus]  ->  nothing similar is priced
+      Baran's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      Blazing Fragment  [entry: Uber Searing Exarch]  ->  nothing similar is priced
+      Cortex  [entry: Venarius (Cortex)]  ->  nothing similar is priced
+      Cosmic Fragment  [entry: Uber Shaper]  ->  nothing similar is priced
+      Decaying Fragment  [entry: Uber Uber Elder]  ->  nothing similar is priced
+      Devouring Fragment  [entry: Uber Eater of Worlds]  ->  nothing similar is priced
+      Drox's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      Echo of Loneliness  [entry: Incarnation of Neglect]  ->  nothing similar is priced
+      Echo of Reverence  [entry: Incarnation of Dread]  ->  nothing similar is priced
+      Echo of Trauma  [entry: Incarnation of Fear]  ->  nothing similar is priced
+      Fragment of Constriction  [entry: The Elder]  ->  nothing similar is priced
+      Fragment of Emptiness  [entry: Uber Elder]  ->  nothing similar is priced
+      Fragment of Enslavement  [entry: The Elder]  ->  nothing similar is priced
+      Fragment of Eradication  [entry: The Elder]  ->  nothing similar is priced
+      Fragment of Knowledge  [entry: Uber Elder]  ->  nothing similar is priced
+      Fragment of Purification  [entry: The Elder]  ->  nothing similar is priced
+      Fragment of Shape  [entry: Uber Elder]  ->  nothing similar is priced
+      Fragment of Terror  [entry: Uber Elder]  ->  nothing similar is priced
+      Fragment of the Chimera  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Hydra  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Minotaur  [entry: The Shaper]  ->  nothing similar is priced
+      Fragment of the Phoenix  [entry: The Shaper]  ->  nothing similar is priced
+      Hivebrain Gland  [entry: Esh-Tul]  ->  nothing similar is priced
+      Incandescent Invitation  [entry: The Searing Exarch]  ->  nothing similar is priced
+      Lonely Fragment  [entry: Uber Incarnation of Neglect]  ->  nothing similar is priced
+      Mortal Grief  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Hope  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Ignorance  [entry: Uber Atziri]  ->  nothing similar is priced
+      Mortal Rage  [entry: Uber Atziri]  ->  nothing similar is priced
+      Nightmare Map  [entry: Sanctuary]  ->  nothing similar is priced
+      Polaric Invitation  [entry: The Black Star]  ->  nothing similar is priced
+      Reality Fragment  [entry: Uber Maven]  ->  nothing similar is priced
+      Reverent Fragment  [entry: Uber Incarnation of Dread]  ->  nothing similar is priced
+      Sacred Blossom  [entry: Oshabi, Avatar of the Grove]  ->  nothing similar is priced
+      Screaming Invitation  [entry: The Eater of Worlds]  ->  nothing similar is priced
+      Syndicate Medallion  [entry: Catarina, Master of Undeath]  ->  nothing similar is priced
+      Synthesising Fragment  [entry: Uber Venarius]  ->  nothing similar is priced
+      The Maven's Writ  [entry: The Maven]  ->  nothing similar is priced
+      Traumatic Fragment  [entry: Uber Incarnation of Fear]  ->  nothing similar is priced
+      Veritania's Crest  [entry: Sirus, Awakener of Worlds]  ->  nothing similar is priced
+      Writhing Invitation  [entry: The Infinite Hunger]  ->  nothing similar is priced
+  gems: no data for Allflame
+  astrolabes: 1 items, no previous snapshot to compare against
+  astrolabes: 1 items (0 priced by GGG), 1 history series
+  catalysts: no data for Allflame
+  fossils: no data for Allflame
+  resonators: no data for Allflame
+- Allflame: 1 scarabs, 1 history series, 1 div = 1300c, rate history 11pt (ninja+self)
+Done. Wrote 1 league(s) (1 fresh) to C:\Users\Banom\AppData\Local\Temp\sl-rate-test-dGcCuu.staging-4312-1790267128856
+  [warning] source-request-failed: Allflame/sources.json records 3 failed request(s)
+  [warning] metadata-coverage-missing: Allflame/sources.json reports no metadata coverage
+Quality: warning (2 warning, 0 degraded, 0 failure)
+Promoted the staged PoE 1 dataset to C:\Users\Banom\AppData\Local\Temp\sl-rate-test-dGcCuu.
+
+chaos 20.0% vs divine -7.7% over 48h · 11 rate points
+
+All checks passed.
+
+> vaal-street@0.1.0 test:poe2
+> node scripts/tests/poe2/test-market-signals.mjs && node scripts/tests/poe2/test-boss.mjs && node scripts/tests/poe2/test-prices.mjs && node scripts/tests/poe2/test-exchange.mjs && node scripts/tests/poe2/test-history.mjs && node scripts/tests/poe2/test-farms.mjs && node scripts/tests/poe2/test-reuse.mjs
+
+Market activity, route consistency and league-scoped watchlists passed.
+PoE 2 boss model: 22 encounters, 84 reviewable rates.
+PoE 2 price parsing passed.
+PoE 2 source evidence passed.
+PoE 2 item state passed.
+PoE 2 Currency Exchange desk passed.
+PoE 2 price history passed.
+test-farms: all assertions passed
+runes-of-aldur: cleaned carried prices — 1 placeholder item name(s), 1 entry/entries quoted at zero or worse
+Reused Runes of Aldur: 11 price point(s), 0 exchange snapshot(s) — restored 10 point(s) the deployment had lost
+Reused Standard: 1 price point(s), 0 exchange snapshot(s) — restored 1 point(s) the deployment had lost
+Quality: ok (0 warning, 0 degraded, 0 failure)
+Promoted the staged PoE 2 dataset to C:\Users\Banom\AppData\Local\Temp\vs-poe2-reuse-rOr2el.
+PoE 2 reuse and failure handling passed.

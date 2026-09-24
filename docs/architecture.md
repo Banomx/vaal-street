@@ -1153,7 +1153,7 @@ by Roman Kuprianov from the
 [GGG Fate of the Vaal showcase](https://www.pathofexile.com/forum/view-thread/3907125).
 Both originals are stored under `public/assets/` and credited in their game footer.
 Artwork URLs are resolved against `document.baseURI` before entering CSS custom properties, so the built stylesheet cannot resolve them relative to its own `assets/` directory.
-Mobile headers wrap controls below the brand without fixed backgrounds or animation.
+PoE 1 uses a taller responsive banner to reveal more of the Incursion mural. Mobile headers wrap controls below the brand without fixed backgrounds or animation.
 
 Supporting text uses near-white neutrals across tables, captions and controls;
 CSS captions use at least 12.5px. Reading surfaces are opaque; artwork in headers has dark contrast overlays;
@@ -1162,7 +1162,7 @@ Shared controls use visible Vaal-red borders, explicit active navigation and key
 focus states. Overview cards emphasize values and full-width tool actions; mobile
 summary cards stack below 720px. Transitions respect reduced-motion preferences.
 
-Overview pages place price sources, update time and exchange rates above the overview heading. Snapshot notices use
+Overview pages place price sources, update time and exchange rates below the artwork-backed overview heading and before the summary cards, keeping the banner and heading uninterrupted. Snapshot notices use
 native expandable details: warning titles stay visible and errors start expanded.
 On mobile, the view selector stays sticky while the workspace scrolls.
 

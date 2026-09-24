@@ -74,15 +74,16 @@ export default function Overview({ league, priceData, exchange, currency, chaosE
       <style>{css}</style>
 
 
-      <div className="overview-provenance">
-      <SourceStrip className="p2ov-source">{sourceText(league, priceData, rateSummary)}</SourceStrip>
-      </div>
 
       <header className="p2ov-head overview-heading">
         <div className="p2ov-kicker">Path of Exile 2 · market desk</div>
         <h2>Market overview</h2>
         <p>Compare boss returns, follow tablet prices, and find your next market to watch.</p>
       </header>
+
+      <div className="overview-provenance">
+      <SourceStrip className="p2ov-source">{sourceText(league, priceData, rateSummary)}</SourceStrip>
+      </div>
 
       <section className="overview-stats" aria-label="Market at a glance">
         <button className="overview-stat" onClick={() => onOpenTab("prices")}><span>Tracked markets</span><strong>{available ? trackedMarkets.toLocaleString() : "—"}</strong><small>Search prices and stored history</small></button>

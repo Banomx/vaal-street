@@ -361,7 +361,7 @@
     var(--app-art) center top / auto 1250px no-repeat, #0c0807;
 }
 .app-art-theme .app-header {
-  min-height: 154px;
+  min-height: var(--app-art-height, 154px);
   padding: 26px;
   align-items: flex-end;
   border-color: var(--app-art-border);

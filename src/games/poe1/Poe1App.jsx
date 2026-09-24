@@ -1572,7 +1572,8 @@ const css = `
 }
 .st-root {
   --app-art: url("${new URL(import.meta.env.BASE_URL + "assets/poe1-incursion.jpg", document.baseURI).href}");
-  --app-art-position: center 42%;
+  --app-art-position: center 38%;
+  --app-art-height: clamp(280px, 25vw, 460px);
   --app-art-tint: #b47545;
   --app-art-border: #694632;
   overflow-x: hidden;
