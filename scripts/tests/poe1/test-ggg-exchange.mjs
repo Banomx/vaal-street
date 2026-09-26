@@ -49,6 +49,19 @@ assert.equal(snapshot.prices["Test Scarab"].c, 2.5, "another league cannot conta
 
 // The CDN can lag the boundary. The fetcher retries the preceding completed
 // hour, then resolves Metadata ids through RePoE without changing the price.
+// A future Astrolabe with no name suffix survives the official adapter and
+// the classification used by the category merge.
+const { isGggCategory } = await import("../../../src/games/poe1/catalogue/classify.js");
+const ASTRO = "Metadata/Items/Currency/AstrolabeFuture";
+const renamedSnapshot = buildGggLeagueSnapshot([
+  ...markets, market("Test League", ASTRO, CHAOS_ID, 5, 100),
+], { ...baseItems, [ASTRO]: { name: "Atlas Compass", item_class: "StackableCurrency", tags: ["currency", "default"] } }, "Test League");
+const astrolabes = renamedSnapshot.items.filter((item) => isGggCategory(item, "astrolabes"));
+assert.equal(astrolabes.length, 1);
+assert.equal(astrolabes[0].name, "Atlas Compass");
+assert.equal(astrolabes[0].chaosValue, 20);
+assert.equal(astrolabes[0].id, ASTRO);
+
 const originalFetch = globalThis.fetch;
 const calls = [];
 globalThis.fetch = async (url) => {

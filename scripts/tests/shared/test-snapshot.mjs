@@ -120,6 +120,17 @@ assert.equal(notes[2].level, "notice");
 assert.ok(/fine/.test(notes[2].text), "a warning is explained instead of reduced to an opaque count");
 assert.deepEqual(qualityNotes(null), []);
 
+const scoped = new QualityReport({ game: "poe1" });
+scoped.degrade("stale-leagues", "1 of 2 league(s) are stale", ["Hardcore"]);
+scoped.warn("source-request-failed", "Hardcore/sources.json records 1 failed request(s)");
+scoped.warn("classification-name-fallback", "Allflame/sources.json/astrolabes: 100% of classification relies on names");
+assert.deepEqual(qualityNotes(scoped.toJSON(), { league: { name: "Allflame", slug: "Allflame" } }), []);
+assert.equal(qualityNotes(scoped.toJSON(), { league: { name: "Hardcore" } }).length, 2);
+scoped.warn("source-request-failed", "Allflame/sources.json records 1 failed request(s)");
+assert.equal(qualityNotes(scoped.toJSON(), { league: { name: "Allflame" } })[0].level, "notice");
+scoped.fail("classification-name-fallback", "Classification is unsafe");
+assert.ok(qualityNotes(scoped.toJSON(), { league: { name: "Allflame" } }).some((note) => note.level === "error"));
+
 /* ---- the whole verdict ---- */
 const clean = summarize({
   documents: { "Prices for this league": good, "Stored price history": { state: MISSING } },

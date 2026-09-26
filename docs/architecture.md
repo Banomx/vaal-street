@@ -57,7 +57,14 @@ market do not widen the search. Recovered entries carry their actual
 hand-set prices.
 
 RePoE's `base_items.min.json` maps GGG Metadata paths to display names and tags.
-It contributes no prices. If either the GGG digest or the name mapping is
+It contributes no prices. PoE 1 Astrolabes are classified by GGG's
+`Metadata/Items/Currency/Astrolabe*` ID family before tags/classes or display
+names; the current export gives them only generic currency tags and class.
+New variants within that family need no name-list update. The poe.ninja
+Astrolabe adapter resolves metadata before filtering, so a renamed label can
+still qualify. Direct GGG IDs retain path identity; paths resolved through a
+unique display-name match help classification but cannot confirm a rename.
+Name patterns remain an explicitly reported fallback when metadata is absent. If either the GGG digest or the name mapping is
 unavailable, the snapshot completes with poe.ninja and poe.watch instead.
 
 Each deployed JSON file records `schemaVersion` and `generatedAt`; files using
@@ -237,7 +244,11 @@ hour, while an unreadable one means the build is older than the data and drawing
 it would be a guess. `summarize()` folds a league's documents, its freshness and
 `quality.json` into one verdict, which `SnapshotNotice.jsx` renders. Non-fatal
 warnings are shown by their actual message under “Data quality note” rather
-than as an unexplained count. Bare maps
+than as an unexplained count. The selected league filters aggregate stale-league
+checks and per-league file diagnostics. Classification name-fallback warnings
+remain in the publication report instead of implying stale prices in the UI.
+The out-of-date headline is reserved for snapshot age or a stale league;
+other warnings describe unavailable or incomplete data. Bare maps
 with no envelope — the derived `<key>-history.json` files — are read with
 `versioned: false` so they are not reported as pre-contract forever.
 

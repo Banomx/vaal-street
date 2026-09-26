@@ -10,7 +10,7 @@ import { SourceStrip } from "./AppShell.jsx";
 
 const HEADLINE = {
   notice: "Data quality note",
-  warning: "This data may be out of date",
+  warning: "Some data is unavailable or incomplete",
   error: "This page cannot show current data",
 };
 
@@ -19,10 +19,12 @@ const TONE = { notice: "notice", warning: "warning", error: "error" };
 export default function SnapshotNotice({ verdict, className = "", headline }) {
   if (!verdict || verdict.level === "ok" || !verdict.notes?.length) return null;
   const level = verdict.level;
+  const stale = verdict.stale || ["stale", "dead"].includes(verdict.freshness?.level);
+  const title = headline || (level !== "error" && stale ? "This data may be out of date" : HEADLINE[level]);
   return (
     <SourceStrip className={`app-source-strip--spaced app-snapshot-notice ${className}`.trim()} tone={TONE[level] || "quiet"}>
       <details open={level === "error"}>
-        <summary><strong>{headline || HEADLINE[level]}</strong><span className="app-notice-toggle">Details</span></summary>
+        <summary><strong>{title}</strong><span className="app-notice-toggle">Details</span></summary>
       <ul>
         {verdict.notes.map((note, index) => <li key={`${note.level}-${index}`}>{note.text}</li>)}
       </ul>

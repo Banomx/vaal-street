@@ -2,7 +2,7 @@
 
    Three tiers, strongest first, and the tier is reported rather than hidden:
 
-     `metadata`  GGG's own tags and item class. This is what the game says the
+     `metadata`  GGG's Metadata path, tags and item class. This is what the game says the
                  item is, so it survives a display name changing and it prices a
                  newly added item on the run it appears.
      `exception` a reviewed, named exception. Each one states why the metadata
@@ -26,9 +26,16 @@ const classIs = (item, ...names) => {
 /* GGG tags and item classes per family, checked against the tags RePoE
    publishes for the current build (2026-08). A family with no reliable tag
    simply has none, and falls through to the tiers below. */
+// Verified against RePoE on 2026-09-26: Astrolabes share only generic currency
+// tags/class, but GGG gives each variant a Currency/Astrolabe* Metadata ID.
+// Prefer a source-stated path; a name-resolved path remains weaker identity.
+const metadataPath = (item) => [item?.gggId, item?.id, item?.metadataPath]
+  .find((value) => typeof value === "string" && value.startsWith("Metadata/")) || "";
+const astrolabePath = (item) => /^Metadata\/Items\/Currency\/Astrolabe[A-Za-z0-9_]*$/.test(metadataPath(item));
+
 const METADATA_RULES = {
   scarabs: (item) => has(item, "scarab") || classIs(item, "Scarab"),
-  astrolabes: (item) => has(item, "astrolabe") || classIs(item, "Astrolabe"),
+  astrolabes: (item) => astrolabePath(item) || has(item, "astrolabe") || classIs(item, "Astrolabe"),
   catalysts: (item) => has(item, "catalyst") || has(item, "jewel_catalyst") || classIs(item, "Catalyst"),
   fossils: (item) => has(item, "fossil") || has(item, "delve_fossil") || classIs(item, "DelveSocketableCurrency", "Fossil"),
   resonators: (item) => has(item, "resonator") || has(item, "delve_stackable_socketable_currency") || classIs(item, "DelveStackableSocketableCurrency", "Resonator"),
@@ -62,6 +69,12 @@ export function classifyItem(item, key) {
      name ends in. */
   for (const [other, rule] of Object.entries(METADATA_RULES)) {
     if (other !== key && rule(item)) return { match: false, confidence: "metadata" };
+  }
+  // Known equipment and quest items must not enter a currency family merely
+  // because their display name ends with Astrolabe.
+  if (key === "astrolabes" && (metadataPath(item)
+    || (item.itemClass && !classIs(item, "StackableCurrency")))) {
+    return { match: false, confidence: "metadata" };
   }
   if (NAME_RULES[key]?.test(item.name)) return { match: true, confidence: "name" };
   return { match: false, confidence: null };

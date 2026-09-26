@@ -132,6 +132,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
         documents,
         required: ["Prices for this league"],
         quality,
+        league: descriptor,
         generatedAt: isUsable(priceDoc) ? priceDoc.data.generatedAt : null,
         game: "PoE 2",
       }));

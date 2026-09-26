@@ -375,8 +375,9 @@ function addNote(verdict, level, text) {
    generator marked stale leads, because "these are last hour's prices" is the
    thing a reader acts on differently. */
 function leagueVerdict({ documents, required, quality, generatedAt, descriptor }) {
-  const verdict = summarize({ documents, required, quality, generatedAt, game: "PoE 1" });
+  const verdict = summarize({ documents, required, quality, generatedAt, league: descriptor, game: "PoE 1" });
   if (descriptor?.stale) {
+    verdict.stale = true;
     verdict.notes.unshift({
       level: "warning",
       text: `${descriptor.name || descriptor.slug}: the last snapshot run could not refresh this league, so these are an earlier run's numbers.`,

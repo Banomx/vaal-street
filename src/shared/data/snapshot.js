@@ -211,7 +211,7 @@ export function worstLevel(levels) {
     failure; the browser's job is to repeat it, not to re-derive it. A report
     that is itself missing is not an error — it only exists from this build
     onwards. */
-export function qualityNotes(quality, { game } = {}) {
+export function qualityNotes(quality, { game, league } = {}) {
   if (!quality || typeof quality !== "object") return [];
   const notes = [];
   /* Field names come from `QualityReport.toJSON()` in
@@ -222,6 +222,18 @@ export function qualityNotes(quality, { game } = {}) {
   const checks = Array.isArray(quality.checks) ? quality.checks : [];
   const label = game ? `${game} ` : "";
   for (const check of checks) {
+    // Classification diagnostics remain in quality.json; they do not indicate
+    // stale prices. Never suppress a degraded or failed classification check.
+    if (check?.level === "warning" && check.code === "classification-name-fallback") continue;
+    if (league) {
+      const selected = [league.name, league.slug].filter(Boolean);
+      if (check?.code === "stale-leagues" && Array.isArray(check.detail)) {
+        if (!check.detail.some((name) => selected.includes(name))) continue;
+      }
+      // Existing reports label per-league files as League/sources.json, etc.
+      const owner = check?.message?.match(/^(.+?)\/[^/\s]+\.json\b/)?.[1];
+      if (owner && !selected.includes(owner)) continue;
+    }
     if (check?.level === "failure") notes.push({ level: "error", text: `${label}${check.code}: ${check.message}` });
     else if (check?.level === "degraded") notes.push({ level: "warning", text: `${label}${check.code}: ${check.message}` });
     else if (check?.level === "warning") notes.push({ level: "notice", text: `${label}${check.message}` });
@@ -236,7 +248,7 @@ export function qualityNotes(quality, { game } = {}) {
     state; optional ones only contribute when they came back worse than
     missing, because "no history yet" is an ordinary state for a new league and
     not something to shout about. */
-export function summarize({ documents = {}, required = [], quality, generatedAt, game, now, staleAfterHours, deadAfterHours } = {}) {
+export function summarize({ documents = {}, required = [], quality, generatedAt, game, league, now, staleAfterHours, deadAfterHours } = {}) {
   const notes = [];
   const states = [];
   for (const [label, result] of Object.entries(documents)) {
@@ -264,7 +276,7 @@ export function summarize({ documents = {}, required = [], quality, generatedAt,
   }
   if (age.level === "future") notes.push({ level: "notice", text: "This snapshot is stamped in the future — check the clock on whatever generated it." });
 
-  notes.push(...qualityNotes(quality, { game }));
+  notes.push(...qualityNotes(quality, { game, league }));
 
   const state = worstState(states);
   const level = worstLevel([levelFor(state), ...notes.map((note) => note.level)]);

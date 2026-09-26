@@ -210,6 +210,19 @@ assert.deepEqual(classifyItem({ name: "Bottled Faith" }, "scarabs"), { match: fa
 assert.deepEqual(classifyItem({ name: "Something Resonator", tags: ["delve_fossil"] }, "resonators"),
   { match: false, confidence: "metadata" });
 
+// GGG currently gives Astrolabes generic currency tags/classes. The path
+// family is stronger evidence and includes future variants without a name list.
+for (const field of ["gggId", "id", "metadataPath"]) {
+  assert.deepEqual(classifyItem({ name: "Renamed Atlas Device", [field]: "Metadata/Items/Currency/AstrolabeFuture", itemClass: "StackableCurrency", tags: ["currency"] }, "astrolabes"),
+    { match: true, confidence: "metadata" });
+}
+for (const item of [
+  { name: "Luminous Astrolabe", id: "Metadata/Items/QuestItems/Act11/CleansingFireMapDeviceAlteration", itemClass: "QuestItem" },
+  { name: "Fake Astrolabe", metadataPath: "Metadata/Items/Amulets/AmuletE1", itemClass: "Amulet" },
+  { name: "Fake Astrolabe", id: "Metadata/Items/Currency/NotAstrolabe" },
+]) assert.equal(classifyItem(item, "astrolabes").match, false);
+assert.deepEqual(classifyItem({ name: "Unknown Astrolabe" }, "astrolabes"), { match: true, confidence: "name" });
+
 const coverage = classificationCoverage([
   { name: "Abyss Scarab", tags: ["scarab"] },
   { name: "Legion Scarab", tags: ["scarab"] },

@@ -249,11 +249,17 @@ function mergeGggPriceMap(priceMap, ggg, leagueParam) {
    family never means editing the same list in two places. */
 const EXTRA_CATEGORIES = FETCHED_CATEGORIES;
 
-async function getExchangeCategory(lgParams, type, nameRe, divisor = null) {
+async function getExchangeCategory(lgParams, type, nameRe, divisor = null, metadata = {}) {
   for (const p of lgParams) {
     const j = await tryJson(`${NINJA}/poe1/api/economy/exchange/current/overview?league=${encodeURIComponent(p)}&type=${encodeURIComponent(type)}`);
     if (j && Array.isArray(j.lines) && j.lines.length) {
-      const adapted = adaptExchange(j, nameRe, divisor);
+      // Resolve metadata before filtering Astrolabes: a renamed display label
+      // must not be discarded before its GGG family can be identified.
+      const adapted = adaptExchange(j, metadata.key ? /./ : nameRe, divisor);
+      if (metadata.key) {
+        enrichFromRepoe(adapted.items, metadata.baseItems, metadata.index);
+        adapted.items = adapted.items.filter((item) => isGggCategory(item, metadata.key));
+      }
       if (adapted.items.length) return adapted;
     }
     await sleep(DELAY_MS);
@@ -1803,7 +1809,7 @@ async function main() {
         try {
           // Same order as everywhere else: poe.ninja's exchange first, then
           // poe.watch for a category poe.ninja served nothing for.
-          let r = await getExchangeCategory(lg.params, cat.ninjaType, cat.re, ctx?.divisor);
+          let r = await getExchangeCategory(lg.params, cat.ninjaType, cat.re, ctx?.divisor, cat.key === "astrolabes" ? { key: cat.key, baseItems: gggExchange?.baseItems, index: repoeIndex } : {});
           if (!r && watch) {
             const wi = watchCategoryItems(watch.rows, cat.re, watch.rate || divineRate, cat.watch, watch.exchange);
             if (wi.length) r = { items: wi, source: "watch" };

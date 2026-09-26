@@ -21,13 +21,14 @@ export function enrichFromRepoe(items, baseItems, index = null) {
   const { byName, ambiguous } = index || nameIndex(baseItems);
   for (const item of items || []) {
     coverage.total += 1;
-    const path = typeof item.gggId === "string" && item.gggId.startsWith("Metadata/") ? item.gggId : null;
+    const path = [item.gggId, item.id].find((value) => typeof value === "string" && value.startsWith("Metadata/"))
+      || (!["name", "name-ambiguous"].includes(item.identity) ? item.metadataPath : null);
     const direct = path ? baseItems[path] : null;
     if (direct) {
       coverage.byPath += 1;
       if (!item.itemClass && direct.item_class) item.itemClass = direct.item_class;
       if ((!item.tags || !item.tags.length) && Array.isArray(direct.tags)) item.tags = direct.tags;
-      if (!item.identity) item.identity = "metadata-path";
+      item.identity = "metadata-path";
       continue;
     }
     const matched = byName.get(item.name);

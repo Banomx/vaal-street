@@ -159,6 +159,18 @@ assert.equal(items[1].identity, "name");
 assert.equal(items[2].identity, "name-ambiguous");
 assert.equal(items[2].itemClass, undefined, "an ambiguous match enriches nothing — a wrong class is worse than none");
 
+// Source-stated Metadata IDs must not be reclassified as name-derived identity.
+const astroPath = "Metadata/Items/Currency/AstrolabeHarvest";
+const astroBase = { [astroPath]: { name: "New Atlas Device", item_class: "StackableCurrency", tags: ["currency"] } };
+const astroItems = [{ id: astroPath, name: "Old Label", identity: "name" }, { name: "New Atlas Device" }];
+const astroCoverage = enrichFromRepoe(astroItems, astroBase);
+assert.equal(astroCoverage.byPath, 1);
+assert.equal(astroCoverage.byName, 1);
+assert.equal(astroItems[0].identity, "metadata-path");
+assert.equal(astroItems[1].identity, "name", "name-resolved metadata cannot establish rename continuity");
+const { classifyItem: classifyAstro } = await import("../../../src/games/poe1/catalogue/classify.js");
+assert.equal(classifyAstro(astroItems[1], "astrolabes").confidence, "metadata", "classification uses the resolved family, not the label suffix");
+
 const scoreNow = Date.now();
 assert.ok(
   poe1QuoteScore({ c: 20, daily: 100000, asOf: new Date(scoreNow - 3600e3).toISOString() }, "watch", scoreNow)
