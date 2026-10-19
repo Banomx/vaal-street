@@ -1,3 +1,4 @@
+import { fetchResource } from "../../shared/http.mjs";
 /* ================================================================
    POE.WATCH — listing/trade evidence and gap-fill source
 
@@ -100,9 +101,7 @@ export const WATCH_CATEGORIES = [
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function watchJson(pathAndQuery) {
-  const res = await fetch(`${BASE}${pathAndQuery}`, { headers: HEADERS });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${pathAndQuery}`);
-  return res.json();
+  return fetchResource(`${BASE}${pathAndQuery}`, { headers: HEADERS, timeoutMs: process.env.FETCH_TIMEOUT_MS });
 }
 /* Failures are logged rather than swallowed: an empty category and an
    unreachable host look identical downstream, and confusing the two once cost
@@ -531,7 +530,5 @@ export function adaptBeta(json) {
 }
 
 export async function fetchWatchBeta(id, league) {
-  const res = await fetch(betaUrl(id, league), { headers: HEADERS });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for beta ${id}`);
-  return adaptBeta(await res.json());
+  return adaptBeta(await fetchResource(betaUrl(id, league), { headers: HEADERS, timeoutMs: process.env.FETCH_TIMEOUT_MS }));
 }

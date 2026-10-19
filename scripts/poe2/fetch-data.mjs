@@ -9,6 +9,7 @@ import { BOSSES } from "../../src/games/poe2/features/bosses/bossData.js";
 import { computeBosses, summarizePriceCoverage } from "../../src/games/poe2/features/bosses/bossProfit.js";
 import { QualityReport, USER_AGENT, clearAbandonedStages, createStage, sourceRecord } from "../shared/dataset.mjs";
 import { POE2_SCHEMA_VERSION, validatePoe2 } from "./validate.mjs";
+import { fetchResource } from "../shared/http.mjs";
 import { EXCHANGE_TYPES, STASH_TYPES } from "./endpoints.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -27,12 +28,10 @@ const FETCH_TIMEOUT_MS = Number(process.env.POE2_FETCH_TIMEOUT_MS || 30000);
    onto a listing feed. */
 
 async function getJson(url) {
-  const response = await fetch(url, {
+  return fetchResource(url, {
     headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    timeoutMs: FETCH_TIMEOUT_MS,
   });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${url}`);
-  return response.json();
 }
 
 async function writeJson(path, value) {

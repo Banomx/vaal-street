@@ -51,6 +51,7 @@ import { classificationCoverage, isGggCategory } from "../../src/games/poe1/cata
 import { describeSpreads } from "../../src/games/poe1/features/pricing/priceCheck.js";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fetchResource, fetchTimeout } from "../shared/http.mjs";
 import {
   QualityReport, USER_AGENT, clearAbandonedStages, createStage, roundPrice, sourceRecord, writeJsonFile,
 } from "../shared/dataset.mjs";
@@ -68,7 +69,7 @@ const FINAL_OUT = process.env.DATA_OUT || path.join(path.dirname(fileURLToPath(i
 let OUT = FINAL_OUT;
 const HEADERS = { "User-Agent": USER_AGENT };
 let localHistorySeeds = new Map();
-const FETCH_TIMEOUT_MS = Math.max(5_000, Number(process.env.FETCH_TIMEOUT_MS) || 30_000);
+const FETCH_TIMEOUT_MS = fetchTimeout(process.env.FETCH_TIMEOUT_MS);
 const HISTORY_LEAGUES = 2;   // ninja backfill only for the first N leagues (politeness)
 const DELAY_MS = 300;
 const GGG_THIN_PRICE_MAX_AGE_HOURS = Math.max(1, Number(process.env.GGG_THIN_PRICE_MAX_AGE_HOURS) || 24);
@@ -111,9 +112,9 @@ async function getJson(url) {
   const meta = activeSourceRecords ? ninjaSourceMeta(url) : null;
   let res;
   try {
-    res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    const payload = await res.json();
+    const payload = await fetchResource(url, {
+      headers: HEADERS, timeoutMs: FETCH_TIMEOUT_MS, onResponse: (response) => { res = response; },
+    });
     if (meta) activeSourceRecords.push(sourceRecord({
       ...meta, url, requestedAt, observedAt: requestedAt, ok: true,
       status: res.status, rawRows: rawRowCount(payload),
@@ -1368,8 +1369,7 @@ export const LEAGUE_FILES = [
 
 async function tryText(url) {
   try {
-    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    return res.ok ? await res.text() : null;
+    return await fetchResource(url, { headers: HEADERS, timeoutMs: FETCH_TIMEOUT_MS, format: "text" });
   } catch { return null; }
 }
 

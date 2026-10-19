@@ -1,3 +1,4 @@
+import { fetchResource, fetchTimeout } from "../../shared/http.mjs";
 /* GGG's public Currency Exchange feed.
 
    The feed is an hourly digest of completed trades. It identifies items by
@@ -21,7 +22,7 @@ const REPOE_URL = process.env.REPOE_BASE_ITEMS_URL || "https://repoe-fork.github
 const HEADERS = { ...JSON_HEADERS };
 /* Every other external read in this project is bounded. This one was not, so a
    stalled CDN connection could hold the hourly job open indefinitely. */
-const FETCH_TIMEOUT_MS = Math.max(5_000, Number(process.env.FETCH_TIMEOUT_MS) || 30_000);
+const FETCH_TIMEOUT_MS = fetchTimeout(process.env.FETCH_TIMEOUT_MS);
 
 export const CHAOS_ID = "Metadata/Items/Currency/CurrencyRerollRare";
 export const DIVINE_ID = "Metadata/Items/Currency/CurrencyModValues";
@@ -34,9 +35,7 @@ const rounded = (v) => {
 };
 
 async function getJson(url) {
-  const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.json();
+  return fetchResource(url, { headers: HEADERS, timeoutMs: FETCH_TIMEOUT_MS });
 }
 
 function pairKey(a, b) {

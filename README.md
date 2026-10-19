@@ -114,6 +114,10 @@ time ever bothers you, ask me to subset it to Latin glyphs (~50 KB).
 
 ## Host on GitHub Pages
 
+Feed requests use bounded deadlines and transient retries. See
+`docs/architecture.md` for timeout settings and retry behavior.
+
+
 GitHub Pages is static-only, so the repo includes a workflow
 (`.github/workflows/deploy.yml`) that fetches the data **server-side** every
 hour, bakes it into the site as JSON under `data/`, and redeploys. The app loads

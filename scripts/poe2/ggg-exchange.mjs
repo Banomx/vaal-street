@@ -1,3 +1,4 @@
+import { fetchResource, fetchTimeout } from "../shared/http.mjs";
 import { JSON_HEADERS, sourceRecord } from "../shared/dataset.mjs";
 import { fetchBaseItems } from "../shared/repoe.mjs";
 
@@ -5,7 +6,7 @@ const BASE = process.env.GGG_POE2_EXCHANGE_BASE || "https://web.poecdn.com/api/c
 const ITEMS_URL = process.env.REPOE_POE2_ITEMS_URL || "https://repoe-fork.github.io/poe2/base_items.min.json";
 const HEADERS = { ...JSON_HEADERS };
 const HOUR = 3600;
-const FETCH_TIMEOUT_MS = Number(process.env.POE2_FETCH_TIMEOUT_MS || 30000);
+const FETCH_TIMEOUT_MS = fetchTimeout(process.env.POE2_FETCH_TIMEOUT_MS);
 
 export const EXALTED_ID = "Metadata/Items/Currency/CurrencyAddModToRare";
 export const DIVINE_ID = "Metadata/Items/Currency/CurrencyModValues";
@@ -131,9 +132,7 @@ export function buildGggPrices(markets, baseItems, league, hour = null) {
 }
 
 async function getJson(url) {
-  const response = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
-  return response.json();
+  return fetchResource(url, { headers: HEADERS, timeoutMs: FETCH_TIMEOUT_MS });
 }
 
 export async function fetchGggPoe2({ now = Date.now() } = {}) {

@@ -790,8 +790,15 @@ All previous-deployment reads prefer `/data/poe1/<league>/`. The former
 `/data/<league>/` location remains a migration fallback only. The browser also
 accepts the old scarab `history.json` filename when `scarabs-history.json` is
 not present, so checked-in or deployed pre-split datasets remain readable.
-External JSON requests have a 30-second timeout (`FETCH_TIMEOUT_MS`) so one
-stalled fallback cannot block the hourly job indefinitely.
+Market-feed and deployed-data requests use `scripts/shared/http.mjs`. Each
+attempt has a 30-second deadline covering headers and body. `FETCH_TIMEOUT_MS`
+(PoE 1) and `POE2_FETCH_TIMEOUT_MS` (PoE 2) accept 5,000–120,000 milliseconds;
+invalid values use the default. Network failures, timeouts, HTTP 429 and 5xx
+receive at most two retries, normally after 500 ms and 1,000 ms. `Retry-After`
+seconds or HTTP dates take precedence. A requested wait over 30 seconds ends the
+request without retrying early. Other HTTP errors and malformed JSON are not
+retried. Source provenance and RePoE response headers remain available after a
+retry. Publication gates and staging still decide whether a run can be deployed.
 
 `historyOrigin()` picks one day 0 per league — league start whenever it is
 known and plausible, otherwise the earliest point we hold — and the price

@@ -13,6 +13,7 @@
    code change when an item suddenly moves. */
 
 import { contentHash, sourceRecord } from "./dataset.mjs";
+import { fetchResource } from "./http.mjs";
 
 /* A dictionary in an unexpected shape must not be consumed. Failing the read is
    recoverable — the run falls back to a source that carries names itself — but
@@ -44,9 +45,10 @@ export function validateBaseItems(baseItems, { expectedEntries = 1000 } = {}) {
 
 export async function fetchBaseItems(url, { id, headers = {}, timeoutMs = 30000 } = {}) {
   const requestedAt = new Date().toISOString();
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
-  if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
-  const text = await response.text();
+  let response;
+  const text = await fetchResource(url, {
+    headers, timeoutMs, format: "text", onResponse: (res) => { response = res; },
+  });
   const baseItems = JSON.parse(text);
   const shape = validateBaseItems(baseItems);
   return {
