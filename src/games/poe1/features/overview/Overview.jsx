@@ -11,18 +11,13 @@ import {
 import { CHANGE_WINDOW_OPTIONS } from "../pricing/marketWindows.js";
 import { POE1_SCHEMA_VERSIONS } from "../../config.js";
 import { isUsable, loadDocument } from "../../../../shared/data/snapshot.js";
-import { TREND_DEPTH, TREND_ROTATION_MS, pickTrend, rotateDesks, rotateTrend } from "./overviewTrends.js";
+import { TREND_DEPTH, pickTrend } from "./overviewTrends.js";
+import SpotlightBoard from "../../../../shared/ui/SpotlightBoard.jsx";
 
 const CATEGORY_FILES = [
   ["catalysts", "Catalysts"],
   ["astrolabes", "Astrolabes"],
 ];
-const ROTATION_SECONDS = Math.round(TREND_ROTATION_MS / 1000);
-/* Desk order for the rotation. The highlight walks this list one step per
-   tick, which is what stops the feature card sitting on Popular farms forever
-   while only the small print underneath changes. */
-const DESK_ORDER = ["farms", "watcher", "boss", "delve", "gems", "market"];
-
 function pct(value) {
   if (!Number.isFinite(value)) return "—";
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
@@ -36,53 +31,6 @@ function sourceLabel(source) {
     .filter(([, enabled]) => enabled)
     .map(([name]) => name === "ggg" ? "GGG exchange" : name);
   return names.length ? `Prices via ${names.join(" + ")}` : "Snapshot data";
-}
-
-function Signal({ kind, title, value, tone = "", selected, pinned, onSelect }) {
-  return (
-    <button type="button" className={`ov-signal${selected ? " on" : ""}${pinned ? " pinned" : ""}`}
-      aria-pressed={selected} onClick={onSelect}
-      title={pinned ? "Pinned — click again to unpin" : "Click to inspect this signal"}>
-      <span className="ov-kind">{kind}{pinned && <em className="ov-pin" aria-label="pinned">pinned</em>}</span>
-      <strong>{title}</strong>
-      <span className={`ov-value ${tone}`}>{value}</span>
-    </button>
-  );
-}
-
-function Feature({ signal }) {
-  return (
-    <section className="ov-feature" aria-live="polite">
-      <div className="ov-feature-top">
-        <span className="ov-kind">{signal.kind}</span>
-        <em>{signal.status}</em>
-      </div>
-      <h3>{signal.title}</h3>
-      <div className="ov-feature-number">
-        <strong className={signal.tone}>{signal.value}</strong>
-        <span>{signal.unit}</span>
-      </div>
-      <p>{signal.note}</p>
-      <div className="ov-feature-bottom">
-        <div className="ov-feature-flow">
-          {signal.flow.map((item) => <span key={item}>{item}</span>)}
-        </div>
-        <button type="button" onClick={signal.open}>{signal.openLabel}</button>
-      </div>
-    </section>
-  );
-}
-
-function SignalList({ label, signals, activeId, pinned, onSelect }) {
-  return (
-    <aside className="ov-signal-list" aria-label={label}>
-      {signals.map((signal) => (
-        <Signal key={signal.id} kind={signal.kind} title={signal.title}
-          value={signal.value} tone={signal.tone} selected={signal.id === activeId}
-          pinned={signal.id === pinned} onSelect={() => onSelect(signal.id)} />
-      ))}
-    </aside>
-  );
 }
 
 export default function Overview({
@@ -104,22 +52,10 @@ export default function Overview({
   onOpenTab,
 }) {
   const [snapshots, setSnapshots] = useState(null);
-  /* null means "follow the rotation". Clicking a signal pins it; clicking the
-     pinned one again hands it back to the rotation. */
-  const [selectedRising, setSelectedRising] = useState(null);
-  const [selectedFalling, setSelectedFalling] = useState(null);
-  const [tick, setTick] = useState(0);
   const [direction, setDirection] = useState("up");
-  const [rotating, setRotating] = useState(true);
 
   useEffect(() => {
-    if (!rotating) return undefined;
-    const timer = setInterval(() => setTick((value) => value + 1), TREND_ROTATION_MS);
-    return () => clearInterval(timer);
-  }, [rotating]);
-
-  useEffect(() => {
-    if (!staticBase) return undefined; // no league folder yet
+    if (!staticBase) { setSnapshots(null); return undefined; }
     let cancelled = false;
     setSnapshots(null);
     /* Every desk on this page is a summary of a file someone else renders in
@@ -136,10 +72,9 @@ export default function Overview({
       read("resonators.json"),
       read("catalysts.json"),
       read("astrolabes.json"),
-      read("catalogue.json"),
       read("gems.json"),
-    ]).then(([prices, fossils, resonators, catalysts, astrolabes, catalogue, gems]) => {
-      if (!cancelled) setSnapshots({ prices, fossils, resonators, catalysts, astrolabes, catalogue, gems });
+    ]).then(([prices, fossils, resonators, catalysts, astrolabes, gems]) => {
+      if (!cancelled) setSnapshots({ prices, fossils, resonators, catalysts, astrolabes, gems });
     });
     return () => { cancelled = true; };
   }, [staticBase]);
@@ -236,8 +171,7 @@ export default function Overview({
     [customFarms],
   );
 
-  /* Each desk keeps its own three-deep rising and falling shortlist. The panels
-     below are the same five desks read from opposite ends of these lists. */
+  // Movement lists are sign-filtered; modelled levels use a simple top three.
   const pools = useMemo(() => {
     const byChange = (rows, valueOf) => ({
       up: pickTrend(rows, valueOf, "up"),
@@ -252,350 +186,99 @@ export default function Overview({
         up: movers.rising.slice(0, TREND_DEPTH),
         down: movers.falling.slice(0, TREND_DEPTH),
       },
-      watcher: byChange(strategyRows, (strategy) => strategy[activeKey]),
       boss: byLevel(bossSummary?.rows, (row) => row.net),
       delve: byLevel(delveTargets, (row) => row.opportunityIndex),
       gems: byLevel(gemRows, (row) => row.profitPerHour),
       market: byChange(categoryRows, (row) => row.change),
     };
-  }, [movers, strategyRows, bossSummary, delveTargets, gemRows, categoryRows, activeKey]);
+  }, [movers, strategyRows, bossSummary, delveTargets, gemRows, categoryRows]);
 
-  const realSuffix = activeKey.endsWith("R") ? " divine-adjusted" : "";
-
-  /* Which desks have anything to say in this direction, in a stable order, so
-     the highlight can walk them predictably. */
-  const deskOrder = (direction) => DESK_ORDER.filter((key) => pools[key][direction].length);
-
-  const buildSignals = (direction) => {
-    const up = direction === "up";
-    const signals = [];
-    const position = (slot) => `${slot.index + 1}/${slot.count}`;
-    /* One lap of the desks per round: every desk shows its strongest entry
-       before any of them moves on to its second. */
-    const { round } = rotateDesks(deskOrder(direction).length, tick);
-
-    const farm = rotateTrend(pools.farms[direction], round);
-    if (farm.entry) signals.push({
-      id: "farms",
-      kind: "Popular farms",
-      status: `Scarab movement · ${position(farm)}`,
-      title: farm.index === 0
-        ? `${farm.entry.name} is the strongest ${up ? "rising" : "falling"} mechanic`
-        : `${farm.entry.name} is the #${farm.index + 1} ${up ? "rising" : "falling"} mechanic`,
-      value: pct(farm.entry[activeKey]),
-      tone: up ? "up" : "down",
-      unit: `${changeWindow} mechanic-total movement`,
-      note: "This is market movement, not a promised profit margin. The detailed tab keeps the existing scarab strategies and cost breakdowns unchanged.",
-      flow: ["Live scarab prices", "Existing strategy recipes", "Mechanic movement"],
-      openLabel: "Open Popular farms",
+  const realSuffix = activeKey.endsWith("R") ? " · Divine-adjusted" : "";
+  const price = (value) => fmtPrice(value, currency, divineRate);
+  const movement = (value) => value > 0 ? "gain" : value < 0 ? "loss" : "";
+  const categories = [
+    {
+      id: "farms", title: "Popular farms", ranking: `Top 3 ${direction === "up" ? "rising" : "falling"} mechanics · ${changeWindow}${realSuffix}`,
+      unit: `${changeWindow} mechanic-total movement`, action: "Inspect Popular farms",
+      emptyTitle: snapshots === null ? "Loading market movement" : "No measured mechanic moves",
+      emptyNote: "A move needs an older comparable snapshot. Price movement is not farming profit.",
       open: () => onOpenTab("farms"),
-    });
-
-    const strategy = rotateTrend(pools.watcher[direction], round);
-    if (strategy.entry) signals.push({
-      id: "watcher",
-      kind: "Strat Watcher",
-      status: `${up ? "Top" : "Bottom"} ${strategy.count} · rotates every ${ROTATION_SECONDS}s`,
-      title: `${strategy.entry.name} is getting ${up ? "more expensive" : "cheaper"}`,
-      value: pct(strategy.entry[activeKey]),
-      tone: up ? "up" : "down",
-      unit: `${changeWindow}${realSuffix} total cost movement`,
-      note: "The total counts every slot of the saved setup, including duplicates and the Astrolabe.",
-      flow: [
-        fmtPrice(strategy.entry.total, currency, divineRate),
-        `${strategy.entry.scarabs.length} scarabs${strategy.entry.astrolabe ? " + Astrolabe" : ""}`,
-        position(strategy),
-      ],
-      openLabel: "Open Strat Watcher",
+      rows: pools.farms[direction].map((row) => ({ id: row.name, title: row.name, value: pct(row[activeKey]),
+        tone: movement(row[activeKey]), unit: `${changeWindow}${realSuffix} mechanic-total movement`,
+        evidence: "Scarab cost movement, not a farming profit estimate.",
+        open: () => onOpenTab("prices", { group: row.name }) })),
+    },
+    {
+      id: "boss", title: "Boss profit", ranking: "Top 3 by estimated net per kill", unit: "Estimated net per kill", action: "Inspect the encounter",
+      emptyNote: "No boss has enough entry pricing for a ranked estimate.", open: () => onOpenTab("bosses"),
+      rows: pools.boss.up.map((row) => ({ id: row.boss.id, title: row.boss.name, value: price(row.net),
+        tone: movement(row.net), unit: "Estimated drop value after entry cost",
+        evidence: `${profile?.name || "Default"} settings · ${row.hiddenLines.length ? `${row.hiddenLines.length} unpriced drop lines` : "All drop lines priced"}`,
+        warning: row.hiddenLines.length ? "Incomplete drop pricing" : null,
+        open: () => onOpenTab("bosses", row.boss.id) })),
+    },
+    {
+      id: "gems", title: "Gem levelling", ranking: "Top 3 by modelled profit / hour / socket", unit: "Modelled profit / hour / socket", action: "Review gem inputs",
+      emptyNote: "No eligible gem has usable pricing and sufficient listing depth.", open: () => onOpenTab("gems"),
+      rows: pools.gems.up.map((row) => ({ id: row.name, title: row.name, value: price(row.profitPerHour),
+        tone: movement(row.profitPerHour), unit: "Modelled profit / hour / socket",
+        warning: row.approx ? "Includes estimated gem quotes" : null,
+        evidence: `Your saved levelling inputs · ${Math.round(row.xp?.minutes || 0)} min to level · ${row.path === "vaal" ? "then corrupt" : "then sell"}`,
+        open: () => onOpenTab("gems") })),
+    },
+    {
+      id: "market", title: "Market movers", ranking: `Top 3 ${direction === "up" ? "rising" : "falling"} Catalysts / Astrolabes · ${changeWindow}`,
+      unit: `${changeWindow} price movement`, action: "Inspect price history",
+      emptyNote: "No measured move in these categories for the selected window.", open: () => onOpenTab("catalysts"),
+      rows: pools.market[direction].map((row) => ({ id: `${row.tab}:${row.name}`, title: row.name, value: pct(row.change),
+        tone: movement(row.change), unit: `${changeWindow} price movement · ${row.label}`,
+        evidence: "Observed item-price movement. Inspect the full price path before drawing conclusions.",
+        open: () => onOpenTab(row.tab, { name: row.name }) })),
+    },
+    {
+      id: "delve", title: "Delve · experimental", ranking: "Top 3 by saved-depth opportunity index", unit: "Community Depth EV", action: "Inspect the Delve model",
+      emptyNote: "No priced target is available for your saved depth and sample.", open: () => onOpenTab("delve"),
+      rows: pools.delve.up.map((row) => ({ id: row.biome.id || row.biome.name, title: row.biome.name,
+        value: price(row.depthAdjustedRange.median), unit: `Community Depth EV · depth ${delveSettings.depth}`,
+        evidence: `${Math.round(row.opportunityIndex)}/100 opportunity · ${row.exclusive?.fossil || "fossil routing"} · saved sample`,
+        warning: "Experimental model", open: () => onOpenTab("delve") })),
+    },
+    {
+      id: "watcher", title: "Strat Watcher", ranking: "Top 3 saved setups by current cost", unit: "Current setup cost", action: "Open Strat Watcher",
+      emptyTitle: "No fully priced saved setups", emptyNote: "Save a setup with all items priced to compare its cost and measured movement.",
       open: () => onOpenTab("watcher"),
-    });
-
-    const boss = rotateTrend(pools.boss[direction], round);
-    if (boss.entry) signals.push({
-      id: "boss",
-      kind: "Boss profit",
-      status: profile?.name || "Active TTK profile",
-      title: boss.index === 0
-        ? `${boss.entry.boss.name} has the ${up ? "highest" : "lowest"} current estimated net`
-        : `${boss.entry.boss.name} is #${boss.index + 1} from the ${up ? "top" : "bottom"} by estimated net`,
-      value: fmtPrice(boss.entry.net, currency, divineRate),
-      tone: boss.entry.net > 0 ? "up" : boss.entry.net < 0 ? "down" : "",
-      unit: "estimated net per kill",
-      note: "Correct drop values can still produce a negative result. The detailed tab keeps entry cost, editable chances, kill distribution and the active TTK profile.",
-      flow: ["Entry cost", "Median and mean", "Active TTK profile"],
-      openLabel: "Open Boss profit",
-      open: () => onOpenTab("bosses", boss.entry.boss?.id),
-    });
-
-    const delve = rotateTrend(pools.delve[direction], round);
-    if (delve.entry) signals.push({
-      id: "delve",
-      kind: "Delve",
-      status: "Experimental",
-      title: delve.index === 0
-        ? `${delve.entry.biome.name} ${up ? "leads" : "trails"} the fossil opportunities at depth ${delveSettings.depth}`
-        : `${delve.entry.biome.name} is #${delve.index + 1} from the ${up ? "top" : "bottom"} of the fossil opportunities`,
-      value: fmtPrice(delve.entry.depthAdjustedRange.median, currency, divineRate),
-      tone: "",
-      unit: "community Depth EV",
-      note: "This reuses the saved depth and sample profile. It never mixes city bosses into fossil routing or invents a universal hourly rate.",
-      flow: ["Live fossil price", `Depth ${delveSettings.depth}`, "Personal sample pace"],
-      openLabel: "Open Delve",
-      open: () => onOpenTab("delve"),
-    });
-
-    const gem = rotateTrend(pools.gems[direction], round);
-    if (gem.entry) signals.push({
-      id: "gems",
-      kind: "Gem levelling",
-      status: `Per hour of levelling · ${position(gem)}`,
-      title: gem.index === 0
-        ? `${gem.entry.name} pays the ${up ? "most" : "least"} per hour of levelling`
-        : `${gem.entry.name} is #${gem.index + 1} from the ${up ? "top" : "bottom"} by profit per hour`,
-      value: fmtPrice(gem.entry.profitPerHour, currency, divineRate),
-      tone: gem.entry.profitPerHour > 0 ? "up" : gem.entry.profitPerHour < 0 ? "down" : "",
-      unit: "profit per hour of levelling",
-      note: "One gem in one socket, bought at level 1 and either sold at its cap or corrupted — whichever pays more. Thin markets are left out of this headline whatever the tab's filter says.",
-      flow: [
-        `Buy at ${fmtPrice(gem.entry.input.chaos, currency, divineRate)}`,
-        `${Math.round(gem.entry.xp?.minutes ?? 0)} min to level`,
-        gem.entry.path === "vaal" ? "Level, then vaal" : "Level, then sell",
-      ],
-      openLabel: "Open Gem levelling",
-      open: () => onOpenTab("gems"),
-    });
-
-    const market = rotateTrend(pools.market[direction], round);
-    if (market.entry) signals.push({
-      id: "market",
-      kind: market.entry.label,
-      status: `Category movement · ${position(market)}`,
-      title: market.index === 0
-        ? `${market.entry.name} has the largest ${changeWindow} category ${up ? "gain" : "drop"}`
-        : `${market.entry.name} is the #${market.index + 1} ${changeWindow} category ${up ? "gain" : "drop"}`,
-      value: pct(market.entry.change),
-      tone: up ? "up" : "down",
-      unit: `${changeWindow} price movement`,
-      note: "One prominent mover appears here, then opens the existing category history for the full price path and divine-adjusted context.",
-      flow: ["Live price", `${changeWindow} window`, "History chart"],
-      openLabel: `Open ${market.entry.label}`,
-      open: () => onOpenTab(market.entry.tab),
-    });
-
-    if (signals.length) return signals;
-    /* Keep both panels the same shape while data is loading or genuinely flat,
-       so the page does not collapse to a single column and back. */
-    return [{
-      id: "quiet",
-      kind: up ? "Rising" : "Cooling",
-      status: snapshots === null ? "Loading" : "Nothing measured",
-      title: snapshots === null
-        ? "Loading market data"
-        : `Nothing is measurably ${up ? "climbing" : "cooling"} in the ${changeWindow} window`,
-      value: "—",
-      tone: "",
-      unit: `${changeWindow}${realSuffix} window`,
-      note: "Short windows stay empty until a snapshot old enough to compare against exists. They are never estimated.",
-      flow: ["Live prices", `${changeWindow} window`, "No measured move"],
-      openLabel: "Open Popular farms",
-      open: () => onOpenTab("farms"),
-    }];
-  };
-
-  const risingSignals = buildSignals("up");
-  const fallingSignals = buildSignals("down");
-  /* The highlight steps one desk per tick unless the reader has pinned one. */
-  const featured = (signals, pinned, direction) => {
-    if (pinned) {
-      const chosen = signals.find((signal) => signal.id === pinned);
-      if (chosen) return chosen;
-    }
-    const order = deskOrder(direction);
-    const { index } = rotateDesks(order.length, tick);
-    return signals.find((signal) => signal.id === order[index]) || signals[0];
-  };
-  const risingSignal = featured(risingSignals, selectedRising, "up");
-  const fallingSignal = featured(fallingSignals, selectedFalling, "down");
-  const toggle = (setter) => (id) => setter((current) => (current === id ? null : id));
-
+      rows: [...strategyRows].filter((row) => !row.missing?.length && row.members?.length && Number.isFinite(row.total)).sort((a, b) => b.total - a.total).slice(0, 3)
+        .map((row) => ({ id: row.id || row.name, title: row.name, value: price(row.total), unit: "Current setup cost, not profit",
+          evidence: `${row.scarabs.length}/5 scarabs${row.astrolabe ? " + Astrolabe" : ""} · ${changeWindow}${realSuffix}: ${pct(row[activeKey])}`,
+          open: () => onOpenTab("watcher", { id: row.id }) })),
+    },
+  ];
   const updatedAt = staticInfo?.generatedAt || snapshots?.prices?.generatedAt;
-  const statusSource = snapshots?.prices?.priceSource || staticInfo?.priceSource;
-  const status = mode === "connecting"
-    ? "Loading market data"
-    : mode === "demo"
-      ? "Demo snapshot"
-      : mode === "unavailable"
-        ? "No market data"
-        : dataSource === "static" ? sourceLabel(statusSource) : "Live market data";
-  /* With nothing loaded there is no league, no timestamp and no rate — and the
-     fallback rate is a constant from the demo generator. Printing it next to
-     "no market data" is exactly the kind of plausible number this page must
-     not show. */
+  const status = mode === "connecting" ? "Loading market data" : mode === "demo" ? "Demo snapshot"
+    : mode === "unavailable" ? "No market data" : sourceLabel(snapshots?.prices?.priceSource || staticInfo?.priceSource);
   const showRates = mode !== "unavailable" && mode !== "connecting";
 
-  const bestBoss = pools.boss.up[0] || null;
-  const bestDelve = pools.delve.up[0] || null;
-  const leadFarm = pools.farms.up[0] || pools.farms.down[0] || null;
-  const leadFarmRising = !!pools.farms.up[0];
-  const deskStrategy = rotateTrend(pools.watcher.up, rotateDesks(deskOrder("up").length, tick).round).entry
-    || strategyRows[0] || null;
-  const deskChange = deskStrategy?.[activeKey];
-
-  /* What the last snapshot found the market had gained, lost or renamed. New
-     items need no help — every category is fetched by type and name pattern —
-     but the curated boss and Delve datasets reference names by string, so a
-     name leaving a feed is the one case that needs a person. */
-  const catalogue = useMemo(() => {
-    const categories = snapshots?.catalogue?.categories;
-    if (!Array.isArray(categories)) return null;
-    const collect = (field) => categories.flatMap((entry) => entry[field] || []);
-    const added = collect("added");
-    const renamed = collect("renamed");
-    const suspected = collect("suspected");
-    const removed = collect("removed");
-    const breaking = collect("breaking");
-    const changes = added.length + renamed.length + suspected.length + removed.length;
-    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-    if (breaking.length) {
-      return {
-        title: `${plural(breaking.length, "curated name")} need updating`,
-        note: `${breaking.slice(0, 3).join(", ")} left the market feed, so anything pricing them is unpriced.`,
-      };
-    }
-    if (!changes) {
-      return { title: "No catalogue changes", note: "New items are adopted automatically on the next hourly snapshot." };
-    }
-    const parts = [];
-    if (added.length) parts.push(`${plural(added.length, "new item")} adopted`);
-    if (renamed.length) parts.push(`${plural(renamed.length, "rename")} followed`);
-    if (suspected.length) parts.push(`${plural(suspected.length, "possible rename")}`);
-    if (removed.length) parts.push(`${plural(removed.length, "item")} gone`);
-    return { title: `${plural(changes, "catalogue change")}`, note: `${parts.join(", ")}. Nothing curated is affected.` };
-  }, [snapshots]);
-
-  const coverageTitle = bossSummary
-    ? bossSummary.missing > 0
-      ? `${bossSummary.missing} boss drop price${bossSummary.missing === 1 ? "" : "s"} missing`
-      : "All configured boss drops are priced"
-    : snapshots === null ? "Checking boss price coverage" : "Boss coverage unavailable";
-  const coverageNote = bossSummary?.firstGap
-    ? `First: ${bossSummary.firstGap.line.label} (${bossSummary.firstGap.boss.name})`
-    : "Every configured drop contributes when broad pricing is available.";
-
-  return (
-    <main className="ov-main market-overview">
-
-      <div className="ov-head overview-heading">
-        <div>
-          <div className="ov-kicker">Path of Exile 1 · market desk</div>
-          <h2>Market overview</h2>
-          <p>Find a farming opportunity, compare boss returns, or check what is moving.</p>
-        </div>
-        <div className="app-segmented st-seg" aria-label="Change window">
-          {CHANGE_WINDOW_OPTIONS.map((window) => (
-            <button type="button" key={window} className={changeWindow === window ? "on" : ""}
-              aria-pressed={changeWindow === window} onClick={() => setChangeWindow(window)}>
-              {window}
-            </button>
-          ))}
-        </div>
+  return <main className="ov-main market-overview">
+    <div className="ov-head overview-heading">
+      <div><div className="ov-kicker">Path of Exile 1 · market desk</div><h2>Market overview</h2>
+        <p>Highlights from your tools, with each category’s top three at hand.</p></div>
+      <div className="app-segmented" aria-label="Movement window">
+        {CHANGE_WINDOW_OPTIONS.map((window) => <button type="button" key={window} className={changeWindow === window ? "on" : ""}
+          aria-pressed={changeWindow === window} onClick={() => setChangeWindow(window)}>{window}</button>)}
       </div>
-
-      <div className="overview-provenance">
-      <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
-        <b>{status}</b>
-        {league ? ` · ${league}` : ""}
-        {updatedAt ? ` · updated ${new Date(updatedAt).toLocaleString()}` : ""}
-        {showRates ? ` · 1 Divine ≈ ${Math.round(divineRate)} Chaos` : ""}
-        {showRates && mirrorDivine > 0 ? ` · 1 Mirror ≈ ${Math.round(mirrorDivine).toLocaleString()} Divine` : ""}
-      </SourceStrip>
-      </div>
-
-      <section className="overview-stats" aria-label="Market at a glance">
-        <button className="overview-stat" onClick={() => onOpenTab("bosses", bestBoss?.boss?.id)}>
-          <span>Highest boss net / kill</span><strong>{bestBoss ? fmtPrice(bestBoss.net, currency, divineRate) : "—"}</strong><small>{bestBoss?.boss?.name || "Waiting for prices"}</small>
-        </button>
-        <button className="overview-stat" onClick={() => onOpenTab("gems")}>
-          <span>Highest gem profit / hour</span><strong>{pools.gems.up[0] ? fmtPrice(pools.gems.up[0].profitPerHour, currency, divineRate) : "—"}</strong><small>{pools.gems.up[0]?.name || "Waiting for prices"}<br />Per socket · your levelling settings</small>
-        </button>
-        <button className="overview-stat" onClick={() => onOpenTab("watcher")}>
-          <span>Saved strategies</span><strong>{strategyRows.length}<em> / 10</em></strong><small>{strategyRows.length ? "Track your setup costs" : "Build your first farming setup"}</small>
-        </button>
-      </section>
-
-      <div className="overview-toolbar">
-        <div><h3>Signals to explore</h3><p>Movements and estimated returns from your tools.</p></div>
-        <div className="overview-toolbar-actions">
-          <div className="app-segmented" aria-label="Signal direction">
-            <button aria-pressed={direction === "up"} className={direction === "up" ? "on" : ""} onClick={() => setDirection("up")}>Stronger signals</button>
-            <button aria-pressed={direction === "down"} className={direction === "down" ? "on" : ""} onClick={() => setDirection("down")}>Weaker signals</button>
-          </div>
-          <button className="overview-rotate" aria-pressed={rotating} onClick={() => setRotating(value => !value)}>{rotating ? "Pause rotation" : "Auto rotate"}</button>
-        </div>
-      </div>
-      <div className={direction === "up" ? "ov-briefing" : "ov-briefing ov-down"}>
-        <Feature signal={direction === "up" ? risingSignal : fallingSignal} />
-        <SignalList label={direction === "up" ? "Stronger signals" : "Weaker signals"}
-          signals={direction === "up" ? risingSignals : fallingSignals}
-          activeId={direction === "up" ? risingSignal.id : fallingSignal.id}
-          pinned={direction === "up" ? selectedRising : selectedFalling}
-          onSelect={toggle(direction === "up" ? setSelectedRising : setSelectedFalling)} />
-      </div>
-
-      <h3 className="ov-section-title">Plan your next run</h3>
-      <div className="ov-desks">
-        <section className="ov-desk">
-          <header><h3>{deskStrategy ? deskStrategy.name : "Watch a farming strategy"}</h3><em>Strat Watcher</em></header>
-          <p>{deskStrategy ? (rotating ? `Rotating through saved setups every ${ROTATION_SECONDS} seconds.` : "Your saved setup, priced from the current snapshot.") : "Save up to ten setups of five scarabs and one Astrolabe."}</p>
-          <dl>
-            {deskStrategy ? <>
-              <div><dt>Current cost</dt><dd>{fmtPrice(deskStrategy.total, currency, divineRate)}</dd></div>
-              <div><dt>{changeWindow}{realSuffix}</dt><dd>{pct(deskChange)}</dd></div>
-              <div><dt>Setup</dt><dd>{deskStrategy.scarabs.length}/5 scarabs{deskStrategy.astrolabe ? " + Astrolabe" : ""}</dd></div>
-            </> : <>
-              <div><dt>Movement leader</dt><dd>{leadFarm?.name || "No notable movement"}</dd></div>
-              <div><dt>{changeWindow} move</dt><dd>{leadFarm ? pct(leadFarm[activeKey]) : "Stable"}</dd></div>
-              <div><dt>Direction</dt><dd>{leadFarm ? (leadFarmRising ? "Rising" : "Falling") : "Stable"}</dd></div>
-            </>}
-          </dl>
-          <button type="button" onClick={() => onOpenTab("watcher")}>Open Strat Watcher</button>
-        </section>
-
-        <section className="ov-desk">
-          <header><h3>Price a boss kill</h3><em>Boss profit</em></header>
-          <p>A quick read before the full loot and TTK view.</p>
-          <dl>
-            <div><dt>Current leader</dt><dd>{bestBoss?.boss?.name || "Unavailable"}</dd></div>
-            <div><dt>Estimated net</dt><dd>{bestBoss ? fmtPrice(bestBoss.net, currency, divineRate) : "—"}</dd></div>
-            <div><dt>TTK profile</dt><dd>{profile?.name || "Default"}</dd></div>
-          </dl>
-          <button type="button" onClick={() => onOpenTab("bosses", bestBoss?.boss?.id)}>Open Boss profit</button>
-        </section>
-
-        <section className="ov-desk">
-          <header><h3>Choose a Delve route</h3><em>Delve EXP</em></header>
-          <p>Reuses saved depth and sample; EXP stays visible.</p>
-          <dl>
-            <div><dt>Target</dt><dd>{bestDelve?.exclusive?.fossil || "Unavailable"}</dd></div>
-            <div><dt>Depth EV</dt><dd>{bestDelve ? fmtPrice(bestDelve.depthAdjustedRange.median, currency, divineRate) : "—"}</dd></div>
-            <div><dt>Opportunity</dt><dd>{bestDelve ? `${Math.round(bestDelve.opportunityIndex)}/100 at ${delveSettings.depth}` : "—"}</dd></div>
-          </dl>
-          <button type="button" onClick={() => onOpenTab("delve")}>Open Delve</button>
-        </section>
-      </div>
-
-      <section className="ov-attention" aria-label="Data quality and assumptions">
-        <button type="button" onClick={() => onOpenTab("bosses", bossSummary?.firstGap?.boss?.id)}>
-          <span>Price coverage</span><strong>{coverageTitle}</strong><small>{coverageNote}</small>
-        </button>
-        <div><span>Experimental</span><strong>Delve assumptions stay labelled</strong><small>Community estimates never appear as official probabilities.</small></div>
-        <div><span>Source quality</span><strong>{status}</strong><small>GGG exchange remains first; fallbacks stay visible.</small></div>
-        <div>
-          <span>Catalogue</span>
-          <strong>{catalogue ? catalogue.title : snapshots === null ? "Checking the item catalogue" : "Catalogue tracking unavailable"}</strong>
-          <small>{catalogue ? catalogue.note : "The first snapshot after this change starts the comparison."}</small>
-        </div>
-      </section>
-    </main>
-  );
+    </div>
+    <div className="overview-provenance"><SourceStrip>
+      <b>{status}</b>{league ? ` · ${league}` : ""}{updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ""}
+      {showRates && divineRate > 0 ? ` · 1 Divine ≈ ${Math.round(divineRate)} Chaos` : ""}
+    </SourceStrip></div>
+    <div className="app-segmented overview-movement-direction" aria-label="Movement rankings">
+      <button type="button" aria-pressed={direction === "up"} className={direction === "up" ? "on" : ""} onClick={() => setDirection("up")}>Rising markets</button>
+      <button type="button" aria-pressed={direction === "down"} className={direction === "down" ? "on" : ""} onClick={() => setDirection("down")}>Falling markets</button>
+    </div>
+    <SpotlightBoard key={league} categories={categories} />
+    <details className="overview-health"><summary>Price coverage and assumptions{bossSummary ? ` · ${bossSummary.missing} missing boss drop quotes` : ""}</summary>
+      <p>Boss and gem figures use your saved settings. Delve remains experimental. Market movement and setup cost are not farming profit.</p>
+      {bossSummary?.firstGap && <button type="button" onClick={() => onOpenTab("bosses", bossSummary.firstGap.boss.id)}>Review the first missing boss quote →</button>}
+    </details>
+  </main>;
 }

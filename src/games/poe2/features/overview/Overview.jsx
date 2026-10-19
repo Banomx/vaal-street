@@ -3,7 +3,9 @@ import { createJsonStore } from "../../../../shared/storage/jsonStore.js";
 import { SourceStrip } from "../../../../shared/ui/AppShell.jsx";
 import { BOSSES } from "../bosses/bossData.js";
 import { computeBosses, fmtPrice, sanitizeSettings, summarizePriceCoverage } from "../bosses/bossProfit.js";
-import { buildTabletFamilies, FAMILY_ORDER } from "../farms/tabletFarms.js";
+import SpotlightBoard from "../../../../shared/ui/SpotlightBoard.jsx";
+import { buildFarmHighlights } from "./overviewHighlights.js";
+import { assessExchangeMarket, buildExchangeOverview, buildExchangeRows, buildUnusualActivity, filterExchangeRowsByTurnover } from "../exchange/exchangeDesk.js";
 
 const bossSettings = createJsonStore({ game: "poe2", feature: "boss-profit", version: 1 });
 
@@ -13,22 +15,7 @@ function sourceText(league, priceData, rateSummary) {
   return `Prices via GGG trades + poe.ninja + PoE2Scout gap-fill · ${league} · updated ${new Date(priceData.generatedAt).toLocaleString()}${rateSummary ? ` · ${rateSummary}` : ""}`;
 }
 
-function FeatureCard({ feature }) {
-  return (
-    <section className="p2ov-feature">
-      <div className="p2ov-feature-top"><span>{feature.kind}</span><em>{feature.status}</em></div>
-      <h3>{feature.title}</h3>
-      <div className="p2ov-number"><strong className={feature.tone}>{feature.value}</strong><span>{feature.unit}</span></div>
-      <p>{feature.note}</p>
-      <div className="p2ov-feature-bottom">
-        <div>{feature.flow.map((item) => <span key={item}>{item}</span>)}</div>
-        <button type="button" onClick={feature.open}>{feature.openLabel}</button>
-      </div>
-    </section>
-  );
-}
-
-export default function Overview({ league, priceData, exchange, currency, chaosExalted, rateSummary, onOpenTab }) {
+export default function Overview({ league, priceData, exchange, history, exchangeHistory, currency, chaosExalted, rateSummary, onOpenTab }) {
   const divineExalted = priceData && priceData !== "missing" ? priceData.divineExalted || 0 : 0;
   const summary = useMemo(() => {
     if (!priceData || priceData === "missing") return null;
@@ -47,122 +34,85 @@ export default function Overview({ league, priceData, exchange, currency, chaosE
     };
   }, [league, priceData]);
 
-  const best = summary?.best;
-  const feature = {
-    kind: "Highest estimated boss net",
-    status: best ? `${best.boss.group} · snapshot estimate` : priceData ? "Waiting for complete pricing" : "Loading market data",
-    title: best ? best.boss.name : "Price a Path of Exile 2 boss encounter",
-    value: best ? fmtPrice(best.net, currency, divineExalted, chaosExalted) : "—",
-    tone: best?.net > 0 ? "gain" : best?.net < 0 ? "loss" : "",
-    unit: "estimated net per kill",
-    note: "Estimated drop value after entry cost. Review the drop assumptions before choosing an encounter.",
-    flow: ["Encounter entry", "Drop-pool EV", summary?.profile ? `TTK: ${summary.profile.name}` : "Optional custom TTK"],
-    openLabel: "Open Boss profit",
-    open: () => onOpenTab("bosses", best?.boss.id),
-  };
-  const coverage = summary?.coverage;
-  const trackedMarkets = priceData && priceData !== "missing" ? Object.keys(priceData.prices || {}).length : 0;
-  const families = priceData && priceData !== "missing" ? buildTabletFamilies(priceData.prices || {}) : [];
-  const pricedFamilies = families.filter(family => family.baseline?.entry?.exalted > 0);
-  const cheapest = [...pricedFamilies].sort((a, b) => a.baseline.entry.exalted - b.baseline.entry.exalted)[0];
-  const available = Boolean(priceData && priceData !== "missing");
-  const emptyLabel = priceData === "missing" ? "Snapshot unavailable" : available ? "No data in snapshot" : "Loading…";
-  const exchangePairs = exchange?.pairs?.length || 0;
-
-  return (
-    <main className="p2ov-main market-overview">
-      <style>{css}</style>
-
-
-
-      <header className="p2ov-head overview-heading">
-        <div className="p2ov-kicker">Path of Exile 2 · market desk</div>
-        <h2>Market overview</h2>
-        <p>Compare boss returns, follow tablet prices, and find your next market to watch.</p>
-      </header>
-
-      <div className="overview-provenance">
-      <SourceStrip className="p2ov-source">{sourceText(league, priceData, rateSummary)}</SourceStrip>
-      </div>
-
-      <section className="overview-stats" aria-label="Market at a glance">
-        <button className="overview-stat" onClick={() => onOpenTab("prices")}><span>Tracked markets</span><strong>{available ? trackedMarkets.toLocaleString() : "—"}</strong><small>Search prices and stored history</small></button>
-        <button className="overview-stat" onClick={() => onOpenTab("farms")}><span>Tablet price coverage</span><strong>{available ? pricedFamilies.length : "—"}<em>{available ? " / " + FAMILY_ORDER.length : ""}</em></strong><small>Normal-tablet entry quotes</small></button>
-        <button className="overview-stat" onClick={() => onOpenTab("exchange")}><span>Completed exchange pairs</span><strong>{exchange ? exchangePairs.toLocaleString() : "—"}</strong><small>{exchange ? "From the stored trade snapshot" : "Waiting for exchange data"}</small></button>
-      </section>
-      <div className="p2ov-briefing">
-        <FeatureCard feature={feature} />
-        <aside className="p2ov-signal" aria-label="Boss shortlist">
-          <header><h3>Boss shortlist</h3><p>Ranked by estimated net per kill</p></header>
-          {summary?.shortlist.map((row, index) => <button type="button" key={row.boss.id} onClick={() => onOpenTab("bosses", row.boss.id)}>
-            <span>0{index + 1} · {row.boss.group}</span><strong>{row.boss.name}</strong>
-            <em className={row.net > 0 ? "gain" : row.net < 0 ? "loss" : ""}>{fmtPrice(row.net, currency, divineExalted, chaosExalted)}</em>
-          </button>)}
-          {!summary?.shortlist.length && <p className="p2ov-shortlist-empty">{emptyLabel}. Boss estimates appear once entry prices are available.</p>}
-        </aside>
-      </div>
-
-      <h3 className="p2ov-section-title">Choose your next move</h3>
-      <div className="p2ov-desks">
-        <section className="p2ov-desk">
-          <header><h3>Compare farming mechanics</h3><em>Popular farms</em></header>
-          <p>Compare tablet entry costs with each mechanic's output basket and market movement.</p>
-          <dl>
-            <div><dt>Priced tablet families</dt><dd>{available ? pricedFamilies.length + "/" + FAMILY_ORDER.length : "—"}</dd></div>
-            <div><dt>Lowest tablet entry</dt><dd>{cheapest?.label || emptyLabel}</dd></div>
-            <div><dt>Normal tablet price</dt><dd>{cheapest ? fmtPrice(cheapest.baseline.entry.exalted, currency, divineExalted, chaosExalted) : "—"}</dd></div>
-          </dl>
-          <button type="button" onClick={() => onOpenTab("farms")}>Explore Popular farms →</button>
-        </section>
-        <section className="p2ov-desk">
-          <header><h3>Follow a market</h3><em>Price tracker</em></header>
-          <p>Open the stored league timeline for any item in the normalized PoE 2 market catalogue.</p>
-          <dl>
-            <div><dt>Tracked markets</dt><dd>{available ? trackedMarkets : "—"}</dd></div>
-            <div><dt>Recent resolution</dt><dd>Hourly for 7 days</dd></div>
-            <div><dt>Retention</dt><dd>Up to 430 days</dd></div>
-          </dl>
-          <button type="button" onClick={() => onOpenTab("prices")}>Open Price tracker</button>
-        </section>
-        <section className="p2ov-desk">
-          <header><h3>Read completed exchange flow</h3><em>Currency Exchange</em></header>
-          <p>Rank real cleared volume, inspect the hour’s traded range, compare poe.ninja quotes, and review liquid two-leg routes.</p>
-          <dl>
-            <div><dt>Completed pairs</dt><dd>{exchange ? exchangePairs : "Unavailable"}</dd></div>
-            <div><dt>Resolution</dt><dd>Official hourly digest</dd></div>
-            <div><dt>Thin-route guard</dt><dd>10 Exalted per leg</dd></div>
-          </dl>
-          <button type="button" onClick={() => onOpenTab("exchange")}>Open Currency Exchange</button>
-        </section>
-      </div>
-
-      <section className="p2ov-attention" aria-label="PoE 2 data quality">
-        <button type="button" onClick={feature.open}>
-          <span>Price coverage</span>
-          <strong>{coverage ? `${coverage.priced}/${coverage.total} boss-market items priced` : "Checking boss price coverage"}</strong>
-          <small>{coverage?.missing.length ? `${coverage.missing.length} items currently need a market quote.` : "Every configured challenge-league item contributes when pricing is available."}</small>
-        </button>
-        <div><span>Timing</span><strong>No hidden default TTK</strong><small>Profit/hour appears only after you create or select a custom timing profile.</small></div>
-        <button type="button" onClick={() => onOpenTab("prices")}><span>Price history</span><strong>Follow a market over time</strong><small>Browse item prices and compare their movement across the available snapshots.</small></button>
-      </section>
-    </main>
-  );
+  const markets = priceData && priceData !== "missing" ? priceData.prices || {} : {};
+  const farms = useMemo(() => buildFarmHighlights(markets, history), [priceData, history]);
+  const exchangeRows = useMemo(() => filterExchangeRowsByTurnover(buildExchangeRows(exchange, priceData), 1000, { minItemVolume: 10 }), [exchange, priceData]);
+  const exchangeSummary = useMemo(() => buildExchangeOverview(exchangeRows, exchangeHistory, { minTurnoverExalted: 1000, limit: 3 }), [exchangeRows, exchangeHistory]);
+  const activity = useMemo(() => buildUnusualActivity(exchangeHistory), [exchangeHistory]);
+  const price = (value) => fmtPrice(value, currency, divineExalted, chaosExalted);
+  const number = (value, digits = 1) => Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
+  const pct = (value) => `${value > 0 ? "+" : ""}${number(value * 100)}%`;
+  const tone = (value) => value > 0 ? "gain" : value < 0 ? "loss" : "";
+  const marketTarget = (row) => ({ name: row.name, itemId: row.itemId });
+  const activityOld = activity.latestAt != null && Date.now() - activity.latestAt > 3 * 3600e3;
+  const categories = [
+    {
+      id: "boss", title: "Boss profit", ranking: "Top 3 by estimated net per kill", unit: "Estimated net per kill", action: "Inspect the encounter",
+      emptyNote: "No boss has enough entry pricing for a ranked estimate.", open: () => onOpenTab("bosses"),
+      rows: (summary?.shortlist || []).map((row) => ({ id: row.boss.id, title: row.boss.name, value: price(row.net), tone: tone(row.net),
+        unit: "Estimated drop value after entry cost", evidence: `${summary.profile?.name || "No custom timing"} · review drop assumptions in Boss profit.`,
+        warning: row.missing?.length ? "Incomplete drop pricing" : null,
+        open: () => onOpenTab("bosses", row.boss.id) })),
+    },
+    {
+      id: "activity", title: "Unusual activity", ranking: "Top 3 by volume / preceding-hour median", unit: "Completed units vs usual volume", action: "Inspect market history",
+      emptyTitle: "No qualifying volume surge", emptyNote: "Needs at least six prior hours, 10 units and a 2× volume increase.", open: () => onOpenTab("activity"),
+      rows: activity.rows.slice(0, 3).map((row) => ({ id: row.itemId, title: row.name, value: `${number(row.multiple)}×`,
+        unit: "Latest completed hour / prior-hour median", evidence: `${number(row.units, 0)} units vs ${number(row.baseline, 0)} median · ${row.samples} baseline hours. Volume is not a buy signal.`,
+        warning: activityOld ? "Historical snapshot" : row.baseline < 10 ? "Small baseline" : null,
+        open: () => onOpenTab("prices", marketTarget(row)) })),
+    },
+    {
+      id: "movers", title: "Market movers", ranking: "Top 3 by absolute 24h move · liquid exchange markets", unit: "24h movement in Exalted", action: "Inspect price history",
+      emptyTitle: "Building comparable history", emptyNote: "A full, recent 24h window is required; thin markets do not rank.", open: () => onOpenTab("prices"),
+      rows: exchangeSummary.movers.map((row) => ({ id: row.itemId, title: row.name, value: pct(row.change), tone: tone(row.change),
+        unit: "24h price movement · Exalted basis", evidence: `${row.historyPoints} observed prices · ${number(row.itemVolume, 0)} units/h · movement is not profit.`,
+        warning: assessExchangeMarket(row).level === "low" ? "Limited route evidence" : null,
+        open: () => onOpenTab("prices", marketTarget(row)) })),
+    },
+    {
+      id: "pressure", title: "Farming pressure", ranking: "Top 3 output / entry relative moves · 24h", unit: "Output basket relative to tablet entry", action: "Inspect Popular farms",
+      emptyNote: "Needs a priced tablet and overlapping histories for at least three output markets.", open: () => onOpenTab("farms"),
+      rows: farms.pressure.map((row) => ({ id: row.id, title: row.label, value: pct(row.spread), tone: tone(row.spread),
+        unit: "Output / entry relative price movement", evidence: `${row.evidence.label} · ${row.index.included.length}/${row.members} output markets. This is not profit per map.`,
+        warning: row.limited ? "Limited basket evidence" : null,
+        open: () => onOpenTab("farms", row.id) })),
+    },
+    {
+      id: "flow", title: "Farming market flow", ranking: "Top 3 by output-market traded value / hour", unit: "Completed output-market value / hour", action: "Inspect the farming markets",
+      emptyNote: "No mechanic has observed completed output flow in this snapshot.", open: () => onOpenTab("farms"),
+      rows: farms.flow.map((row) => ({ id: row.id, title: row.label, value: price(row.flow),
+        unit: "Completed output-market value / hour", evidence: `${row.members} curated output markets · traded value is market activity, not farming yield.`,
+        open: () => onOpenTab("farms", row.id) })),
+    },
+    {
+      id: "liquidity", title: "Currency Exchange", ranking: "Top 3 by completed traded value / hour", unit: "Completed traded value / hour", action: "Inspect the exchange market",
+      emptyNote: "No exchange route meets 1,000 Exalted per leg and 10 units per hour.", open: () => onOpenTab("exchange"),
+      rows: exchangeSummary.liquidity.map((row) => ({ id: row.itemId, title: row.name, value: price(row.turnoverExalted),
+        unit: "Completed traded value / hour", evidence: `${number(row.itemVolume, 0)} units/h · ${row.quoteRoute} · ${assessExchangeMarket(row).label}. Past trades are not executable orders.`,
+        warning: assessExchangeMarket(row).level === "low" ? "Limited route evidence" : null,
+        open: () => onOpenTab("exchange", marketTarget(row)) })),
+    },
+    {
+      id: "references", title: "Currency references", references: true, ranking: "Three currency references · not ranked", unit: "Snapshot currency value", action: "Open the price tracker",
+      emptyNote: "Waiting for actual currency quotes.", open: () => onOpenTab("prices"),
+      rows: ["Divine Orb", "Chaos Orb", "Exalted Orb"].flatMap((name) => {
+        const value = Number(markets[name]?.exalted);
+        return value > 0 ? [{ id: name, title: name, value: price(value), unit: "Snapshot currency value",
+          evidence: `${markets[name]?.source || "Normalized snapshot"} · conversion uses your selected currency.`,
+          open: () => onOpenTab("prices", { name }) }] : [];
+      }),
+    },
+  ];
+  return <main className="market-overview p2ov-main">
+    <div className="overview-heading p2ov-head"><div className="p2ov-kicker">Path of Exile 2 · market desk</div>
+      <h2>Market overview</h2><p>Three categories in focus, with the next highlights and their top three below.</p></div>
+    <div className="overview-provenance"><SourceStrip>{sourceText(league, priceData, rateSummary)}</SourceStrip></div>
+    <SpotlightBoard key={league} categories={categories} />
+    <details className="overview-health"><summary>Price coverage and assumptions{summary ? ` · ${summary.coverage.priced}/${summary.coverage.total} boss-market items priced` : ""}</summary>
+      <p>Boss estimates use saved settings. Profit/hour requires a custom timing profile. Farming pressure compares prices, not returns per map.</p>
+      <p>Exchange highlights use at least 1,000 Exalted per leg and 10 units per hour. Missing prices and history remain unknown.</p>
+      <button type="button" onClick={() => onOpenTab("bosses")}>Review boss price coverage →</button>
+    </details>
+  </main>;
 }
-
-const css = `
-.p2ov-signal header{padding:18px;border-bottom:1px solid #392120}.p2ov-signal header h3{margin:0;font-size:15px}.p2ov-signal header p,.p2ov-shortlist-empty{margin:5px 0 0;color:#e2e2e0;font-size:12.5px}.p2ov-signal em.gain{color:#e2e2e0}.p2ov-signal em.loss{color:#e2e2e0}.p2ov-signal button:hover{background:#281111}.p2ov-shortlist-empty{padding:18px;}
-.p2ov-main{display:grid;gap:14px}.p2ov-source{margin:0}.p2ov-head{padding:22px 24px;border:1px solid #3e201f;border-radius:8px;background:linear-gradient(105deg,#170e0d,#0d0908)}.p2ov-kicker{color:#f09996;font-size:12.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}.p2ov-head h2{margin:5px 0 4px;color:#e2e2e0;font-size:27px}.p2ov-head p{margin:0;color:#e2e2e0;font-size:14px}
-.p2ov-briefing{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.7fr);gap:14px}.p2ov-feature{display:flex;flex-direction:column;gap:16px;min-height:260px;padding:20px;border:1px solid #5a2322;border-radius:8px;background:radial-gradient(circle at 85% 5%,#350f0e 0,transparent 38%),#120d0b}.p2ov-feature-top{display:flex;justify-content:space-between;gap:12px;color:#e69e9b;font-size:12.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.p2ov-feature-top em{color:#e2e2e0;font-style:normal}.p2ov-feature h3{max-width:720px;margin:5px 0 0;color:#e2e2e0;font-size:24px;line-height:1.15}.p2ov-number{display:flex;align-items:baseline;gap:9px}.p2ov-number strong{font-size:34px}.p2ov-number span{color:#e2e2e0;font-size:13px}.p2ov-feature>p{max-width:780px;margin:0;color:#e2e2e0;font-size:14px;line-height:1.55}.p2ov-feature-bottom{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-top:auto}.p2ov-feature-bottom>div{display:flex;flex-wrap:wrap;gap:6px}.p2ov-feature-bottom span{padding:5px 8px;border:1px solid #3d2120;border-radius:4px;color:#e2e2e0;font-size:12.5px}.p2ov-feature button,.p2ov-desk button{padding:9px 12px;border:1px solid #7b2927;border-radius:5px;background:#200e0e;color:#e2e2e0;font:inherit;font-size:13px;cursor:pointer}
-.p2ov-signal{display:grid;align-content:start;overflow:hidden;border:1px solid #3e201f;border-radius:8px;background:#110c0a}.p2ov-signal>*{display:grid;gap:5px;padding:17px;border:0;border-bottom:1px solid #311a1a;background:transparent;text-align:left}.p2ov-signal button{color:inherit;font:inherit;cursor:pointer}.p2ov-signal span{color:#e2e2e0;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase}.p2ov-signal strong{color:#e2e2e0;font-size:16px}.p2ov-signal em{color:#e2e2e0;font-size:18px;font-style:normal;font-weight:700}.p2ov-signal small{color:#e2e2e0;font-size:12.5px}
-.p2ov-section-title{margin:8px 0 0;color:#e2e2e0;font-size:17px}.p2ov-desks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px}.p2ov-desk{display:grid;gap:12px;padding:17px;border:1px solid #3b2120;border-radius:7px;background:#120d0b}.p2ov-desk header{display:flex;align-items:start;justify-content:space-between;gap:10px}.p2ov-desk h3{margin:0;color:#e2e2e0;font-size:18px}.p2ov-desk header em{color:#e2e2e0;font-size:12.5px;font-style:normal;letter-spacing:.1em;text-transform:uppercase}.p2ov-desk>p{margin:0;color:#e2e2e0;font-size:13.5px;line-height:1.45}.p2ov-desk dl{display:grid;gap:7px;margin:0}.p2ov-desk dl div{display:flex;justify-content:space-between;gap:16px;padding-top:7px;border-top:1px solid #2b1818}.p2ov-desk dt{color:#e2e2e0;font-size:12.5px}.p2ov-desk dd{margin:0;color:#e2e2e0;font-size:12.5px;text-align:right}.p2ov-desk button{width:max-content}
-.p2ov-attention{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid #392120;border-radius:7px;background:#0f0b09}.p2ov-attention>*{display:grid;gap:4px;min-width:0;padding:14px;border:0;border-right:1px solid #301a1a;background:transparent;text-align:left}.p2ov-attention>*:last-child{border-right:0}.p2ov-attention button{font:inherit;cursor:pointer}.p2ov-attention span{color:#e2e2e0;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase}.p2ov-attention strong{color:#e2e2e0;font-size:13.5px}.p2ov-attention small{color:#e2e2e0;font-size:12.5px;line-height:1.4}
-@media(max-width:900px){.p2ov-briefing{grid-template-columns:1fr}.p2ov-attention{grid-template-columns:1fr}.p2ov-attention>*{border-right:0;border-bottom:1px solid #301a1a}.p2ov-attention>*:last-child{border-bottom:0}}@media(max-width:560px){.p2ov-head{padding:18px}.p2ov-feature{padding:17px}.p2ov-feature-bottom{align-items:stretch;flex-direction:column}.p2ov-feature-bottom button{width:100%}}
-
-.p2ov-feature,.p2ov-desk,.p2ov-signal{border-radius:12px;box-shadow:inset 0 1px #ffffff08}
-.p2ov-desk{display:flex;flex-direction:column;gap:14px;padding:22px;background:linear-gradient(145deg,#1b0f0e,#110d0a)}
-.p2ov-desk header{flex-direction:column-reverse;gap:7px}.p2ov-desk h3{font-size:19px}.p2ov-desk>p{color:#e2e2e0;line-height:1.55}
-.p2ov-desk>button{margin-top:auto;width:100%;text-align:left;padding:11px 14px;border-radius:7px;background:#2b1414;color:#f0aaa7}
-.p2ov-desk>button:hover,.p2ov-feature button:hover{background:#431d1c;border-color:#b85451}
-.p2ov-number{flex-wrap:wrap}.p2ov-number strong{font-weight:650;letter-spacing:-.04em;font-size:42px}
-.p2ov-feature-top{flex-wrap:wrap}.p2ov-signal button{border-left:2px solid transparent;grid-template-columns:minmax(0,1fr) auto;column-gap:14px}.p2ov-signal button>span{grid-column:1/-1}.p2ov-signal button>strong{font-size:14px;line-height:1.4}.p2ov-signal button>em{align-self:center;font-size:16px;white-space:nowrap}.p2ov-signal button:hover{border-left-color:#dc6b68}
-`;

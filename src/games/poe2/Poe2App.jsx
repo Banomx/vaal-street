@@ -54,6 +54,7 @@ export default function Poe2App({ activeGame, onGameChange }) {
   const [tab, setTab] = useState("overview");
   const [marketTarget, setMarketTarget] = useState(null);
   const [bossTarget, setBossTarget] = useState(null);
+  const [farmTarget, setFarmTarget] = useState(null);
   const rates = marketRates(prices);
 
   useEffect(() => {
@@ -188,9 +189,12 @@ export default function Poe2App({ activeGame, onGameChange }) {
       </div>
       {prices === null && <LoadingPanel label={`Loading ${league || "PoE 2"} markets…`} />}
       {prices !== null && <>
-      {tab === "overview" && <Overview league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary}
-        onOpenTab={(next, target) => { setBossTarget(target || null); setTab(next); window.scrollTo({ top: 0, behavior: "instant" }); }} />}
-      {tab === "farms" && <PopularFarms league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency}
+      {tab === "overview" && <Overview league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} history={priceHistory} exchangeHistory={exchangeHistory} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary}
+        onOpenTab={(next, target) => { if (next === "bosses") setBossTarget(target || null);
+          if (next === "prices" || next === "exchange") setMarketTarget(target || null);
+          if (next === "farms") setFarmTarget(target || null);
+          setTab(next); window.scrollTo({ top: 0, behavior: "instant" }); }} />}
+      {tab === "farms" && <PopularFarms initialFamily={farmTarget} league={league || "Standard"} priceData={prices} history={priceHistory} currency={currency}
         chaosExalted={rates.chaosExalted} divineExalted={rates.divineExalted} rateSummary={rates.summary} />}
       {tab === "bosses" && <BossProfit initialBossId={bossTarget} league={league || "Standard"} priceData={prices} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}
       {tab === "exchange" && <CurrencyExchange initialItemId={marketTarget?.itemId} league={league || "Standard"} priceData={prices} exchange={exchangeMarkets} history={exchangeHistory} currency={currency} chaosExalted={rates.chaosExalted} rateSummary={rates.summary} />}

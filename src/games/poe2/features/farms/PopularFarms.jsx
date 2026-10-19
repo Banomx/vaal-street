@@ -182,12 +182,15 @@ function UniqueTabletTile({ name, entry, baselineValue, currency, divineExalted,
   </article>;
 }
 
-export default function PopularFarms({ league, priceData, history, currency, chaosExalted, divineExalted, rateSummary }) {
+export default function PopularFarms({ initialFamily, league, priceData, history, currency, chaosExalted, divineExalted, rateSummary }) {
   const markets = priceData && priceData !== "missing" ? priceData.prices || {} : {};
   const families = useMemo(() => buildTabletFamilies(markets), [markets]);
   const pools = useMemo(() => mechanicPools(markets), [markets]);
   const coverage = useMemo(() => curatedCoverage(markets), [markets]);
   const [rangeHours, setRangeHours] = useState(24);
+  useEffect(() => {
+    if (initialFamily) document.getElementById(`poe2-farm-${initialFamily}`)?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [initialFamily, priceData, history]);
   const [divineAdjusted, setDivineAdjusted] = useState(false);
   const [sortMode, setSortMode] = useState("spread");
   const [weightMode, setWeightMode] = useState("supply");
@@ -328,7 +331,7 @@ export default function PopularFarms({ league, priceData, history, currency, cha
         const chart = mergeSeries(entryPoints, row.index?.points || []);
         const heavy = row.index?.concentration?.heavy && row.pool?.members.length;
         const topWeight = row.index?.dominant;
-        return <article className="p2pf-card" key={row.id} style={{ "--tone": TONES[row.id] || "#bd6846" }}>
+        return <article id={`poe2-farm-${row.id}`} className="p2pf-card" key={row.id} style={{ "--tone": TONES[row.id] || "#bd6846" }}>
           <header>
             <div><span className="p2pf-rank">{index + 1}</span><h3>{row.label}</h3><em>{row.entry.name || row.entry.label || `No ${row.entry.kind} quote in this league`}</em></div>
             <div className={`p2pf-verdict ${signal.tone}`}><span>{row.limited ? "Limited evidence" : "Market signal"}</span><strong>{signal.label}</strong></div>

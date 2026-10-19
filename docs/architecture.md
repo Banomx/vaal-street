@@ -317,12 +317,16 @@ PoE 1 league rule or item shape from silently changing PoE 2.
 The shared contract tests enforce relative-import boundaries between games and
 prevent shared application code from importing either game.
 
-The PoE 2 workspace opens on its own Overview. Headline cards show market count,
-normal-tablet price coverage and completed exchange pairs. A boss highlight and
-three-entry shortlist use the boss calculator with saved settings; each link
-opens that specific encounter. Farming, price history and exchange cards follow,
-with a data-quality strip below. Calculations stay in native PoE 2 features;
-only the summary-card presentation is shared with PoE 1.
+The PoE 2 Overview ranks boss net, unusual volume, absolute 24h exchange
+movement, output/entry relative farming movement, mechanic traded value and
+exchange turnover. Currency references are explicitly unranked. It reuses the
+native boss, exchange and farming models; `overview/overviewHighlights.js`
+selects the farm shortlists using the same basket, entry alignment and evidence
+rules as Popular farms. Missing history never becomes zero movement. Partial,
+stale or concentrated baskets retain evidence warnings. Exchange movers require
+a complete recent 24h window and the exchange tab's default 1,000 Exalted per
+leg / 10 units per hour floor. Completed flow describes activity, not map yield.
+Ranked actions target encounters, item histories, exchange markets or farm cards.
 
 PoE 1 feature folders are `bosses`, `delve`, `gems`, `overview`, `pricing`, and
 `strategies`. A feature keeps its React view, pure calculation layer, and
@@ -1190,36 +1194,28 @@ mounts. Its feature styles still live in the `css` string at the bottom of that
 file — `bp-`, `dl-`, `ov-`, `gm-` and feature-specific `st-` rules are kept
 together there. A tab whose CSS is missing renders as unstyled markup rather
 than failing, so the mount and the styles have to be added together.
-`src/games/poe1/features/overview/Overview.jsx` is the PoE 1 default view and
-reads the same generated snapshots as
-the detailed tools. It calls the pure boss and Delve calculation modules instead
-of maintaining separate estimates. Headline cards link to the highest boss net,
-highest gem profit per hour and saved strategies. One briefing panel pairs a
-feature card with signal selectors; Stronger/Weaker controls switch its direction.
-The panel draws from Popular farms, Strat Watcher, Boss profit, Delve,
-Gem levelling and category movers (Astrolabes and Catalysts, labelled by family).
-Each desk contributes a signal only while it has an entry for that direction. The
-gem desk runs the same `computeGems` the tab does on the same saved settings,
-and drops thin markets whatever the tab's filter is set to: a headline is the
-wrong place to lead with a profit resting on three listings. Three
-decision desks and a data-quality strip follow. These are alternate
-presentations of existing results, not new calculations.
+Both overviews use `src/shared/ui/SpotlightBoard.jsx` and
+`spotlightRotation.js` for presentation and rotation only. Three categories stay
+featured while the queue exposes each remaining category's top three. Every
+seven seconds one unpinned slot takes the next queued category; pins survive
+rotation. Selecting a ranked row changes the headline and pauses rotation.
+Hover, keyboard focus, hidden documents and an off-screen board suspend the
+timer. Reduced-motion users start paused. Manual promotion is available through
+Next and the queue; pinning all featured panels stops promotion. Layout and
+selection reset when changing league. Game-specific ranking, formatting and
+navigation remain in the game's overview folder.
 
-`src/games/poe1/features/overview/overviewTrends.js` owns the ranking and the
-five-second rotation sequence. The overview rotates by default; Pause rotation stops the timer and Auto rotate
-starts it again.
-Every desk keeps a three-deep shortlist per direction. `rotateDesks` moves the
-highlighted feature card one desk per tick and only advances the entries once
-the tick has been all the way round, so the page walks across the desks showing
-each one's strongest entry before any shows its second — changing desk and
-entry on the same tick would skip most of what the shortlists hold. Clicking a
-signal pins the highlight to it; clicking the pinned one hands it back to the
-rotation. Movements — scarab mechanics, saved
-strategies, category prices — are sign-filtered, so a rising list holds real
-gains rather than the least-bad losses. Levels rather than movements — boss net,
-Delve opportunity — take a plain best/worst slice instead, since an all-negative
-boss list still has a best three. Non-finite values never rank: a window without
-a comparison snapshot is not a trend.
+`src/games/poe1/features/overview/Overview.jsx` reads validated generated
+snapshots and reuses the boss, gem and Delve calculation modules with saved
+settings. Its categories are mechanic movement, boss net, gem profit per hour
+per socket, Catalyst/Astrolabe movement, experimental Delve opportunity and
+saved setup cost. `overviewTrends.js` selects sign-filtered movement shortlists;
+levels use the highest three finite values, including negative boss net.
+Thin gem markets are excluded. Missing drop quotes, experimental models and
+unknown history remain visible. Saved setups rank by current cost, not profit.
+The movement window and rising/falling controls apply to price-movement lists.
+The assumptions disclosure links to the first missing boss quote.
+
 Popular farms remains a dedicated scarab-only market view. Strat Watcher owns
 the searchable five-scarab-plus-Astrolabe editor and caps its collection at ten.
 `src/games/poe1/features/strategies/farmStrategy.js` migrates the old

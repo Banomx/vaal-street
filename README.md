@@ -3,10 +3,11 @@
 Path of Exile 1 farming profitability and market price tools, plus an isolated
 Path of Exile 2 market-tools workspace.
 
-The site opens on a compact **Overview** briefing. It reuses the existing scarab
-movement, boss EV, Delve biome and category-price calculations in a selectable
-headline, three decision desks and a small data-quality strip. Every result links
-to the full tool. **Popular farms** keeps the existing mechanic movement layout.
+Both games open on an **Overview** with three featured categories and a compact
+queue. Each category shows up to three real results; one unpinned category
+rotates every seven seconds. Hover or keyboard focus pauses rotation; pins,
+Pause and Next controls keep inspection predictable. Reduced-motion settings
+start with rotation paused. **Popular farms** keeps its dedicated layout.
 The separate **Strat Watcher** stores up to ten custom setups, each with five
 scarabs plus one Astrolabe. Saved icons expose their full item names immediately
 on hover or keyboard focus; duplicate scarabs count as separate map-device
@@ -14,8 +15,8 @@ slots. Clicking a saved setup opens the same league graph the other tabs use,
 plotting what the whole setup cost over time; clicking one of its icons overlays
 that single item on it. The line covers the days every saved item has history
 for — an item with no history at all is named under the graph instead of being
-filled in with today's price. Overview rotates through the three strongest saved
-setups every five seconds and lists up to three falling setups underneath.
+filled in with today's price. Overview ranks the three saved setups with the highest current cost; movement
+remains visible beside each setup.
 Boss price-coverage warnings still open the boss that contains the first gap.
 
 Exchange-traded prices come from **GGG's public Currency Exchange API** first.

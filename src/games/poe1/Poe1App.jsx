@@ -1130,10 +1130,16 @@ export default function Poe1App({ activeGame, onGameChange }) {
           mode={mode}
           dataSource={dataSource}
           staticInfo={staticInfo}
-          onOpenTab={(nextTab, bossId = null) => {
+          onOpenTab={(nextTab, target = null) => {
             setTab(nextTab); setDragSel(null);
+            if (nextTab === "prices") { setOpenGroup(target?.group || null); setFocusScarab(null); }
+            if (nextTab === "watcher") { setWatchStrat(target?.id || null); setWatchFocus(null); }
+            if (CATEGORY_TABS[nextTab] && target?.name) {
+              setCatFilter((current) => ({ ...current, [nextTab]: "" }));
+              setCatSelected((current) => ({ ...current, [nextTab]: target.name }));
+            }
             if (nextTab === "bosses") {
-              setBossTarget(bossId);
+              setBossTarget(target);
               setCurrency((current) => current === "chaos" ? "divine" : current);
             }
           }}
