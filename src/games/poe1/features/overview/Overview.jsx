@@ -258,23 +258,31 @@ export default function Overview({
     : mode === "unavailable" ? "No market data" : sourceLabel(snapshots?.prices?.priceSource || staticInfo?.priceSource);
   const showRates = mode !== "unavailable" && mode !== "connecting";
 
-  return <main className="ov-main market-overview">
+  return <main className="ov-main market-overview overview-compact">
+    <div className="overview-controls" role="group" aria-label="Overview market controls">
+      <div className="overview-control-group">
+        <span className="overview-control-label">Time window</span>
+        <div className="app-segmented overview-window" aria-label="Movement window">
+          {CHANGE_WINDOW_OPTIONS.map((window) => <button type="button" key={window} className={changeWindow === window ? "on" : ""}
+            aria-pressed={changeWindow === window} onClick={() => setChangeWindow(window)}>{window}</button>)}
+        </div>
+      </div>
+      <div className="overview-control-group">
+        <span className="overview-control-label">Movement</span>
+        <div className="app-segmented overview-movement-direction" aria-label="Movement rankings">
+          <button type="button" aria-pressed={direction === "up"} className={direction === "up" ? "on" : ""} onClick={() => setDirection("up")}>Rising markets</button>
+          <button type="button" aria-pressed={direction === "down"} className={direction === "down" ? "on" : ""} onClick={() => setDirection("down")}>Falling markets</button>
+        </div>
+      </div>
+    </div>
     <div className="ov-head overview-heading">
       <div><div className="ov-kicker">Path of Exile 1 · market desk</div><h2>Market overview</h2>
         <p>Highlights from your tools, with each category’s top three at hand.</p></div>
-      <div className="app-segmented" aria-label="Movement window">
-        {CHANGE_WINDOW_OPTIONS.map((window) => <button type="button" key={window} className={changeWindow === window ? "on" : ""}
-          aria-pressed={changeWindow === window} onClick={() => setChangeWindow(window)}>{window}</button>)}
-      </div>
     </div>
     <div className="overview-provenance"><SourceStrip>
       <b>{status}</b>{league ? ` · ${league}` : ""}{updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ""}
       {showRates && divineRate > 0 ? ` · 1 Divine ≈ ${Math.round(divineRate)} Chaos` : ""}
     </SourceStrip></div>
-    <div className="app-segmented overview-movement-direction" aria-label="Movement rankings">
-      <button type="button" aria-pressed={direction === "up"} className={direction === "up" ? "on" : ""} onClick={() => setDirection("up")}>Rising markets</button>
-      <button type="button" aria-pressed={direction === "down"} className={direction === "down" ? "on" : ""} onClick={() => setDirection("down")}>Falling markets</button>
-    </div>
     <SpotlightBoard key={league} categories={categories} />
     <details className="overview-health"><summary>Price coverage and assumptions{bossSummary ? ` · ${bossSummary.missing} missing boss drop quotes` : ""}</summary>
       <p>Boss and gem figures use your saved settings. Delve remains experimental. Market movement and setup cost are not farming profit.</p>

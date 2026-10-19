@@ -1203,7 +1203,9 @@ Hover, keyboard focus, hidden documents and an off-screen board suspend the
 timer. Reduced-motion users start paused. Manual promotion is available through
 Next and the queue; pinning all featured panels stops promotion. Layout and
 selection reset when changing league. Game-specific ranking, formatting and
-navigation remain in the game's overview folder.
+navigation remain in the game's overview folder. Panel list text is 14px and
+evidence text is 13.5px; compact vertical spacing retains the existing three-column
+layout and minimum panel dimensions.
 
 `src/games/poe1/features/overview/Overview.jsx` reads validated generated
 snapshots and reuses the boss, gem and Delve calculation modules with saved
@@ -1213,7 +1215,9 @@ saved setup cost. `overviewTrends.js` selects sign-filtered movement shortlists;
 levels use the highest three finite values, including negative boss net.
 Thin gem markets are excluded. Missing drop quotes, experimental models and
 unknown history remain visible. Saved setups rank by current cost, not profit.
-The movement window and rising/falling controls apply to price-movement lists.
+The movement window and rising/falling controls share a compact toolbar above
+the PoE 1 heading and apply to price-movement lists. Sources sit directly below
+the heading, with the rotation controls and cards following without spacer rows.
 The assumptions disclosure links to the first missing boss quote.
 
 Popular farms remains a dedicated scarab-only market view. Strat Watcher owns
