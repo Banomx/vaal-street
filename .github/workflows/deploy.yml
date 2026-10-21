@@ -80,7 +80,7 @@ jobs:
           echo "days=$days" >> "$GITHUB_OUTPUT"
       # Save before build/deploy, even when this game had to retain old prices.
       - name: Retain validated game data
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: market-data-${{ matrix.game }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: public/data/${{ matrix.game }}
