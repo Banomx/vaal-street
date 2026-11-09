@@ -1,0 +1,25 @@
+.mechanic-value { display: grid; gap: 12px; min-width: 0; }
+.mechanic-value .mechanic-value-heading { padding-block: 8px; margin: 0; }
+.mechanic-value-heading h2, .mechanic-value-heading p, .mechanic-value-controls p, .mechanic-value-details p, .mechanic-value-note { margin: 0; }
+.mechanic-value-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.mechanic-value-controls p, .mechanic-value-details p, .mechanic-value-note { color: #d4c5ba; font-size: 13.5px; }
+.mechanic-value-list { display: grid; gap: 8px; }
+.mechanic-value-card { border: 1px solid var(--app-art-border, #694632); border-radius: 8px; background: #17100d; }
+.mechanic-value-card summary { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, minmax(130px, .55fr)) auto; align-items: center; gap: 10px; padding: 12px 15px; cursor: pointer; list-style: none; }
+.mechanic-value-card summary::-webkit-details-marker { display: none; }
+.mechanic-value-card summary::after { content: "+"; color: #efbc9e; }
+.mechanic-value-card[open] summary::after { content: "−"; }
+.mechanic-value-card summary > span { display: grid; color: #d4c5ba; font-size: 12.5px; }
+.mechanic-value-card summary b { color: #eee8e3; font-size: 16px; }
+.mechanic-value-card small { display: block; color: #d4c5ba; font-size: 12.5px; }
+.mechanic-value-details { display: grid; gap: 12px; padding: 14px 15px; border-top: 1px solid var(--app-art-border, #694632); }
+.mechanic-value-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 150px)); gap: 10px; }
+.mechanic-value-inputs label { display: grid; gap: 5px; font-size: 13.5px; }
+.mechanic-value-card input { width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; border: 1px solid var(--app-art-border, #694632); border-radius: 5px; background: #100b09; color: inherit; padding: 7px 8px; }
+.mechanic-value-drops label { display: grid; grid-template-columns: minmax(0, 1fr) minmax(70px, 110px); align-items: center; gap: 10px; border-top: 1px solid #3a2720; padding: 7px 0; }
+@media (max-width: 600px) {
+  .mechanic-value-card summary { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+  .mechanic-value-card summary > strong { grid-column: 1 / -1; }
+}
+.mechanic-value-details > button { justify-self: start; min-height: 44px; padding: 8px 14px; border: 1px solid var(--app-art-border, #694632); border-radius: 5px; color: inherit; background: #382019; cursor: pointer; }
+.mechanic-value-details > button:disabled { opacity: .55; cursor: default; }

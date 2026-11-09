@@ -7,9 +7,12 @@ import PriceChart, { PctBadge, dayAxis, fmtDay, fmtRate, rateAt, realPct } from 
 import Overview from "./features/overview/Overview.jsx";
 import BossProfit from "./features/bosses/BossProfit.jsx";
 import Delve from "./features/delve/Delve.jsx";
+import PopularThreads from "./features/farms/PopularThreads.jsx";
+import MechanicValue from "./features/mechanics/MechanicValue.jsx";
 import Gems from "./features/gems/Gems.jsx";
 import GameSwitcher from "../../shared/ui/GameSwitcher.jsx";
 import { AppHeader, AppTabs, SourceStrip, LoadingPanel } from "../../shared/ui/AppShell.jsx";
+import { usesThreads } from "./leagueRules.js";
 import SnapshotNotice from "../../shared/ui/SnapshotNotice.jsx";
 import {
   POE1_API_BASES, POE1_EXCHANGE_BASES, POE1_LEAGUE_FILES, POE1_SCHEMA_VERSIONS, POE1_STATIC_BASE,
@@ -400,6 +403,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
   const [showUniversal, setShowUniversal] = useState(true);
   const [showHorned, setShowHorned] = useState(true);
   const [chgWindow, setChgWindow] = useState("24h");      // 24h | 48h
+  const [legacyFarms, setLegacyFarms] = useState(false);
   const [tab, setTab] = useState("overview");             // overview | farms | watcher | prices | astrolabes | catalysts | bosses | gems | delve
   const [bossTarget, setBossTarget] = useState(null);      // boss opened from an Overview signal
   const [openGroup, setOpenGroup] = useState(null);
@@ -461,7 +465,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
     setItems((j.items || []).map((it) => ({ ...it, group: groupForName(it.name) })));
     setDivineRate(rate);
     setMirrorDivine(Number.isFinite(mirrorChaos) && rate > 0 ? mirrorChaos / rate : null);
-    setStaticInfo({ generatedAt: j.generatedAt, historySource: j.historySource, historyAxis: j.historyAxis, priceSource: j.priceSource, stale: !!descriptor.stale });
+    setStaticInfo({ generatedAt: j.generatedAt, historySource: j.historySource, historyAxis: j.historyAxis, priceSource: j.items?.length ? j.priceSource : broadPrices?.priceSource, scarabsRetired: Array.isArray(j.items) && j.items.length === 0, stale: !!descriptor.stale });
     setRateHistory(Array.isArray(j.rateHistory) ? j.rateHistory : []);
     setMode("live"); setDataSource("static");
     staticHistFetched.current.delete(name);
@@ -721,6 +725,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
      Panels that fetch their own files take this as a prop and wait: asking for
      `data/poe1/prices.json` with no league in the path only ever produced a
      404, and a 404 in the network log is indistinguishable from a real one. */
+  const threads = usesThreads(league) || staticInfo?.scarabsRetired === true;
   const leagueBase = staticSlugsRef.current[league]
     ? `${STATIC_BASE}/${encodeURIComponent(staticSlugsRef.current[league])}`
     : null;
@@ -938,7 +943,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
           <GameSwitcher activeGame={activeGame} onChange={onGameChange} />
           <label className="app-control st-ctl">
             <span>League</span>
-            <select value={league} disabled={mode !== "live"} onChange={(e) => { const v = e.target.value; setLeague(v); (dataSource === "static" ? loadStaticLeague(v) : loadLeague(v)).catch(() => {}); }}>
+            <select value={league} disabled={mode !== "live"} onChange={(e) => { const v = e.target.value; setLeague(v); setStaticInfo(null); setTab((current) => current === "farms" ? current : "overview"); (dataSource === "static" ? loadStaticLeague(v) : loadLeague(v)).catch(() => {}); }}>
               {["current", "previous"].map((g) => {
                 const opts = leagues.filter((l) => (l.group || "current") === g);
                 if (!opts.length) return null;
@@ -964,19 +969,22 @@ export default function Poe1App({ activeGame, onGameChange }) {
       <AppTabs className="st-tabs">
         <button className={tab === "overview" ? "on" : ""} onClick={() => { setTab("overview"); setDragSel(null); }}>Overview</button>
         <button className={tab === "farms" ? "on" : ""} onClick={() => { setTab("farms"); setDragSel(null); }}>Popular farms</button>
-        <button className={tab === "watcher" ? "on" : ""} onClick={() => { setTab("watcher"); setDragSel(null); }}>Strat Watcher</button>
-        <button className={tab === "prices" ? "on" : ""} onClick={() => { setTab("prices"); setDragSel(null); }}>Scarabs</button>
+        {!threads && <button className={tab === "watcher" ? "on" : ""} onClick={() => { setTab("watcher"); setDragSel(null); }}>Strat Watcher</button>}
+        {!threads && <button className={tab === "prices" ? "on" : ""} onClick={() => { setTab("prices"); setDragSel(null); }}>Scarabs</button>}
         <button className={tab === "astrolabes" ? "on" : ""} onClick={() => { setTab("astrolabes"); setDragSel(null); }}>Astrolabes</button>
         <button className={tab === "catalysts" ? "on" : ""} onClick={() => { setTab("catalysts"); setDragSel(null); }}>Catalysts</button>
-        <button className={tab === "bosses" ? "on" : ""}
+        {!threads && <button className={tab === "bosses" ? "on" : ""}
           onClick={() => {
             setTab("bosses"); setBossTarget(null); setDragSel(null);
             // Boss values run to thousands of chaos, so chaos is the wrong unit
             // here and entering the tab switches away from it. Smart already
             // quotes the big numbers in divine, so leave that choice alone.
             setCurrency((c) => (c === "chaos" ? "divine" : c));
-          }}>Boss profit</button>
+          }}>Boss profit</button>}
         <button className={tab === "gems" ? "on" : ""} onClick={() => { setTab("gems"); setDragSel(null); }}>Gem levelling</button>
+        <button aria-label="Mechanic value" className={tab === "mechanics" ? "on" : ""} onClick={() => { setTab("mechanics"); setDragSel(null); }}>
+          Mechanic value <em className="st-tab-exp">EXP</em>
+        </button>
         <button className={tab === "delve" ? "on" : ""} onClick={() => { setTab("delve"); setDragSel(null); }}>
           Delve <em className="st-tab-exp">EXP</em>
         </button>
@@ -998,8 +1006,10 @@ export default function Poe1App({ activeGame, onGameChange }) {
           hourly job may be mid-deployment; reloading in a few minutes is the usual fix.
         </SourceStrip>
       )}
-      {mode === "connecting" && !OWN_BAR[tab] && tab !== "gems" && <LoadingPanel label="Loading the latest market snapshot…" />}
-      {mode === "live" && !OWN_BAR[tab] && tab !== "gems" && (
+      {tab === "farms" &&
+        <label className="popular-farms-legacy"><input type="checkbox" checked={legacyFarms} onChange={(event) => setLegacyFarms(event.target.checked)} /> Show legacy Scarabs</label>}
+      {mode === "connecting" && !OWN_BAR[tab] && tab !== "gems" && (tab !== "farms" || (legacyFarms && !threads)) && <LoadingPanel label="Loading the latest market snapshot…" />}
+      {mode === "live" && !OWN_BAR[tab] && tab !== "gems" && (tab !== "farms" || (legacyFarms && !threads)) && (
         <SourceStrip className="app-source-strip--spaced st-banner st-quiet">
           {dataSource === "static"
             ? `${staticInfo?.priceSource ? `Prices via ${staticInfo.priceSource}` : "Snapshot data"} · ${league} · updated ${staticInfo?.generatedAt ? new Date(staticInfo.generatedAt).toLocaleString() : "recently"}`
@@ -1019,7 +1029,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       {/* ---------- per-tab toolbar ----------
           Only the controls that actually change the view in front of you.
           The boss and delve tabs bring their own bars, so they're excluded. */}
-      {!OWN_BAR[tab] && (() => {
+      {!OWN_BAR[tab] && (tab !== "farms" || (legacyFarms && !threads)) && (() => {
         const isCat = !!CATEGORY_TABS[tab];
         const showSort = tab === "prices" || isCat;
         const showChange = true;                      // every non-boss tab shows % badges
@@ -1116,6 +1126,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       {tab === "overview" && (
         <Overview
           league={league}
+          threads={threads}
           staticBase={leagueBase}
           currency={currency}
           divineRate={divineRate}
@@ -1272,6 +1283,11 @@ export default function Poe1App({ activeGame, onGameChange }) {
         />
       )}
 
+      {tab === "mechanics" && (
+        <MechanicValue key={league} league={league} currency={currency} stale={staticInfo?.stale}
+          priceUrl={leagueFileUrl(STATIC_BASE, staticLeagueRef.current[league], "prices", POE1_LEAGUE_FILES)} />
+      )}
+
       {tab === "delve" && (
         <Delve
           league={league}
@@ -1286,7 +1302,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       )}
 
       {/* ---------- boss profitability ---------- */}
-      {tab === "bosses" && (
+      {!threads && tab === "bosses" && (
         <BossProfit
           league={league}
           staticBase={leagueBase}
@@ -1302,7 +1318,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       )}
 
       {/* ---------- mechanic grid ---------- */}
-      {(tab === "prices" || tab === "farms") && <p className="st-cat-note">{items.length} traded scarabs · New items appear automatically with each snapshot. Market listings can include retired items; prices do not confirm drop availability.</p>}
+      {(tab === "prices" || (tab === "farms" && legacyFarms && !threads)) && <p className="st-cat-note">{items.length} traded scarabs · New items appear automatically with each snapshot. Market listings can include retired items; prices do not confirm drop availability.</p>}
       {tab === "prices" && !visibleGroups.length && (
         <div className="st-cat-note">No scarab or mechanic matches “{scarabFilter}”.</div>
       )}
@@ -1348,7 +1364,12 @@ export default function Poe1App({ activeGame, onGameChange }) {
       )}
 
       {/* ---------- popular farms tab ---------- */}
-      {tab === "farms" && (
+      {tab === "farms" && <>
+        {legacyFarms ? (threads && <SourceStrip>Choose an older league to see its archived Scarab prices.</SourceStrip>)
+          : <PopularThreads key={league} currency={currency} window={chgWindow} setWindow={setChgWindow} stale={staticInfo?.stale}
+              priceUrl={leagueFileUrl(STATIC_BASE, staticLeagueRef.current[league], "threads", POE1_LEAGUE_FILES)} />}
+      </>}
+      {tab === "farms" && legacyFarms && !threads && (
         <section className="st-farms">
           <p className="st-farms-intro">
             Scarab prices react fast when the player base changes farming strategies. Rising set

@@ -24,6 +24,7 @@
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { usesThreads } from "../../../src/games/poe1/leagueRules.js";
 import { CATEGORIES } from "../../../src/games/poe1/catalogue/categories.js";
 
 const OUT_DIR = await mkdtemp(path.join(tmpdir(), "sl-fetch-test-"));
@@ -146,9 +147,12 @@ globalThis.fetch = async (url) => {
   if (u.hostname === "poe.watch") return NOPE();          // the active-price page
   hits.push(`${u.pathname}${type ? "?type=" + type : ""}`);
   if (u.pathname.startsWith("/api/data/")) return NOPE();                    // legacy is dead
-  if (u.pathname === "/poe1/api/economy/leagues") return J([{ id: "Allflame", name: "Allflame", startAt: "2026-07-24T20:00:00Z" }]);
+  if (u.pathname === "/poe1/api/economy/leagues") return J([{ id: "Allflame", name: "Allflame", startAt: "2026-07-24T20:00:00Z" }, { id: "Umbra", name: "Umbra" }]);
   if (u.pathname === "/poe1/api/data/index-state") return J({ economyLeagues: [], oldEconomyLeagues: [] });
   if (u.pathname === "/poe1/api/economy/exchange/current/overview") {
+    if (type === "Currency" && u.searchParams.get("league") === "Umbra") {
+      return exchange([...EXCHANGE_DATA.Currency, ["abyss-thread", 0.6], ["thread-of-hope", 1.2]]);
+    }
     return EXCHANGE_DATA[type] ? exchange(EXCHANGE_DATA[type]) : J({ core: CORE, lines: [] });
   }
   if (u.pathname === "/poe1/api/economy/stash/current/item/overview") {
@@ -184,6 +188,23 @@ const fetchModule = await import("../../poe1/fetch-data.mjs");
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log("FAIL:", m); } };
 const near = (a, b, eps = 0.01) => a != null && Math.abs(a - b) <= eps;
+
+const rolloverIndex = JSON.parse(await readFile(path.join(OUT_DIR, "index.json"), "utf8"));
+const umbra = rolloverIndex.leagues.find(({ name }) => name === "Umbra");
+ok(umbra && !umbra.stale && umbra.files.prices && umbra.files.gems && umbra.files.fossils,
+   "Umbra publishes the other markets without scarabs");
+const umbraScarabs = JSON.parse(await readFile(path.join(OUT_DIR, "Umbra", "scarabs.json"), "utf8"));
+ok(umbraScarabs.items.length === 0 && near(umbraScarabs.divineRate, 1300),
+   "Umbra ignores legacy scarab rows and derives the rate from Currency");
+const threadFile = JSON.parse(await readFile(path.join(OUT_DIR, "Umbra", umbra.files.threads), "utf8"));
+ok(threadFile.items.length === 1 && threadFile.items[0].name === "Abyss Thread" && near(threadFile.items[0].chaosValue, 6),
+   "Umbra publishes a calibrated Thread quote without matching Thread of Hope");
+ok(!Object.keys(threadFile.items[0]).some((key) => /^change\d/.test(key)),
+   "the first Thread snapshot does not inherit movement from the source sparkline");
+ok(usesThreads("Hardcore SSF Covens of Umbra"), "Umbra variants work without a feed start date");
+ok(usesThreads("Next league", "2027-02-05T19:00:00Z"), "later leagues inherit the Threads era");
+ok(!usesThreads("Allflame", "2026-07-24T20:00:00Z") && !usesThreads("Standard"),
+   "old and undated leagues are not guessed to be in the Threads era");
 
 const priced = JSON.parse(await readFile(path.join(OUT_DIR, "Allflame", "prices.json"), "utf8"));
 const P = priced.prices;

@@ -4,6 +4,7 @@ import {
   identityKind, similarity, stableId,
 } from "../../../src/games/poe1/catalogue/catalogue.js";
 import { CATEGORIES, CATEGORY_BY_KEY, FETCHED_CATEGORIES, TAB_CATEGORIES } from "../../../src/games/poe1/catalogue/categories.js";
+import { threadMovers } from "../../../src/games/poe1/features/farms/threadMovers.js";
 import { GROUPS, groupForName } from "../../../src/games/poe1/catalogue/scarabs.js";
 
 /* ---- category catalogue ---- */
@@ -12,7 +13,7 @@ for (const cat of CATEGORIES) {
   assert.ok(cat.key && cat.label && cat.file, `${cat.key} is fully described`);
   assert.ok(cat.re instanceof RegExp, `${cat.key} matches names by regex, not by a name list`);
   assert.ok(Array.isArray(cat.watch) && cat.watch.length, `${cat.key} narrows poe.watch categories`);
-  assert.ok(cat.re.test(`Some ${cat.label.replace(/s$/, "")}`), `${cat.key} regex matches its own family`);
+  assert.ok(cat.re.test(cat.key === "threads" ? "Abyss Thread" : `Some ${cat.label.replace(/s$/, "")}`), `${cat.key} regex matches its own family`);
 }
 assert.equal(new Set(CATEGORIES.map((c) => c.key)).size, CATEGORIES.length, "category keys are unique");
 assert.equal(CATEGORY_BY_KEY.catalysts.ninjaType, "Currency");
@@ -242,7 +243,7 @@ assert.ok(CLASSIFICATION_EXCEPTIONS.every((entry) => entry.name && entry.key && 
    silently emptying after a GGG tag change. */
 for (const category of CATEGORIES) {
   const probe = { name: `Test ${category.label.replace(/s$/, "")}`, tags: [] };
-  const byName = classifyItem({ ...probe, name: category.key === "scarabs" ? "Test Scarab"
+  const byName = classifyItem({ ...probe, name: category.key === "threads" ? "Abyss Thread" : category.key === "scarabs" ? "Test Scarab"
     : category.key === "astrolabes" ? "Test Astrolabe"
       : category.key === "catalysts" ? "Test Catalyst"
         : category.key === "fossils" ? "Test Fossil" : "Test Resonator" }, category.key);
@@ -293,3 +294,15 @@ assert.deepEqual(idChanged.added, []);
 assert.deepEqual(idChanged.removed, []);
 
 console.log("Catalogue identity tests passed");
+
+assert.equal(classifyItem({ name: "Thread of Hope" }, "threads").match, false);
+const threads = threadMovers([
+  { name: "Abyss Thread", chaosValue: 6, change24: 20 },
+  { name: "Blight Thread", chaosValue: 3, change24: 50 },
+  { name: "Legion Thread", chaosValue: 4, change24: -10 },
+  { name: "Betrayal Thread", chaosValue: 2 },
+  { name: "Ritual Thread", chaosValue: 1, change24: 100, staleHours: 1 },
+], "24h");
+assert.equal(threads.quoted, 5);
+assert.equal(threads.measured, 3);
+assert.deepEqual(threads.rising.map(({ name, movement }) => [name, movement]), [["Blight Thread", 50], ["Abyss Thread", 20]]);

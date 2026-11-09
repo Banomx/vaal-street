@@ -35,6 +35,7 @@ function sourceLabel(source) {
 
 export default function Overview({
   league,
+  threads = false,
   staticBase,
   currency,
   divineRate,
@@ -94,6 +95,7 @@ export default function Overview({
   }, []);
 
   const bossSummary = useMemo(() => {
+    if (threads) return null;
     const priceMap = snapshots?.prices?.prices;
     if (!priceMap) return null;
     const resolve = makeResolver(priceMap, {
@@ -110,7 +112,7 @@ export default function Overview({
       missing: gaps.length,
       firstGap: gaps[0] || null,
     };
-  }, [snapshots, profile, divineRate]);
+  }, [snapshots, profile, divineRate, threads]);
 
   const delveTargets = useMemo(() => {
     const priceMap = snapshots?.prices?.prices || null;
@@ -283,10 +285,11 @@ export default function Overview({
       <b>{status}</b>{league ? ` · ${league}` : ""}{updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ""}
       {showRates && divineRate > 0 ? ` · 1 Divine ≈ ${Math.round(divineRate)} Chaos` : ""}
     </SourceStrip></div>
-    <SpotlightBoard key={league} categories={categories} />
-    <details className="overview-health"><summary>Price coverage and assumptions{bossSummary ? ` · ${bossSummary.missing} missing boss drop quotes` : ""}</summary>
+    {threads && <SourceStrip>Threads of Creation replace scarabs in this league. Scarab tools are available in archived leagues. Boss estimates are on hold pending a review of the new encounters and drops.</SourceStrip>}
+    <SpotlightBoard key={league} categories={threads ? categories.filter(({ id }) => !["farms", "watcher", "boss"].includes(id)) : categories} />
+    <details className="overview-health"><summary>Price coverage and assumptions{!threads && bossSummary ? ` · ${bossSummary.missing} missing boss drop quotes` : ""}</summary>
       <p>Boss and gem figures use your saved settings. Delve remains experimental. Market movement and setup cost are not farming profit.</p>
-      {bossSummary?.firstGap && <button type="button" onClick={() => onOpenTab("bosses", bossSummary.firstGap.boss.id)}>Review the first missing boss quote →</button>}
+      {!threads && bossSummary?.firstGap && <button type="button" onClick={() => onOpenTab("bosses", bossSummary.firstGap.boss.id)}>Review the first missing boss quote →</button>}
     </details>
   </main>;
 }

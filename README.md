@@ -7,7 +7,16 @@ Both games open on an **Overview** with three featured categories and a compact
 queue. Each category shows up to three real results; one unpinned category
 rotates every seven seconds. Hover or keyboard focus pauses rotation; pins,
 Pause and Next controls keep inspection predictable. Reduced-motion settings
-start with rotation paused. **Popular farms** keeps its dedicated layout.
+start with rotation paused. **Popular farms** ranks rising Thread prices over a selectable window. Enable
+**Show legacy Scarabs** to compare older leagues.
+For Umbra and later dated challenge leagues, the overview explains the Threads
+transition. Scarab tools remain available for older leagues; new-era boss
+estimates are paused until the encounter models are reviewed.
+
+**Mechanic value** compares selected reward markets for eight PoE 1 mechanics.
+Log your drop counts, time and costs to compare tracked net per run and per
+hour using the selected league's prices. Samples stay in your browser.
+
 The separate **Strat Watcher** stores up to ten custom setups, each with five
 scarabs plus one Astrolabe. Saved icons expose their full item names immediately
 on hover or keyboard focus; duplicate scarabs count as separate map-device
@@ -588,7 +597,7 @@ stitching, the shared axis, carry-forward and thinning.
 - `src/games/poe1/Poe1App.jsx` — PoE 1 shell, navigation, data loading, styles.
 - `src/games/poe1/catalogue/` — PoE 1 market families and scarab catalogue.
 - `src/games/poe1/features/` — feature-owned UI, calculations and datasets:
-  `bosses`, `delve`, `gems`, `overview`, `pricing` and `strategies`.
+  `bosses`, `delve`, `gems`, `mechanics`, `overview`, `pricing` and `strategies`.
 - `src/games/poe2/` — PoE 2 shell and isolated PoE 2-only features.
 - `scripts/shared/` — staging, publication gates, source provenance, RePoE.
 - `scripts/poe1/`, `scripts/poe2/` — each game's snapshot pipeline, endpoint

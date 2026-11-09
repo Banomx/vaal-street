@@ -47,6 +47,7 @@ import { GCP_NAME, VAAL_ORB_NAME, computeGems, parseVariant } from "../../src/ga
 import {
   applyRenames, breakingNames, describeDiff, diffCatalogue, identityKind, stableId, unresolvedSeries,
 } from "../../src/games/poe1/catalogue/catalogue.js";
+import { usesThreads } from "../../src/games/poe1/leagueRules.js";
 import { classificationCoverage, isGggCategory } from "../../src/games/poe1/catalogue/classify.js";
 import { describeSpreads } from "../../src/games/poe1/features/pricing/priceCheck.js";
 import { fileURLToPath } from "node:url";
@@ -150,7 +151,7 @@ async function getLeagues() {
       for (const l of b.economyLeagues || []) current.push({ name: l.name, params: [l.url, l.name].filter(Boolean), group: "current", start: l.startAt || l.startDate || null });
     }
     for (const l of b.oldEconomyLeagues || []) {
-      previous.push({ name: l.name, params: [l.url, l.name].filter(Boolean), group: "previous" });
+      previous.push({ name: l.name, params: [l.url, l.name].filter(Boolean), group: "previous", start: l.startAt || l.startDate || null });
     }
     if (previous.length) console.log(`Previous leagues via index-state: ${previous.map((l) => l.name).join(", ")}`);
   }
@@ -892,7 +893,7 @@ function configuredBossPriceNames() {
 }
 
 /* ---------- divine rate ---------- */
-async function getDivineRate(lgParam, fallback) {
+async function getDivineRate(lgParam, fallback, defaultRate = 185) {
   const urls = [
     `${NINJA}/poe1/api/economy/stash/current/currency/overview?league=${encodeURIComponent(lgParam)}&type=Currency`,
     `${NINJA}/api/data/currencyoverview?league=${encodeURIComponent(lgParam)}&type=Currency`,
@@ -903,7 +904,7 @@ async function getDivineRate(lgParam, fallback) {
     if (div?.chaosEquivalent) return div.chaosEquivalent;
     await sleep(DELAY_MS);
   }
-  return fallback ?? 185;
+  return fallback ?? defaultRate;
 }
 
 /* ---------- ninja per-item history (legacy only) ----------
@@ -1608,10 +1609,16 @@ async function main() {
       }
 
       const ctx = await getExchangeContext(lg.params);
-      const priced = await getScarabPrices(lg.params, ctx?.divisor, watch);
+      // Keep the established era when an upstream archive entry drops its start date.
+      const priorScarabs = await readJson(path.join(OUT, slugify(lg.name), "scarabs.json"));
+      const threads = usesThreads(lg.name, lg.start)
+        || (Array.isArray(priorScarabs?.items) && priorScarabs.items.length === 0);
+      const priced = threads ? null : await getScarabPrices(lg.params, ctx?.divisor, watch);
       const source = priced?.source || "ggg";
       const leagueParam = priced?.leagueParam || ctx?.leagueParam || lg.params[0];
-      const exchangeDivineRate = priced?.exchangeDivineRate;
+      const exchangeDivineRate = threads
+        ? (ctx ? adaptExchange(ctx.currency, /./, ctx.divisor)?.exchangeDivineRate : undefined)
+        : priced?.exchangeDivineRate;
 
       // Divine rate: when prices come from the exchange overview, derive the
       // rate from that same response (live market, consistent with the scarab
@@ -1620,15 +1627,16 @@ async function main() {
         ? ggg.divineRate
         : (watch?.rate > 0)
         ? watch.rate
-        : (source === "exchange" && exchangeDivineRate)
+        : ((threads || source === "exchange") && exchangeDivineRate)
           ? exchangeDivineRate
-          : await getDivineRate(leagueParam, exchangeDivineRate);
-      const mergedScarabs = mergeGggCategory(priced?.items || [], ggg, "scarabs", divineRate);
+          : await getDivineRate(leagueParam, exchangeDivineRate, threads ? null : 185);
+      if (threads && !rateSane(divineRate)) throw new Error("no usable Divine exchange rate");
+      const mergedScarabs = mergeGggCategory(priced?.items || [], threads ? null : ggg, "scarabs", divineRate);
       const items = mergedScarabs.items;
       const scarabCoverage = enrichFromRepoe(items, gggExchange?.baseItems, repoeIndex);
       const scarabClassification = classificationCoverage(items, "scarabs");
       attachStableKeys(items);
-      if (!items.length) {
+      if (!items.length && !threads) {
         // Writing nothing would delete this league from the site and restart
         // every accumulated curve in it. Keep the last good snapshot instead.
         const slug = slugify(lg.name);
@@ -1657,7 +1665,7 @@ async function main() {
       const trackDrift = lg.group === "current" && li === 0;
       const curated = trackDrift ? await curatedNames() : null;
       const catalogue = [];
-      const scarabDrift = trackDrift
+      const scarabDrift = trackDrift && !threads
         ? await trackCatalogue(slug, CATEGORY_BY_KEY.scarabs, items, curated)
         : null;
       if (scarabDrift) catalogue.push(scarabDrift);
@@ -1804,8 +1812,9 @@ async function main() {
         console.log(`  gems: FAILED (${e.message})`);
       }
 
-      // extra categories: astrolabes + catalysts, same treatment as scarabs
+      // Other market families share the same price and history pipeline.
       for (const cat of EXTRA_CATEGORIES) {
+        if (cat.key === "threads" && lg.group === "previous" && !threads) continue;
         try {
           // Same order as everywhere else: poe.ninja's exchange first, then
           // poe.watch for a category poe.ninja served nothing for.
@@ -1817,6 +1826,12 @@ async function main() {
           const rate2 = ggg?.divineRate || r?.exchangeDivineRate || divineRate;
           const mergedCat = mergeGggCategory(r?.items || [], ggg, cat.key, rate2);
           const catItems = mergedCat.items;
+          if (cat.key === "threads") {
+            // Rank Threads only from our own matched hourly observations.
+            for (const item of catItems) for (const key of Object.keys(item)) {
+              if (/^change\d+R?$/.test(key)) delete item[key];
+            }
+          }
           const catCoverage = enrichFromRepoe(catItems, gggExchange?.baseItems, repoeIndex);
           attachStableKeys(catItems);
           if (catCoverage.total) metadataCoverage.push({ family: cat.key, ...catCoverage });

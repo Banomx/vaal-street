@@ -1,0 +1,12 @@
+.popular-threads { display: grid; gap: 12px; min-width: 0; }
+.popular-threads > header { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.popular-threads h2, .popular-threads p { margin: 0; }
+.popular-threads p { color: #d4c5ba; font-size: 14px; }
+.popular-threads-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.popular-threads-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(64px, auto); gap: 12px; align-items: center; padding: 12px 14px; background: #17100d; border: 1px solid var(--app-art-border, #694632); border-radius: 7px; }
+.popular-threads-list b { color: #a5d4a0; text-align: right; font-variant-numeric: tabular-nums; }
+.popular-farms-legacy { display: flex; align-items: center; gap: 8px; margin: 10px 0; min-height: 36px; font-size: 14px; width: fit-content; cursor: pointer; }
+@media (max-width: 600px) {
+  .popular-threads > header > .app-segmented { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); width: 100%; }
+  .popular-threads > header > .app-segmented > button { min-width: 0; padding-inline: 0; min-height: 44px; }
+}

@@ -1,3 +1,5 @@
+export const THREAD_NAME = /^(?:Abyss|Blight|Legion|Breach|Incursion|Betrayal|Bestiary|Expedition|Ultimatum|Ritual) Thread$/i;
+
 /* Market categories — one definition, read by both sides.
 
    Every tradable family the site tracks is described here once. The hourly
@@ -26,6 +28,15 @@ export const CATEGORIES = [
        separately, but drift tracking treats them like every other family. */
     ownFetch: true,
     tab: null,
+  },
+  {
+    key: "threads",
+    label: "Threads",
+    file: "threads.json",
+    ninjaType: "Currency",
+    re: THREAD_NAME,
+    watch: ["currency"],
+    tab: null, // shown inside Popular farms
   },
   {
     key: "astrolabes",

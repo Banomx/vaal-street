@@ -328,7 +328,7 @@ a complete recent 24h window and the exchange tab's default 1,000 Exalted per
 leg / 10 units per hour floor. Completed flow describes activity, not map yield.
 Ranked actions target encounters, item histories, exchange markets or farm cards.
 
-PoE 1 feature folders are `bosses`, `delve`, `gems`, `overview`, `pricing`, and
+PoE 1 feature folders are `bosses`, `delve`, `gems`, `mechanics`, `overview`, `pricing`, and
 `strategies`. A feature keeps its React view, pure calculation layer, and
 curated dataset beside each other so maintenance starts from one directory.
 
@@ -1215,12 +1215,43 @@ saved setup cost. `overviewTrends.js` selects sign-filtered movement shortlists;
 levels use the highest three finite values, including negative boss net.
 Thin gem markets are excluded. Missing drop quotes, experimental models and
 unknown history remain visible. Saved setups rank by current cost, not profit.
+PoE 1 league rules recognize Umbra by name and later challenge leagues by
+their upstream start date. For those leagues the generator skips the dedicated
+scarab market fetch and emits an empty scarab snapshot in the existing format.
+This retains
+the common rate history and lets the broad price map, gems and other categories
+publish independently of scarabs. An existing empty scarab snapshot preserves
+that decision if the feed later omits the start date. Empty scarab results
+still trigger carry-forward for unclassified leagues. Undated permanent leagues
+keep their prior behavior pending confirmation of how their markets migrate.
+The app hides scarab tabs, saved-setup rankings and pre-3.30 boss estimates for
+Threads leagues. Older league history and saved setups stay available. Threads
+and Fates market mapping, and revised encounter rates, require verified feed
+data and patch details.
+
 The movement window and rising/falling controls share a compact toolbar above
 the PoE 1 heading and apply to price-movement lists. Sources sit directly below
 the heading, with the rotation controls and cards following without spacer rows.
 The assumptions disclosure links to the first missing boss quote.
 
-Popular farms remains a dedicated scarab-only market view. Strat Watcher owns
+The experimental **Mechanic value** tab reads the selected league's broad
+price snapshot. Its tracked reward baskets are curated locally; the turnover
+view sums only completed GGG trades from the snapshot's common digest hour and
+shows how many tracked items contribute. This measures demand and supply in the
+exchange, not farming yield. A player can save one sample per mechanic and
+league in local storage. The sample view revalues the recorded counts using the
+snapshot, subtracts total costs, then divides by runs or elapsed time. Empty
+inputs and missing or carried quotes for positive counts suppress ranking.
+Explicit zero counts do not require quotes. Older snapshots are labelled.
+No drop rates are inferred from trades, and the baskets are not patch drop tables.
+
+Popular farms defaults to rising Thread prices. The Threads family uses existing
+Currency quotes and the shared hourly history pipeline. Only matching observed
+windows count toward a gain; upstream sparklines do not substitute for missing
+history. The name matcher excludes unrelated items such as Thread of Hope and
+can be checked against feed identities after launch. A legacy checkbox opens
+the Scarab view for older leagues without mixing the two price histories.
+Strat Watcher owns
 the searchable five-scarab-plus-Astrolabe editor and caps its collection at ten.
 `src/games/poe1/features/strategies/farmStrategy.js` migrates the old
 `vaal-street.farmingStrategy.v1` record

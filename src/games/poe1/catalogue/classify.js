@@ -1,3 +1,5 @@
+import { THREAD_NAME } from "./categories.js";
+
 /* Which market family an item belongs to, and how confident that answer is.
 
    Three tiers, strongest first, and the tier is reported rather than hidden:
@@ -51,6 +53,7 @@ export const CLASSIFICATION_EXCEPTIONS = [
 
 /* Anchored so a unique with the word in its name cannot claim the family. */
 const NAME_RULES = {
+  threads: THREAD_NAME,
   scarabs: /scarab/i,
   astrolabes: /astrolabe$/i,
   catalysts: /catalyst$/i,
