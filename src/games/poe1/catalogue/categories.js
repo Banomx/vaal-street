@@ -1,4 +1,4 @@
-export const THREAD_NAME = /^(?:Abyss|Blight|Legion|Breach|Incursion|Betrayal|Bestiary|Expedition|Ultimatum|Ritual) Thread$/i;
+export const THREAD_NAME = /^(?:Abyss|Blight|Legion|Breach|Incursion|Betrayal|Bestiary|Expedition|Ultimatum|Ritual|Frayed) Thread$/i;
 
 /* Market categories — one definition, read by both sides.
 
@@ -33,7 +33,8 @@ export const CATEGORIES = [
     key: "threads",
     label: "Threads",
     file: "threads.json",
-    ninjaType: "Currency",
+    ninjaType: "Fragment",
+    extraNinjaTypes: ["Currency"], // Frayed Thread is currency; mechanic Threads are fragments.
     re: THREAD_NAME,
     watch: ["currency"],
     tab: null, // shown inside Popular farms

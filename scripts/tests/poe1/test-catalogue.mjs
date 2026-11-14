@@ -306,3 +306,5 @@ const threads = threadMovers([
 assert.equal(threads.quoted, 5);
 assert.equal(threads.measured, 3);
 assert.deepEqual(threads.rising.map(({ name, movement }) => [name, movement]), [["Blight Thread", 50], ["Abyss Thread", 20]]);
+
+assert.equal(classifyItem({name:"Frayed Thread"}, "threads").match, true);

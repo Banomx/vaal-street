@@ -47,6 +47,7 @@ import { GCP_NAME, VAAL_ORB_NAME, computeGems, parseVariant } from "../../src/ga
 import {
   applyRenames, breakingNames, describeDiff, diffCatalogue, identityKind, stableId, unresolvedSeries,
 } from "../../src/games/poe1/catalogue/catalogue.js";
+import { retainLeague } from "./retainLeague.mjs";
 import { usesThreads } from "../../src/games/poe1/leagueRules.js";
 import { classificationCoverage, isGggCategory } from "../../src/games/poe1/catalogue/classify.js";
 import { describeSpreads } from "../../src/games/poe1/features/pricing/priceCheck.js";
@@ -54,7 +55,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { fetchResource, fetchTimeout } from "../shared/http.mjs";
 import {
-  QualityReport, USER_AGENT, clearAbandonedStages, createStage, roundPrice, sourceRecord, writeJsonFile,
+  QualityReport, USER_AGENT, clearAbandonedStages, collapsed, createStage, roundPrice, sourceRecord, writeJsonFile,
 } from "../shared/dataset.mjs";
 import { POE1_SCHEMA_VERSION, checkCuratedCoverage, validatePoe1 } from "./validate.mjs";
 import { poe1QuoteScore, poe1StateCompatible } from "./quote.mjs";
@@ -1716,6 +1717,7 @@ async function main() {
       if (scarabHist.backfillFile) await writeFile(path.join(dir, "scarabs-backfill.json"), JSON.stringify(scarabHist.backfillFile));
       // broad price map for the boss profitability tab
       let currencyPrices = null;
+      let priceFailure = null;
       try {
         let pm = mergeGggPriceMap(await getPriceMap(lg.params, ctx, watch), ggg, leagueParam);
         // The newest GGG digest may know an exchange item but have zero trades
@@ -1752,6 +1754,10 @@ async function main() {
         }
         if (pm && li === 0 && watchName) await applyBetaPrices(pm.prices, watchName);
         if (pm) {
+          const previous = await readJson(path.join(FINAL_OUT, slug, "prices.json"));
+          if (collapsed(Object.keys(pm.prices).length, Object.keys(previous?.prices || {}).length)) {
+            throw new Error("price coverage collapsed; retaining this league");
+          }
           const priceSource = sourceLabel({
             ggg: pm.selectedSources?.ggg || 0,
             watch: pm.selectedSources?.watch || 0,
@@ -1762,11 +1768,13 @@ async function main() {
           await reportUnpricedBossItems(pm.prices, lg.name, li === 0);
           currencyPrices = pm.prices;
         } else {
-          console.log(`  prices: NO DATA for ${lg.name} — every endpoint family came back empty`);
+          throw new Error("no usable broad price map");
         }
       } catch (e) {
+        priceFailure = e;
         console.log(`  prices: FAILED (${e.message})`);
       }
+      if (priceFailure) throw priceFailure;
 
       /* gem levelling — one poe.ninja request, kept per variant.
          The profit curve is accumulated here rather than in the browser: the
@@ -1819,6 +1827,14 @@ async function main() {
           // Same order as everywhere else: poe.ninja's exchange first, then
           // poe.watch for a category poe.ninja served nothing for.
           let r = await getExchangeCategory(lg.params, cat.ninjaType, cat.re, ctx?.divisor, cat.key === "astrolabes" ? { key: cat.key, baseItems: gggExchange?.baseItems, index: repoeIndex } : {});
+          for (const type of cat.extraNinjaTypes || []) {
+            const extra = await getExchangeCategory(lg.params, type, cat.re, ctx?.divisor);
+            if (extra?.items.length) {
+              const combined = new Map((r?.items || []).map((item) => [item.name, item]));
+              for (const item of extra.items) if (!combined.has(item.name)) combined.set(item.name, item);
+              r = { ...extra, ...r, items: [...combined.values()] };
+            }
+          }
           if (!r && watch) {
             const wi = watchCategoryItems(watch.rows, cat.re, watch.rate || divineRate, cat.watch, watch.exchange);
             if (wi.length) r = { items: wi, source: "watch" };
@@ -1899,7 +1915,8 @@ async function main() {
          reported success, which silently deletes its accumulated history on the
          next pass. Keep the last good copy and say it is stale instead. */
       const slug = slugify(lg.name);
-      const carried = await carryForward(slug, LEAGUE_FILES);
+      const restored = await retainLeague(FINAL_OUT, OUT, slug);
+      const carried = restored ? LEAGUE_FILES.length : await carryForward(slug, LEAGUE_FILES);
       const seeded = await readJson(path.join(OUT, slug, "prices.json"));
       console.log(`- ${lg.name}: FAILED (${e.message})${carried || seeded ? " — kept the last valid snapshot, marked stale" : ""}`);
       if (carried || seeded) {

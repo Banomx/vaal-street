@@ -21,7 +21,7 @@
    Run: node scripts/test-fetch-shapes.mjs
 */
 
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, writeFile, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { usesThreads } from "../../../src/games/poe1/leagueRules.js";
@@ -147,11 +147,14 @@ globalThis.fetch = async (url) => {
   if (u.hostname === "poe.watch") return NOPE();          // the active-price page
   hits.push(`${u.pathname}${type ? "?type=" + type : ""}`);
   if (u.pathname.startsWith("/api/data/")) return NOPE();                    // legacy is dead
-  if (u.pathname === "/poe1/api/economy/leagues") return J([{ id: "Allflame", name: "Allflame", startAt: "2026-07-24T20:00:00Z" }, { id: "Umbra", name: "Umbra" }]);
+  if (u.pathname === "/poe1/api/economy/leagues") return J([{ id: "Allflame", name: "Allflame", startAt: "2026-07-24T20:00:00Z" }, { id: "Covens", name: "Covens" }, { id: "Hardcore Allflame", name: "Hardcore Allflame" }]);
   if (u.pathname === "/poe1/api/data/index-state") return J({ economyLeagues: [], oldEconomyLeagues: [] });
   if (u.pathname === "/poe1/api/economy/exchange/current/overview") {
-    if (type === "Currency" && u.searchParams.get("league") === "Umbra") {
-      return exchange([...EXCHANGE_DATA.Currency, ["abyss-thread", 0.6], ["thread-of-hope", 1.2]]);
+    if (type === "Currency" && u.searchParams.get("league") === "Covens") {
+      return exchange([...EXCHANGE_DATA.Currency, ["frayed-thread", 0.2], ["thread-of-hope", 1.2]]);
+    }
+    if (type === "Fragment" && u.searchParams.get("league") === "Covens") {
+      return exchange([...EXCHANGE_DATA.Fragment, ["abyss-thread", 0.6]]);
     }
     return EXCHANGE_DATA[type] ? exchange(EXCHANGE_DATA[type]) : J({ core: CORE, lines: [] });
   }
@@ -181,6 +184,13 @@ globalThis.fetch = async (url) => {
   return NOPE();
 };
 
+// A thin archived feed must not block the new league or replace its own history.
+const retainedDir = path.join(OUT_DIR, "Hardcore_Allflame");
+await mkdir(retainedDir, { recursive: true });
+const retainedPrices = { schemaVersion: 1, generatedAt: new Date().toISOString(), divineRate: 1300,
+  prices: { "Chaos Orb": { c: 1 }, ...Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`Old ${i}`, { c: 1 }])) } };
+await writeFile(path.join(retainedDir, "prices.json"), JSON.stringify(retainedPrices));
+await writeFile(path.join(retainedDir, "retained-history.json"), '{"observations":[1,2,3]}');
 process.env.DATA_OUT = OUT_DIR;
 const fetchModule = await import("../../poe1/fetch-data.mjs");
 
@@ -190,14 +200,19 @@ const ok = (c, m) => { if (!c) { fails++; console.log("FAIL:", m); } };
 const near = (a, b, eps = 0.01) => a != null && Math.abs(a - b) <= eps;
 
 const rolloverIndex = JSON.parse(await readFile(path.join(OUT_DIR, "index.json"), "utf8"));
-const umbra = rolloverIndex.leagues.find(({ name }) => name === "Umbra");
+const retained = rolloverIndex.leagues.find(({ name }) => name === "Hardcore Allflame");
+ok(retained?.stale, "a collapsed archive is retained and marked stale");
+ok((await readFile(path.join(retainedDir, "retained-history.json"), "utf8")) === '{"observations":[1,2,3]}', "archive observations survive refresh failure");
+ok(JSON.stringify(JSON.parse(await readFile(path.join(retainedDir, "prices.json"), "utf8"))) === JSON.stringify(retainedPrices), "archive prices remain the last good snapshot");
+ok(!(await readdir(retainedDir)).includes("scarabs.json"), "partial refresh files are removed from the retained league");
+const umbra = rolloverIndex.leagues.find(({ name }) => name === "Covens");
 ok(umbra && !umbra.stale && umbra.files.prices && umbra.files.gems && umbra.files.fossils,
    "Umbra publishes the other markets without scarabs");
-const umbraScarabs = JSON.parse(await readFile(path.join(OUT_DIR, "Umbra", "scarabs.json"), "utf8"));
+const umbraScarabs = JSON.parse(await readFile(path.join(OUT_DIR, "Covens", "scarabs.json"), "utf8"));
 ok(umbraScarabs.items.length === 0 && near(umbraScarabs.divineRate, 1300),
    "Umbra ignores legacy scarab rows and derives the rate from Currency");
-const threadFile = JSON.parse(await readFile(path.join(OUT_DIR, "Umbra", umbra.files.threads), "utf8"));
-ok(threadFile.items.length === 1 && threadFile.items[0].name === "Abyss Thread" && near(threadFile.items[0].chaosValue, 6),
+const threadFile = JSON.parse(await readFile(path.join(OUT_DIR, "Covens", umbra.files.threads), "utf8"));
+ok(threadFile.items.length === 2 && threadFile.items.some((item) => item.name === "Abyss Thread" && near(item.chaosValue, 6)) && threadFile.items.some((item) => item.name === "Frayed Thread"),
    "Umbra publishes a calibrated Thread quote without matching Thread of Hope");
 ok(!Object.keys(threadFile.items[0]).some((key) => /^change\d/.test(key)),
    "the first Thread snapshot does not inherit movement from the source sparkline");
@@ -398,3 +413,4 @@ console.log(`\nprice map: ${Object.keys(P).length} names, chaos=${P["Chaos Orb"]
 await rm(OUT_DIR, { recursive: true, force: true });
 console.log(fails ? `\n${fails} FAILURES` : "\nAll checks passed.");
 process.exit(fails ? 1 : 0);
+

@@ -63,8 +63,8 @@ export const DOCUMENTED = [
     reason: "Kalguur-league currency. No tab or curated dataset references it, so it would cost a request per run for nothing.",
   },
   {
-    type: "EnshroudingCrystal", family: "exchange", enabled: false,
-    reason: "League-specific and unreferenced by any boss, Delve or category dataset. Enable together with a consumer, not before.",
+    type: "EnshroudingCrystal", family: "exchange", enabled: true,
+    consumer: "broad price map, including the new Afarud crystal",
   },
 
   // ---- stash items: everything priced per listing ----

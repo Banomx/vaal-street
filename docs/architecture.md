@@ -1215,7 +1215,7 @@ saved setup cost. `overviewTrends.js` selects sign-filtered movement shortlists;
 levels use the highest three finite values, including negative boss net.
 Thin gem markets are excluded. Missing drop quotes, experimental models and
 unknown history remain visible. Saved setups rank by current cost, not profit.
-PoE 1 league rules recognize Umbra by name and later challenge leagues by
+PoE 1 league rules recognize Covens, Covens of Umbra and Umbra by name and later challenge leagues by
 their upstream start date. For those leagues the generator skips the dedicated
 scarab market fetch and emits an empty scarab snapshot in the existing format.
 This retains
@@ -1246,7 +1246,8 @@ Explicit zero counts do not require quotes. Older snapshots are labelled.
 No drop rates are inferred from trades, and the baskets are not patch drop tables.
 
 Popular farms defaults to rising Thread prices. The Threads family uses existing
-Currency quotes and the shared hourly history pipeline. Only matching observed
+Fragment quotes for mechanic Threads, Currency quotes for Frayed Thread,
+and the shared hourly history pipeline. Only matching observed
 windows count toward a gain; upstream sparklines do not substitute for missing
 history. The name matcher excludes unrelated items such as Thread of Hope and
 can be checked against feed identities after launch. A legacy checkbox opens
@@ -1394,3 +1395,8 @@ personal hourly projection when it contains elapsed minutes; a timed route with
 zero recorded encounters remains valid zero-rate evidence. Profiles and active selection use the versioned
 `sl.delve.sampleProfiles.v1` and `sl.delve.activeSampleProfile.v1` localStorage
 keys; global Delve settings keep depth, wall preference and price/boss overrides.
+
+A broad-price coverage collapse or failed broad-price refresh restores the whole
+affected PoE 1 league from the validated pre-run directory, removes partial files,
+and marks the manifest entry stale. Other leagues may publish fresh data. The
+global schema, coverage and history gates still validate the assembled dataset.
