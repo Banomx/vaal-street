@@ -197,3 +197,26 @@ const exchangeSet = new Set(EXCHANGE_TYPES);
 assert.equal(exchangeSet.size, EXCHANGE_TYPES.length, "no type is requested twice per run");
 
 console.log("PoE 1 source evidence passed.");
+
+
+const { withThreadMetadata, THREAD_METADATA } = await import("../../poe1/threadMetadata.mjs");
+const patched = withThreadMetadata(twins);
+const threadItems = [{ id: "Metadata/Items/Threads/ThreadAbyss", name: "Abyss Thread" }, { name: "Breach Thread" }];
+const threadCoverage = enrichFromRepoe(threadItems, patched);
+assert.equal(threadCoverage.byPath, 1);
+assert.equal(threadCoverage.byName, 1);
+assert.equal(threadItems[1].identity, "name", "name resolution cannot claim a confirmed rename");
+assert.equal(classifyAstro(threadItems[0], "threads").confidence, "metadata");
+assert.equal(classifyAstro({id:"Metadata/Items/Jewels/Test",name:"Abyss Thread",itemClass:"Jewel"}, "threads").match,false);
+const officialThreads = buildGggLeagueSnapshot([{
+ league:"Covens", market_pair:[Object.keys(THREAD_METADATA)[0],CHAOS_ID],
+ volume_traded:{[Object.keys(THREAD_METADATA)[0]]:100,[CHAOS_ID]:50},
+}],patched,"Covens");
+assert.equal(officialThreads.prices["Abyss Thread"].c,.5);
+assert.equal(withThreadMetadata({[Object.keys(THREAD_METADATA)[0]]:{name:"Upstream name"}})[Object.keys(THREAD_METADATA)[0]].name,"Upstream name");
+const questIndex = nameIndex({
+ "Metadata/Quest/A": {name:"Shared",item_class:"QuestItem"},
+ "Metadata/Quest/B": {name:"Shared",item_class:"QuestItem"},
+ "Metadata/Currency/A": {name:"Shared",item_class:"StackableCurrency"},
+});
+assert.equal(questIndex.ambiguous.has("Shared"),false,"superseded quest-name ties must not taint a unique tradable match");

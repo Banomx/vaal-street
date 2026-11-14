@@ -92,7 +92,7 @@ export function nameIndex(baseItems) {
     };
     const held = byName.get(item.name);
     if (!held) { byName.set(item.name, candidate); continue; }
-    if (rankOf(candidate) > rankOf(held)) { byName.set(item.name, candidate); continue; }
+    if (rankOf(candidate) > rankOf(held)) { byName.set(item.name, candidate); ambiguous.delete(item.name); continue; }
     if (rankOf(candidate) === rankOf(held)) ambiguous.add(item.name);
   }
   return { byName, ambiguous };

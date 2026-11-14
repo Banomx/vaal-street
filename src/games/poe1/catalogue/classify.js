@@ -36,6 +36,7 @@ const metadataPath = (item) => [item?.gggId, item?.id, item?.metadataPath]
 const astrolabePath = (item) => /^Metadata\/Items\/Currency\/Astrolabe[A-Za-z0-9_]*$/.test(metadataPath(item));
 
 const METADATA_RULES = {
+  threads: (item) => /^Metadata\/Items\/Threads\/Thread(?:Abyss|Bestiary|Betrayal|Blight|Breach|Expedition|Incursion|Legion|Ritual|Ultimatum)$/.test(metadataPath(item)),
   scarabs: (item) => has(item, "scarab") || classIs(item, "Scarab"),
   astrolabes: (item) => astrolabePath(item) || has(item, "astrolabe") || classIs(item, "Astrolabe"),
   catalysts: (item) => has(item, "catalyst") || has(item, "jewel_catalyst") || classIs(item, "Catalyst"),
@@ -75,8 +76,9 @@ export function classifyItem(item, key) {
   }
   // Known equipment and quest items must not enter a currency family merely
   // because their display name ends with Astrolabe.
-  if (key === "astrolabes" && (metadataPath(item)
-    || (item.itemClass && !classIs(item, "StackableCurrency")))) {
+  const allowedClasses = key === "threads" ? ["StackableCurrency", "MapFragment"] : ["StackableCurrency"];
+  if ((key === "threads" || key === "astrolabes") && (metadataPath(item)
+    || (item.itemClass && !classIs(item, ...allowedClasses)))) {
     return { match: false, confidence: "metadata" };
   }
   if (NAME_RULES[key]?.test(item.name)) return { match: true, confidence: "name" };

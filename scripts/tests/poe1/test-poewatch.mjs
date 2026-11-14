@@ -46,6 +46,7 @@ const WATCH = {
     { id: 1, name: "Divine Orb", mean: LISTING, min: LISTING, max: 179.5, daily: 89, lowConfidence: true, divine: 0.76 },
     { id: 2, name: "Exalted Orb", mean: 1, min: 1, max: 1, daily: 40, lowConfidence: true, divine: 0 },
     { id: 3, name: "Deceptive Astrolabe", mean: 90, min: 88, max: 95, daily: 300, lowConfidence: false, divine: 0.39 },
+    { id: 300, name: "Feral Astrolabe", mean: 25, min: 24, max: 26, daily: 100, lowConfidence: false, divine: 0.1 },
     { id: 4, name: "Abrasive Catalyst", mean: 7, min: 7, max: 8, daily: 900, lowConfidence: false, divine: 0 },
     // poe.ninja prices this one far lower, and wins anyway — poe.watch's
     // figure does not survive at all, beyond a line in the hourly log.
@@ -305,6 +306,10 @@ for (const [file, name, value] of [
   const j = JSON.parse(await readFile(path.join(OUT_DIR, "Allflame", `${file}.json`), "utf8"));
   ok(near(j.items.find((i) => i.name === name)?.chaosValue, value), `${file} tab reads poe.ninja: ${JSON.stringify(j.items[0])}`);
 }
+
+const filledAstrolabes = JSON.parse(await readFile(path.join(OUT_DIR, "Allflame", "astrolabes.json"), "utf8"));
+ok(filledAstrolabes.items.some((item) => item.name === "Feral Astrolabe" && item.chaosValue === 25),
+   "partial ninja category is filled from watch without discarding its existing quotes");
 
 /* A category regex must not reach across categories — /catalyst/i and
    /astrolabe/i both run over the currency rows, and only their own rows. */

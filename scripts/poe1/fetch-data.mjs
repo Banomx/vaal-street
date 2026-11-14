@@ -47,6 +47,7 @@ import { GCP_NAME, VAAL_ORB_NAME, computeGems, parseVariant } from "../../src/ga
 import {
   applyRenames, breakingNames, describeDiff, diffCatalogue, identityKind, stableId, unresolvedSeries,
 } from "../../src/games/poe1/catalogue/catalogue.js";
+import { threadMetadataSource, withThreadMetadata } from "./threadMetadata.mjs";
 import { retainLeague } from "./retainLeague.mjs";
 import { usesThreads } from "../../src/games/poe1/leagueRules.js";
 import { classificationCoverage, isGggCategory } from "../../src/games/poe1/catalogue/classify.js";
@@ -1580,7 +1581,8 @@ async function main() {
 
   /* Built once for the whole run: the name index is the same for every league,
      and rebuilding it per family would walk a 20k-entry dictionary 40 times. */
-  const repoeIndex = gggExchange?.baseItems ? nameIndex(gggExchange.baseItems) : null;
+  const baseItems = withThreadMetadata(gggExchange?.baseItems || {});
+  const repoeIndex = nameIndex(baseItems);
 
   const written = [];
   for (const [li, lg] of leagues.entries()) {
@@ -1634,7 +1636,7 @@ async function main() {
       if (threads && !rateSane(divineRate)) throw new Error("no usable Divine exchange rate");
       const mergedScarabs = mergeGggCategory(priced?.items || [], threads ? null : ggg, "scarabs", divineRate);
       const items = mergedScarabs.items;
-      const scarabCoverage = enrichFromRepoe(items, gggExchange?.baseItems, repoeIndex);
+      const scarabCoverage = enrichFromRepoe(items, baseItems, repoeIndex);
       const scarabClassification = classificationCoverage(items, "scarabs");
       attachStableKeys(items);
       if (!items.length && !threads) {
@@ -1826,7 +1828,7 @@ async function main() {
         try {
           // Same order as everywhere else: poe.ninja's exchange first, then
           // poe.watch for a category poe.ninja served nothing for.
-          let r = await getExchangeCategory(lg.params, cat.ninjaType, cat.re, ctx?.divisor, cat.key === "astrolabes" ? { key: cat.key, baseItems: gggExchange?.baseItems, index: repoeIndex } : {});
+          let r = await getExchangeCategory(lg.params, cat.ninjaType, cat.re, ctx?.divisor, cat.key === "astrolabes" ? { key: cat.key, baseItems, index: repoeIndex } : {});
           for (const type of cat.extraNinjaTypes || []) {
             const extra = await getExchangeCategory(lg.params, type, cat.re, ctx?.divisor);
             if (extra?.items.length) {
@@ -1835,9 +1837,13 @@ async function main() {
               r = { ...extra, ...r, items: [...combined.values()] };
             }
           }
-          if (!r && watch) {
+          const ninjaNames = new Set((r?.items || []).map((item) => item.name));
+          let watchNames = new Set();
+          if (watch) {
             const wi = watchCategoryItems(watch.rows, cat.re, watch.rate || divineRate, cat.watch, watch.exchange);
-            if (wi.length) r = { items: wi, source: "watch" };
+            const missing = wi.filter((item) => !ninjaNames.has(item.name));
+            watchNames = new Set(missing.map((item) => item.name));
+            if (missing.length) r = { ...r, items: [...(r?.items || []), ...missing] };
           }
           const rate2 = ggg?.divineRate || r?.exchangeDivineRate || divineRate;
           const mergedCat = mergeGggCategory(r?.items || [], ggg, cat.key, rate2);
@@ -1848,7 +1854,7 @@ async function main() {
               if (/^change\d+R?$/.test(key)) delete item[key];
             }
           }
-          const catCoverage = enrichFromRepoe(catItems, gggExchange?.baseItems, repoeIndex);
+          const catCoverage = enrichFromRepoe(catItems, baseItems, repoeIndex);
           attachStableKeys(catItems);
           if (catCoverage.total) metadataCoverage.push({ family: cat.key, ...catCoverage });
           classification.push({ family: cat.key, ...classificationCoverage(catItems, cat.key) });
@@ -1871,8 +1877,8 @@ async function main() {
             familyHistoryFiles({ ...catFam, t0Ms: origin?.t0Ms });
           const catPriceSource = sourceLabel({
             ggg: mergedCat.officialCount,
-            watch: r?.source === "watch" ? mergedCat.fallbackCount : 0,
-            ninja: r && r.source !== "watch" ? mergedCat.fallbackCount : 0,
+            watch: catItems.filter((item) => watchNames.has(item.name) && !ggg?.prices?.[item.name]).length,
+            ninja: catItems.filter((item) => ninjaNames.has(item.name) && !ggg?.prices?.[item.name]).length,
           });
           await writeFile(path.join(dir, `${cat.key}.json`), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate: rate2, priceSource: catPriceSource, historySource: catHistorySource, historyAxis, historyOrigin: historyOriginISO, rateHistory, rateHistorySource, items: catItems }));
           await writeFile(path.join(dir, `${cat.key}-history.json`), JSON.stringify(catHist));
@@ -1897,7 +1903,7 @@ async function main() {
         league: lg.name,
         gggHour: ggg ? gggExchange.hourISO : null,
         nextChangeId: ggg ? gggExchange.nextChangeId ?? null : null,
-        sources: [...(gggExchange?.sources || []), ...ninjaSources, ...(watch?.sources || [])],
+        sources: [...(gggExchange?.sources || [threadMetadataSource()]), ...ninjaSources, ...(watch?.sources || [])],
         metadataCoverage,
         classification,
       }));

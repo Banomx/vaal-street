@@ -15,6 +15,7 @@ import { fetchResource, fetchTimeout } from "../../shared/http.mjs";
    download. */
 
 import { JSON_HEADERS, sourceRecord } from "../../shared/dataset.mjs";
+import { threadMetadataSource, withThreadMetadata } from "../threadMetadata.mjs";
 import { fetchBaseItems } from "../../shared/repoe.mjs";
 
 const GGG_BASE = process.env.GGG_EXCHANGE_BASE || "https://web.poecdn.com/api/currency-exchange";
@@ -201,9 +202,10 @@ export async function fetchGggExchange({ now = Date.now() } = {}) {
   }
   if (!payload) throw lastError || new Error("GGG returned no completed hourly market digest");
 
-  const { baseItems, provenance: repoe } = await fetchBaseItems(REPOE_URL, {
+  const { baseItems: upstreamBaseItems, provenance: repoe } = await fetchBaseItems(REPOE_URL, {
     id: "repoe.poe1.baseItems", headers: HEADERS, timeoutMs: FETCH_TIMEOUT_MS,
   });
+  const baseItems = withThreadMetadata(upstreamBaseItems);
   const leagues = [...new Set(payload.markets.map((market) => market.league).filter(Boolean))];
   const byLeague = {};
   for (const league of leagues) {
@@ -230,6 +232,7 @@ export async function fetchGggExchange({ now = Date.now() } = {}) {
         version: payload.next_change_id != null ? String(payload.next_change_id) : null,
       }),
       repoe,
+      threadMetadataSource(),
     ],
     baseItems,
     byLeague,

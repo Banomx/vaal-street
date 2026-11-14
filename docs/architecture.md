@@ -1400,3 +1400,13 @@ A broad-price coverage collapse or failed broad-price refresh restores the whole
 affected PoE 1 league from the validated pre-run directory, removes partial files,
 and marks the manifest entry stale. Other leagues may publish fresh data. The
 global schema, coverage and history gates still validate the assembled dataset.
+
+
+PoE 1 supplements the lagging RePoE dictionary with the ten Thread paths and
+three new Astrolabe paths verified against GGG's exchange and trade catalogue
+on 2026-11-14. `scripts/poe1/threadMetadata.mjs` records this reviewed fallback;
+upstream entries always take precedence. Its own hashed source record keeps
+the RePoE response hash truthful. The fallback also enriches listing rows when
+the completed-trade digest is unavailable, retaining weaker name identity for
+those rows. Generic category snapshots fill missing names from poe.watch even
+when poe.ninja returned a partial result, and credit each selected source.
