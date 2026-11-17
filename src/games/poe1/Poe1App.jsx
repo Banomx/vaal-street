@@ -973,14 +973,14 @@ export default function Poe1App({ activeGame, onGameChange }) {
         {!threads && <button className={tab === "prices" ? "on" : ""} onClick={() => { setTab("prices"); setDragSel(null); }}>Scarabs</button>}
         <button className={tab === "astrolabes" ? "on" : ""} onClick={() => { setTab("astrolabes"); setDragSel(null); }}>Astrolabes</button>
         <button className={tab === "catalysts" ? "on" : ""} onClick={() => { setTab("catalysts"); setDragSel(null); }}>Catalysts</button>
-        {!threads && <button className={tab === "bosses" ? "on" : ""}
+        <button className={tab === "bosses" ? "on" : ""}
           onClick={() => {
             setTab("bosses"); setBossTarget(null); setDragSel(null);
             // Boss values run to thousands of chaos, so chaos is the wrong unit
             // here and entering the tab switches away from it. Smart already
             // quotes the big numbers in divine, so leave that choice alone.
             setCurrency((c) => (c === "chaos" ? "divine" : c));
-          }}>Boss profit</button>}
+          }}>Boss profit</button>
         <button className={tab === "gems" ? "on" : ""} onClick={() => { setTab("gems"); setDragSel(null); }}>Gem levelling</button>
         <button aria-label="Mechanic value" className={tab === "mechanics" ? "on" : ""} onClick={() => { setTab("mechanics"); setDragSel(null); }}>
           Mechanic value <em className="st-tab-exp">EXP</em>
@@ -1302,8 +1302,9 @@ export default function Poe1App({ activeGame, onGameChange }) {
       )}
 
       {/* ---------- boss profitability ---------- */}
-      {!threads && tab === "bosses" && (
+      {tab === "bosses" && (
         <BossProfit
+          threads={threads}
           league={league}
           staticBase={leagueBase}
           currency={currency}

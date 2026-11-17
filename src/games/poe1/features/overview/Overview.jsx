@@ -95,7 +95,6 @@ export default function Overview({
   }, []);
 
   const bossSummary = useMemo(() => {
-    if (threads) return null;
     const priceMap = snapshots?.prices?.prices;
     if (!priceMap) return null;
     const resolve = makeResolver(priceMap, {
@@ -112,7 +111,7 @@ export default function Overview({
       missing: gaps.length,
       firstGap: gaps[0] || null,
     };
-  }, [snapshots, profile, divineRate, threads]);
+  }, [snapshots, profile, divineRate]);
 
   const delveTargets = useMemo(() => {
     const priceMap = snapshots?.prices?.prices || null;
@@ -216,7 +215,7 @@ export default function Overview({
       rows: pools.boss.up.map((row) => ({ id: row.boss.id, title: row.boss.name, value: price(row.net),
         tone: movement(row.net), unit: "Estimated drop value after entry cost",
         evidence: `${profile?.name || "Default"} settings · ${row.hiddenLines.length ? `${row.hiddenLines.length} unpriced drop lines` : "All drop lines priced"}`,
-        warning: row.hiddenLines.length ? "Incomplete drop pricing" : null,
+        warning: [threads ? "3.30 drop assumptions unverified" : null, row.hiddenLines.length ? "Incomplete drop pricing" : null].filter(Boolean).join(" · ") || null,
         open: () => onOpenTab("bosses", row.boss.id) })),
     },
     {
@@ -285,11 +284,11 @@ export default function Overview({
       <b>{status}</b>{league ? ` · ${league}` : ""}{updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ""}
       {showRates && divineRate > 0 ? ` · 1 Divine ≈ ${Math.round(divineRate)} Chaos` : ""}
     </SourceStrip></div>
-    {threads && <SourceStrip>Threads of Creation replace scarabs in this league. Scarab tools are available in archived leagues. Boss estimates are on hold pending a review of the new encounters and drops.</SourceStrip>}
-    <SpotlightBoard key={league} categories={threads ? categories.filter(({ id }) => !["farms", "watcher", "boss"].includes(id)) : categories} />
-    <details className="overview-health"><summary>Price coverage and assumptions{!threads && bossSummary ? ` · ${bossSummary.missing} missing boss drop quotes` : ""}</summary>
+    {threads && <SourceStrip>Threads of Creation replace scarabs in this league. Scarab tools are available in archived leagues. Boss EV remains available as experimental while 3.30 encounter and drop assumptions are reviewed.</SourceStrip>}
+    <SpotlightBoard key={league} categories={threads ? categories.filter(({ id }) => !["farms", "watcher"].includes(id)) : categories} />
+    <details className="overview-health"><summary>Price coverage and assumptions{bossSummary ? ` · ${bossSummary.missing} missing boss drop quotes` : ""}</summary>
       <p>Boss and gem figures use your saved settings. Delve remains experimental. Market movement and setup cost are not farming profit.</p>
-      {!threads && bossSummary?.firstGap && <button type="button" onClick={() => onOpenTab("bosses", bossSummary.firstGap.boss.id)}>Review the first missing boss quote →</button>}
+      {bossSummary?.firstGap && <button type="button" onClick={() => onOpenTab("bosses", bossSummary.firstGap.boss.id)}>Review the first missing boss quote →</button>}
     </details>
   </main>;
 }

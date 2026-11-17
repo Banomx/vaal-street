@@ -10,8 +10,8 @@ Pause and Next controls keep inspection predictable. Reduced-motion settings
 start with rotation paused. **Popular farms** ranks rising Thread prices over a selectable window. Enable
 **Show legacy Scarabs** to compare older leagues.
 For Umbra and later dated challenge leagues, the overview explains the Threads
-transition. Scarab tools remain available for older leagues; new-era boss
-estimates are paused until the encounter models are reviewed.
+transition. Scarab tools remain available for older leagues. Boss EV is available
+with a warning that 3.30 encounter and drop assumptions are unverified.
 
 **Mechanic value** compares selected reward markets for eight PoE 1 mechanics.
 Log your drop counts, time and costs to compare tracked net per run and per

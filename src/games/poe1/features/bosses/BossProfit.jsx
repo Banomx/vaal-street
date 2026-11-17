@@ -88,7 +88,7 @@ function TimeInput({ value, onCommit, width = 58, title, custom }) {
 
 /* unitFor resolves the "smart" currency to chaos or divine for one value;
    for the fixed modes it just hands the mode back. */
-export default function BossProfit({ league, staticBase, currency, divineRate, mirrorDivine, fmtPrice, fmtChaos, fmtDiv,
+export default function BossProfit({ league, threads = false, staticBase, currency, divineRate, mirrorDivine, fmtPrice, fmtChaos, fmtDiv,
                                      unitFor = (chaos, cur) => cur, initialBoss = null }) {
   const [priceMap, setPriceMap] = useState(null);   // null = loading, "missing" = no snapshot
   const [generatedAt, setGeneratedAt] = useState(null);
@@ -359,11 +359,16 @@ export default function BossProfit({ league, staticBase, currency, divineRate, m
 
   return (
     <section className="bp-wrap">
+      {threads && <SourceStrip tone="alert">
+        <strong>Experimental · 3.30 drop assumptions unverified.</strong>{" "}
+        Prices use this league’s snapshot, but encounter entries and drop rates may still reflect earlier patches.
+        Review the selected boss and edit rates, costs and kill times for your setup. These estimates do not include unmodelled Fate rewards.
+      </SourceStrip>}
       {priceMap === null && <SourceStrip className="app-source-strip--spaced st-banner st-quiet">Loading prices…</SourceStrip>}
       {priceMap === "missing" && (
         <SourceStrip className="app-source-strip--spaced st-banner" tone="alert">
           No price snapshot for {league} yet. Boss values need <code>prices.json</code>, which the
-          data workflow writes alongside the scarab data — it appears after the next refresh.
+          data workflow writes for each league — it appears after the next refresh.
           You can still edit drop rates and times; prices will fill in.
         </SourceStrip>
       )}

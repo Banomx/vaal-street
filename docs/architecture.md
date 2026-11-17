@@ -1224,8 +1224,9 @@ publish independently of scarabs. An existing empty scarab snapshot preserves
 that decision if the feed later omits the start date. Empty scarab results
 still trigger carry-forward for unclassified leagues. Undated permanent leagues
 keep their prior behavior pending confirmation of how their markets migrate.
-The app hides scarab tabs, saved-setup rankings and pre-3.30 boss estimates for
-Threads leagues. Older league history and saved setups stay available. Threads
+The app keeps legacy scarab tools in older leagues and Boss EV available in all
+leagues. Threads-era Boss EV and its overview rankings explicitly flag unverified
+3.30 encounter/drop assumptions; rates, costs and timing remain editable. Older league history and saved setups stay available. Threads
 and Fates market mapping, and revised encounter rates, require verified feed
 data and patch details.
 
