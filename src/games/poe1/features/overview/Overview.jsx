@@ -101,7 +101,7 @@ export default function Overview({
       priceOverrides: profile?.priceOverrides || {},
       divineRate,
     });
-    const rows = computeAll(resolve, profile);
+    const rows = computeAll(resolve, profile, { threads });
     const gaps = rows.flatMap((row) => row.hiddenLines.map((line) => ({
       boss: row.boss,
       line,
@@ -111,7 +111,7 @@ export default function Overview({
       missing: gaps.length,
       firstGap: gaps[0] || null,
     };
-  }, [snapshots, profile, divineRate]);
+  }, [snapshots, profile, divineRate, threads]);
 
   const delveTargets = useMemo(() => {
     const priceMap = snapshots?.prices?.prices || null;
@@ -214,7 +214,7 @@ export default function Overview({
       emptyNote: "No boss has enough entry pricing for a ranked estimate.", open: () => onOpenTab("bosses"),
       rows: pools.boss.up.map((row) => ({ id: row.boss.id, title: row.boss.name, value: price(row.net),
         tone: movement(row.net), unit: "Estimated drop value after entry cost",
-        evidence: `${profile?.name || "Default"} settings · ${row.hiddenLines.length ? `${row.hiddenLines.length} unpriced drop lines` : "All drop lines priced"}`,
+        evidence: `${row.templeEntry ? "Build Incursion Temple · provisional 1–2 entries/hour · " : ""}${profile?.name || "Default"} settings · ${row.hiddenLines.length ? `${row.hiddenLines.length} unpriced drop lines` : "All drop lines priced"}`,
         warning: [threads ? "3.30 drop assumptions unverified" : null, row.hiddenLines.length ? "Incomplete drop pricing" : null].filter(Boolean).join(" · ") || null,
         open: () => onOpenTab("bosses", row.boss.id) })),
     },

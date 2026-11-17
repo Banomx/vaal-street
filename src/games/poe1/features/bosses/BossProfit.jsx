@@ -141,8 +141,8 @@ export default function BossProfit({ league, threads = false, staticBase, curren
   );
 
   const rows = useMemo(
-    () => BOSSES.map((b) => computeBoss(b, resolve, (profile?.bosses || {})[b.id] || {})),
-    [resolve, profile]
+    () => BOSSES.map((b) => computeBoss(b, resolve, (profile?.bosses || {})[b.id] || {}, { threads })),
+    [resolve, profile, threads]
   );
 
   /* Variance matters as much as EV — a boss can be +EV entirely on a 1% drop
@@ -463,11 +463,11 @@ export default function BossProfit({ league, threads = false, staticBase, curren
                             return (
                               <label className="bp-prof-cell" key={b.id}>
                                 <span>{b.name}</span>
-                                <TimeInput
+                                {threads && b.id === "uber-atziri" ? <span title="Temple construction and the encounter are included; edit entries/hour on the boss page.">1–2 temple entries/hour</span> : <TimeInput
                                   value={p.bosses?.[b.id]?.ttk ?? b.ttk}
                                   custom={custom}
                                   title={custom ? `Default is ${fmtTime(b.ttk)} — clear to nothing to restore` : "Default"}
-                                  onCommit={(v) => setBossFieldIn(p.name, b.id, "ttk", v === b.ttk ? null : v)} />
+                                  onCommit={(v) => setBossFieldIn(p.name, b.id, "ttk", v === b.ttk ? null : v)} />}
                               </label>
                             );
                           })}
@@ -560,17 +560,17 @@ export default function BossProfit({ league, threads = false, staticBase, curren
                       </span>
                       <span className="bp-item-meta">
                         {r.boss.group}
-                        {safety[r.boss.id] != null && (
+                        {!(r.templeEntry && r.entryUnknown) && safety[r.boss.id] != null && (
                           <em className={`bp-safe ${safety[r.boss.id] >= 0.5 ? "ok" : "risk"}`}
                             title={`Simulated: ${Math.round(safety[r.boss.id] * 100)}% of ${runs}-run stretches finish in profit`}>
                             {Math.round(safety[r.boss.id] * 100)}% safe
                           </em>
                         )}
-                        {" · "}{fmtTime(r.runSeconds)}/run · {r.runsPerHour.toFixed(1)}/hr
+                        {" · "}{r.templeEntry ? "Build Temple · " : `${fmtTime(r.runSeconds)}/run · `}{r.runsPerHour.toFixed(1)}/hr
                       </span>
                       <span className="bp-meter"><i className={r.profitPerHour >= 0 ? "up" : "down"} style={{ width: `${w}%` }} /></span>
                     </span>
-                    <span className={`bp-item-val ${r.profitPerHour >= 0 ? "pos" : "neg"}`}>{signed(r.profitPerHour)}</span>
+                    <span className={`bp-item-val ${r.profitPerHour >= 0 ? "pos" : "neg"}`}>{r.templeEntry && r.entryUnknown ? "—" : signed(r.profitPerHour)}</span>
                   </button>
                 );
               })}
@@ -599,16 +599,24 @@ export default function BossProfit({ league, threads = false, staticBase, curren
                 {current.boss.note && <p className="bp-note">{current.boss.note}</p>}
 
                 <div className="bp-stats">
-                  <Stat label="Entry" value={current.entryCost ? money(current.entryCost) : "free"} />
+                  <Stat label={current.templeEntry ? "Entry / hour" : "Entry"} value={current.entryUnknown ? "Unpriced" : current.entryCost ? money(current.entryCost * (current.templeEntry ? current.runsPerHour : 1)) : "free"} />
                   <Stat label="EV / kill" value={signed(current.net)} tone={current.net >= 0 ? "pos" : "neg"} />
-                  <Stat label="Profit / hour" value={signed(current.profitPerHour)} tone={current.profitPerHour >= 0 ? "pos" : "neg"} big />
+                  <Stat label="Profit / hour" value={current.templeEntry && current.entryUnknown ? "—" : signed(current.profitPerHour)} tone={current.profitPerHour >= 0 ? "pos" : "neg"} big />
                   <Stat label={`Profit in ${runs} runs`}
-                    value={chance == null ? "—" : `${Math.round(chance * 100)}%`}
+                    value={chance == null || (current.templeEntry && current.entryUnknown) ? "—" : `${Math.round(chance * 100)}%`}
                     tone={chance == null ? null : chance >= 0.5 ? "pos" : "warn"}
                     title={`Simulated over ${runs} consecutive runs: how often the total finishes in the black. EV alone hides the variance.`} />
                 </div>
 
+                {current.templeEntry && <details className="bp-note">
+                  <summary title={current.templeEntry.description}>{current.templeEntry.label} · Entry requirements ⓘ</summary>
+                  <p>{current.templeEntry.description}</p>
+                  <p>{current.entryUnknown ? "Royal Visage has no usable quote. Set its cost below to calculate the hourly estimate." : <>Modelled net / hour at 1–2 entries: {signed(current.hourlyRange[0])} to {signed(current.hourlyRange[1])}. The headline uses {current.runsPerHour.toFixed(1)} entries/hour.</>}</p>
+                </details>}
                 <div className="bp-timing">
+                  {current.templeEntry ? <label>Temple entries / hour
+                    <NumInput value={current.runsPerHour} step={0.1} min={1} width={60} title="Provisional 1–2 entries per hour, including building the Temple" onCommit={(v) => setBossField(current.boss.id, "templeEntriesPerHour", Math.min(2, Math.max(1, v)))} />
+                  </label> : <>
                   <label>Kill time
                     <TimeInput value={current.ttk} title="m:ss" custom={(profile?.bosses || {})[current.boss.id]?.ttk != null}
                       onCommit={(v) => setBossField(current.boss.id, "ttk", v === current.boss.ttk ? null : v)} />
@@ -618,17 +626,18 @@ export default function BossProfit({ league, threads = false, staticBase, curren
                       custom={(profile?.bosses || {})[current.boss.id]?.overhead != null}
                       onCommit={(v) => setBossField(current.boss.id, "overhead", v === (current.boss.overhead ?? 0) ? null : v)} />
                   </label>
+                  </>}
                   {current.groups.some((g) => g.scaled) && (
                     <label title="Area item quantity — multiplies the quantity-scaled additional drops">
                       Quantity <NumInput value={current.quantity} suffix="%" width={54} onCommit={(v) => setBossField(current.boss.id, "quantity", v)} />
                     </label>
                   )}
-                  <span className="bp-timing-out">{fmtTime(current.runSeconds)} per run · {current.runsPerHour.toFixed(1)} kph</span>
+                  <span className="bp-timing-out">{fmtTime(current.runSeconds)} per run · {current.runsPerHour.toFixed(1)} {current.templeEntry ? "entries/hour · provisional 1–2" : "kph"}</span>
                 </div>
 
                 {current.entryLines.length > 0 && (
                   <div className="bp-entry">
-                    <span className="bp-entry-lbl">Entry</span>
+                    <span className="bp-entry-lbl" title={current.templeEntry?.description}>{current.templeEntry?.label || "Entry"}</span>
                     {current.entryLines.map((l) => (
                       <span key={l.item} className={`bp-entry-item ${!l.found ? "unknown" : ""}`}
                         title={l.label && l.label !== l.item ? `Priced as: ${l.item}` : undefined}>
@@ -641,7 +650,7 @@ export default function BossProfit({ league, threads = false, staticBase, curren
                         {!l.found && <em className="bp-flag warn" title="Neither poe.watch nor poe.ninja prices this — the entry cost is understated">no price</em>}
                       </span>
                     ))}
-                    <span className="bp-entry-total">= {money(current.entryCost)}</span>
+                    <span className="bp-entry-total">= {current.templeEntry && current.entryUnknown ? "Unpriced" : money(current.entryCost)}{current.templeEntry ? " per entry" : ""}</span>
                   </div>
                 )}
 

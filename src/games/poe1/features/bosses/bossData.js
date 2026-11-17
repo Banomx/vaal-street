@@ -935,3 +935,11 @@ export const BOSSES = [
 ];
 
 export const BOSS_BY_ID = Object.fromEntries(BOSSES.map((b) => [b.id, b]));
+
+
+export const TEMPLE_ENTRY = {
+  label: "Build Incursion Temple",
+  item: "Royal Visage",
+  minRate: 1, maxRate: 2, defaultRate: 1.5,
+  description: "Atziri is in the Apex of Atzoatl. Connect the Apex to a room beneath it during Incursions, or use a Flashpowder Keg from an Explosives Room. For Uber Atziri, use a Royal Visage to enter an Alluring Temporal Incursion and let Xipocado, Architect of the Queen occupy a room, adding a Cradle of Sacrifice. This makes the Temple level 84 and upgrades Atziri. The provisional 1–2 temple entries per hour includes construction and the encounter; it is not kill time alone. Entry costs below cover Royal Visage only, not other Temple-building expenses. Drop rates remain unverified for 3.30.",
+};

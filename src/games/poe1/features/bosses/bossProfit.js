@@ -17,7 +17,7 @@
 
    Every rate, roll count and quantity is overridable per profile. */
 
-import { BOSSES, SYNTHETIC } from "./bossData.js";
+import { BOSSES, SYNTHETIC, TEMPLE_ENTRY } from "./bossData.js";
 
 export const PROFILE_KEY = "sl.boss.profiles.v2";
 export const ACTIVE_KEY = "sl.boss.activeProfile.v2";
@@ -32,7 +32,7 @@ export const dropKey = (d) => d.key || d.item;
    Orb is a Divine Orb wherever it lands), so "reset this boss" needs this list
    to know which of them belong to the boss you are resetting. */
 export function bossItems(boss) {
-  const out = new Set();
+  const out = new Set(boss?.id === "uber-atziri" ? [TEMPLE_ENTRY.item] : []);
   for (const e of (boss?.entry || [])) if (e.item) out.add(e.item);
   for (const g of (boss?.groups || [])) {
     for (const d of (g.drops || [])) if (d.item) {
@@ -310,7 +310,8 @@ export function makeResolver(priceMap, { priceOverrides = {}, divineRate = 0 } =
      drops:  { [dropKey]: { share | chance | weight } },
      entry:  { [item]: qty },
    } */
-export function computeBoss(boss, resolve, settings = {}) {
+export function computeBoss(boss, resolve, settings = {}, { threads = false } = {}) {
+  const templeEntry = threads && boss.id === "uber-atziri" ? TEMPLE_ENTRY : null;
   const ttk = num(settings.ttk, boss.ttk);
   const overhead = num(settings.overhead, boss.overhead ?? 0);
   const quantity = num(settings.quantity, boss.quantity ?? 0);
@@ -319,7 +320,7 @@ export function computeBoss(boss, resolve, settings = {}) {
   const groupOv = settings.groups || {};
   const qMul = 1 + quantity / 100;
 
-  const entryLines = (boss.entry || []).map((e) => {
+  const entryLines = (templeEntry ? [{ item: templeEntry.item }] : boss.entry || []).map((e) => {
     const qty = num(entryOv[e.item], e.qty ?? 1);
     const p = resolve(e.item, e.aliases, e.fallback, null, false, { asEntry: true });
     return { ...e, qty, unit: p.chaos, total: p.chaos * qty, found: p.found, overridden: p.overridden,
@@ -398,11 +399,14 @@ export function computeBoss(boss, resolve, settings = {}) {
   const gross = groups.reduce((s, g) => s + g.subtotal, 0);
   const missingPrices = hiddenLines.length;
   const net = gross - entryCost;
-  const runSeconds = Math.max(1, ttk + overhead);
-  const runsPerHour = 3600 / runSeconds;
+  const rate = Number(settings.templeEntriesPerHour);
+  const templeRate = Number.isFinite(rate) && rate >= TEMPLE_ENTRY.minRate && rate <= TEMPLE_ENTRY.maxRate ? rate : TEMPLE_ENTRY.defaultRate;
+  const runsPerHour = templeEntry ? templeRate : 3600 / Math.max(1, ttk + overhead);
+  const runSeconds = 3600 / runsPerHour;
+  const hourlyRange = templeEntry ? [net * TEMPLE_ENTRY.minRate, net * TEMPLE_ENTRY.maxRate].sort((a, b) => a - b) : null;
 
   return {
-    boss, ttk, overhead, quantity, runSeconds, runsPerHour,
+    boss, ttk, overhead, quantity, runSeconds, runsPerHour, templeEntry, hourlyRange,
     entryLines, entryCost, entryUnknown,
     groups, dropLines, hiddenLines, hiddenShare, gross, net,
     profitPerHour: net * runsPerHour,
@@ -475,8 +479,8 @@ export function profitChance(computed, runs = 10, trials = 4000, seed = 0x5ca4ab
   return wins / trials;
 }
 
-export function computeAll(resolve, profile) {
-  return BOSSES.map((b) => computeBoss(b, resolve, (profile && profile.bosses && profile.bosses[b.id]) || {}));
+export function computeAll(resolve, profile, context = {}) {
+  return BOSSES.map((b) => computeBoss(b, resolve, (profile && profile.bosses && profile.bosses[b.id]) || {}, context));
 }
 
 function num(v, fallback) {
@@ -612,6 +616,8 @@ export function sanitizeProfile(p, fallbackName = "Imported") {
         for (const k of ["ttk", "overhead", "quantity"]) {
           if (isFinite(Number(s[k])) && s[k] !== null && s[k] !== "") clean[k] = Number(s[k]);
         }
+        const templeRate = Number(s.templeEntriesPerHour);
+        if (templeRate >= TEMPLE_ENTRY.minRate && templeRate <= TEMPLE_ENTRY.maxRate) clean.templeEntriesPerHour = templeRate;
         if (s.groups && typeof s.groups === "object") {
           clean.groups = {};
           for (const [gid, g] of Object.entries(s.groups)) {

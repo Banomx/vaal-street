@@ -876,7 +876,7 @@ function configuredBossPriceNames() {
       import("../../src/games/poe1/features/bosses/bossData.js"),
       import("../../src/games/poe1/features/delve/delveData.js"),
     ]).then(([data, delve]) => {
-      const names = new Set();
+      const names = new Set([data.TEMPLE_ENTRY.item]);
       for (const boss of [...data.BOSSES, ...delve.DELVE_BOSSES]) {
         for (const line of boss.entry || []) if (line.item) names.add(line.item);
         for (const group of boss.groups || []) {

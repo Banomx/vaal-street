@@ -557,6 +557,7 @@ for (const b of BOSSES) {
 for (const b of BOSSES) {
   const items = bossItems(b);
   const expect = new Set([
+    ...(b.id === "uber-atziri" ? ["Royal Visage"] : []),
     ...(b.entry || []).map((e) => e.item),
     ...b.groups.flatMap((g) => g.drops.map((d) => d.item)),
   ].filter(Boolean));
@@ -773,6 +774,23 @@ eqv(variantHint(null), null, "null line must not throw");
   const unresolved = [...gems].filter((g) => !r(g).found);
   ok(unresolved.length === 0, `support gems that would not resolve: ${unresolved.join(", ")}`);
   ok(gems.size > 0, "there should be support gems in the dataset to check");
+}
+
+{
+  const atziri = BOSSES.find((boss) => boss.id === "uber-atziri");
+  const resolve = makeResolver({ "Royal Visage": { c: 50 } });
+  const modern = computeBoss(atziri, resolve, { ttk: 1, overhead: 0 }, { threads: true });
+  eqv(modern.templeEntry.label, "Build Incursion Temple", "temple entry label");
+  eqv(modern.entryLines.length, 1, "new-era entry does not use Mortal Fragments");
+  eqv(modern.entryLines[0].item, "Royal Visage", "Uber temple prices Royal Visage");
+  eqv(modern.runsPerHour, 1.5, "default temple rate ignores saved combat-only timing");
+  eqv(modern.entryCost, 50, "Visage contributes its real entry cost");
+  ok(near(modern.profitPerHour, modern.net * 1.5), "hourly profit uses temple throughput");
+  ok(near(modern.hourlyRange[0], Math.min(modern.net, modern.net * 2)), "range orders correctly for losses");
+  eqv(computeBoss(atziri, resolve, { templeEntriesPerHour: 2 }, { threads: true }).runsPerHour, 2, "editable throughput");
+  eqv(computeBoss(atziri, resolve, { templeEntriesPerHour: 100 }, { threads: true }).runsPerHour, 1.5, "invalid imported rate is rejected");
+  eqv(computeBoss(atziri, resolve).entryLines.length, 4, "archived entry retains Mortal Fragments");
+  eqv(sanitizeProfile({ name: "Temple", bosses: { "uber-atziri": { templeEntriesPerHour: 1.7 } } }).bosses["uber-atziri"].templeEntriesPerHour, 1.7, "temple setting survives storage");
 }
 
 console.log(fails ? `\n${fails} FAILURES` : "\nAll checks passed.");

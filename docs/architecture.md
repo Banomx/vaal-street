@@ -1411,3 +1411,12 @@ the RePoE response hash truthful. The fallback also enriches listing rows when
 the completed-trade digest is unavailable, retaining weaker name identity for
 those rows. Generic category snapshots fill missing names from poe.watch even
 when poe.ninja returned a partial result, and credit each selected source.
+
+For Threads-era Uber Atziri, entry is labelled Build Incursion Temple and requires
+one priced Royal Visage. The provisional full-cycle throughput is 1–2 entries
+per hour, with 1.5 used for the headline unless the player sets a rate in that
+range. This overrides combat-only timing, including saved fast TTK presets.
+The calculator shows the hourly range and explains normal Apex access versus
+Uber Cradle of Sacrifice requirements on hover and in an expandable disclosure.
+Additional Temple-building costs and changed 3.30 drops remain unmodelled.
+Archived leagues retain their original Mortal Fragment entry.
