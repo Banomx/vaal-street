@@ -245,7 +245,10 @@ it would be a guess. `summarize()` folds a league's documents, its freshness and
 `quality.json` into one verdict, which `SnapshotNotice.jsx` renders. Non-fatal
 warnings are shown by their actual message under “Data quality note” rather
 than as an unexplained count. The selected league filters aggregate stale-league
-checks and per-league file diagnostics. Classification name-fallback warnings
+checks and per-league file/family diagnostics, including labels without a
+`.json` suffix. Errors take priority over notices in the three-note summary.
+Archived leagues show historical age rather than implying an hourly-job outage.
+Classification name-fallback warnings
 remain in the publication report instead of implying stale prices in the UI.
 The out-of-date headline is reserved for snapshot age or a stale league;
 other warnings describe unavailable or incomplete data. Bare maps
@@ -803,6 +806,16 @@ seconds or HTTP dates take precedence. A requested wait over 30 seconds ends the
 request without retrying early. Other HTTP errors and malformed JSON are not
 retried. Source provenance and RePoE response headers remain available after a
 retry. Publication gates and staging still decide whether a run can be deployed.
+Optional legacy probes retain their HTTP failures in source provenance. HTTP
+404/410 means the optional endpoint is unsupported, not a price-feed outage;
+timeouts, 429 and 5xx still warn. PoE 1 also recognises pre-marker legacy
+overview probes in retained manifests so reuse mode classifies them consistently.
+
+Archived PoE 1 family snapshots use the final stored self-history point for
+prices, observation date and divine conversion. Change windows are recomputed
+at that point; later feed liquidity and price fields are discarded. Fetch,
+reuse and artifact recovery apply the same rule without appending or changing
+raw observations. Families without a usable stored point are left as-is.
 
 `historyOrigin()` picks one day 0 per league — league start whenever it is
 known and plausible, otherwise the earliest point we hold — and the price

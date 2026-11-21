@@ -10,6 +10,7 @@ Pause and Next controls keep inspection predictable. Reduced-motion settings
 start with rotation paused. **Popular farms** shows all ten Thread prices, ordered by movement, with rising
 and falling filters over a selectable window. Enable
 **Show legacy Scarabs** to compare older leagues.
+Archived family prices and change windows refer to their final stored observation.
 For Umbra and later dated challenge leagues, the overview explains the Threads
 transition. Scarab tools remain available for older leagues. Boss EV is available
 with a warning that 3.30 encounter and drop assumptions are unverified.

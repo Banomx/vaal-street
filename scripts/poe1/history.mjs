@@ -375,7 +375,27 @@ export function rebuildOrigin(snapshot, { self, backfill }) {
   return historyOrigin({ backfill, self })?.t0Ms ?? null;
 }
 
-export async function rebuildDerivedHistory(dir, keys) {
+/* Archived families stop accumulating. Their quote and conversion must refer
+   to the final stored observation too, even if an upstream overview changes. */
+export function archivedFamilySnapshot(snapshot, self) {
+  const last = self?.points?.at(-1);
+  if (!Number.isFinite(Date.parse(last?.t))) return snapshot;
+  const identities = new Map((snapshot.items || []).map((item) => [item.name, item]));
+  const divineRate = rateSane(last.rate) ? last.rate : undefined;
+  const identityKeys = ["id", "name", "gggId", "itemClass", "tags", "metadataPath", "identity", "icon"];
+  const items = Object.entries(last.values || {}).filter(([, value]) => Number.isFinite(value) && value > 0)
+    .map(([name, chaosValue]) => ({
+      ...Object.fromEntries(identityKeys.filter((key) => identities.get(name)?.[key] !== undefined)
+        .map((key) => [key, identities.get(name)[key]])),
+      name, chaosValue, divineValue: divineRate ? chaosValue / divineRate : undefined,
+    }));
+  if (!items.length) return snapshot;
+  applySelfChanges(items, self);
+  return { ...snapshot, generatedAt: last.t, gggHour: null, divineRate,
+    priceSource: "Stored history", archived: true, items };
+}
+
+export async function rebuildDerivedHistory(dir, keys, { archived = false } = {}) {
   const scarabSelf = await readJson(path.join(dir, "scarabs-selfhistory.json")) || { points: [] };
   const scarabBackfill = (await readJson(path.join(dir, "scarabs-backfill.json")))?.series || {};
   const t0Ms = rebuildOrigin(await readJson(path.join(dir, "scarabs.json")), { self: scarabSelf, backfill: scarabBackfill });
@@ -394,7 +414,7 @@ export async function rebuildDerivedHistory(dir, keys) {
     const snapshot = await readJson(path.join(dir, `${key}.json`));
     if (!snapshot || key === "gems") continue; // gems plot profit, not a rate line
     await writeFile(path.join(dir, `${key}.json`), JSON.stringify({
-      ...snapshot,
+      ...(archived ? archivedFamilySnapshot(snapshot, self) : snapshot),
       historyAxis: snapshot.historyAxis || "days since first snapshot",
       historyOrigin: new Date(t0Ms).toISOString(),
       historySource: historySourceOf(history, backfill, self),

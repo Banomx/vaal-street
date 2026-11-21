@@ -128,6 +128,12 @@ assert.deepEqual(qualityNotes(scoped.toJSON(), { league: { name: "Allflame", slu
 assert.equal(qualityNotes(scoped.toJSON(), { league: { name: "Hardcore" } }).length, 2);
 scoped.warn("source-request-failed", "Allflame/sources.json records 1 failed request(s)");
 assert.equal(qualityNotes(scoped.toJSON(), { league: { name: "Allflame" } })[0].level, "notice");
+scoped.warn("snapshot-history-drift", "Allflame/scarabs: 96/115 current prices disagree with the newest stored point");
+scoped.warn("snapshot-history-drift", "Allflame/astrolabes: 10/10 current prices disagree with the newest stored point");
+assert.deepEqual(qualityNotes(scoped.toJSON(), { league: { name: "Covens", slug: "Covens" } }), [],
+  "family diagnostics without .json must stay scoped to their owning league");
+assert.ok(qualityNotes(scoped.toJSON(), { league: { name: "Allflame" } }).some((note) => /96\/115/.test(note.text)),
+  "the affected league still sees its actual mismatch");
 scoped.fail("classification-name-fallback", "Classification is unsafe");
 assert.ok(qualityNotes(scoped.toJSON(), { league: { name: "Allflame" } }).some((note) => note.level === "error"));
 
@@ -161,6 +167,13 @@ const old = summarize({
 });
 assert.equal(old.state, READY);
 assert.ok(old.notes.some((note) => /last updated/.test(note.text)), "a stale snapshot always says so");
+const archived = summarize({
+  documents: { Prices: good }, required: ["Prices"],
+  generatedAt: "2026-08-01T00:00:00Z", now, league: { group: "previous" },
+});
+assert.ok(archived.notes.some((note) => /historical/.test(note.text)));
+assert.ok(!archived.notes.some((note) => /job may be failing/.test(note.text)),
+  "an intentionally archived timestamp is not evidence of a failed hourly job");
 
 /* An aborted request is a league the reader already left, not a failure to
    report at them. */

@@ -23,7 +23,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildRateHistory, rebuildDerivedHistory } from "../../poe1/history.mjs";
+import { archivedFamilySnapshot, buildRateHistory, rebuildDerivedHistory } from "../../poe1/history.mjs";
 
 let fails = 0;
 const ok = (condition, message) => { if (!condition) { fails++; console.log("FAIL:", message); } };
@@ -31,6 +31,31 @@ const ok = (condition, message) => { if (!condition) { fails++; console.log("FAI
 const NOW = Date.now();
 const ago = (hours) => new Date(NOW - hours * 3600e3).toISOString();
 const SCARAB = "Divination Scarab of Pilfering";
+
+{
+  const self = { points: [
+    { t: ago(240 + 24), values: { [SCARAB]: 80 }, rate: 160 },
+    { t: ago(240), values: { [SCARAB]: 100, Retired: 5 }, rate: 200 },
+  ] };
+  const snapshot = { generatedAt: ago(0), divineRate: 999, priceSource: "poe.ninja", items: [
+    { id: "pilfering", name: SCARAB, chaosValue: 999, change1: 500, n: 10, staleHours: 1 },
+    { name: "Feed-only new item", chaosValue: 10 },
+  ] };
+  const frozen = archivedFamilySnapshot(snapshot, self);
+  ok(frozen.generatedAt === ago(240), "archive date is the observation date, not the fetch date");
+  ok(frozen.items[0].chaosValue === 100 && frozen.items[0].divineValue === 0.5, "archived quote and rate refer to the same final point");
+  ok(frozen.items[0].change24 === 25 && frozen.items[0].change1 === undefined, "only final comparable windows survive");
+  ok(frozen.items[0].n === undefined && frozen.items[0].staleHours === undefined, "fresh-feed liquidity and age do not describe archived quotes");
+  ok(frozen.items.some((item) => item.name === "Retired"), "a recorded item survives a later catalogue removal");
+  ok(!frozen.items.some((item) => item.name === "Feed-only new item"), "later feed rows do not become invented archived observations");
+  ok(snapshot.items[0].chaosValue === 999 && self.points.length === 2, "source snapshots and raw history are untouched");
+  const dir = await mkdtemp(path.join(tmpdir(), "vs-archive-"));
+  await writeFile(path.join(dir, "scarabs.json"), JSON.stringify({ ...snapshot, historyOrigin: ago(300) }));
+  await writeFile(path.join(dir, "scarabs-selfhistory.json"), JSON.stringify(self));
+  await rebuildDerivedHistory(dir, ["scarabs"], { archived: true });
+  const recovered = JSON.parse(await readFile(path.join(dir, "scarabs.json"), "utf8"));
+  ok(recovered.items[0].chaosValue === 100 && recovered.generatedAt === ago(240), "recovery repairs existing archive drift too");
+}
 
 /* ---- 1) the derived rebuild, on the shape the checked-in tree actually had ---- */
 {

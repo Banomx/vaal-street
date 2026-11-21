@@ -25,6 +25,17 @@ const NOW = Date.now();
 const ago = (hours) => new Date(NOW - hours * 3600e3).toISOString();
 const write = (file, value) => writeJsonFile(file, value);
 
+// Unsupported optional probes stay in provenance. Actual outages still warn.
+for (const [status, optional, warns] of [[404, true, false], [410, true, false], [500, true, true], [404, false, true]]) {
+  const report = new QualityReport({ game: "poe1" });
+  checkSourceRecords(report, "Live/sources.json", [sourceRecord({
+    id: "probe", endpointFamily: "legacy", url: "https://example.test/legacy",
+    requestedAt: ago(0), ok: false, status, optional,
+  })]);
+  assert.equal(report.checks.some((check) => check.code === "source-request-failed"), warns,
+    `optional=${optional}, HTTP ${status} must be classified correctly`);
+}
+
 /* ---- rounding: a price must never become zero ---- */
 assert.equal(roundPrice(0), null, "zero is not a price");
 assert.equal(roundPrice(-1), null, "a negative number is not a price");
@@ -180,6 +191,25 @@ async function poe1Tree(mutate = () => {}) {
 const codes = (result) => result.checks.filter((check) => check.level !== "ok").map((check) => check.code);
 
 assert.equal((await validatePoe1(await poe1Tree())).publishable, true, "a healthy tree publishes");
+
+for (const [status, warns] of [[404, false], [500, true]]) {
+  const dir = await poe1Tree((t) => {
+    t.index.schemaVersion = 2;
+    t.index.leagues[0].files = { prices: "prices.json", sources: "sources.json" };
+    t.sources = {
+      schemaVersion: 2, generatedAt: ago(0), sources: [
+        sourceRecord({ id: "ninja.poe1.exchange", endpointFamily: "exchange",
+          url: "https://poe.ninja/poe1/api/economy/exchange/current/overview", requestedAt: ago(0) }),
+        sourceRecord({ id: "ninja.poe1.discovery", endpointFamily: "discovery",
+          url: "https://poe.ninja/api/data/currencyoverview?league=Allflame&type=Currency",
+          requestedAt: ago(0), ok: false, status }),
+      ],
+      metadataCoverage: [{ family: "scarabs", total: 1, byPath: 1, byName: 0, ambiguous: 0, unmatched: 0 }],
+    };
+  });
+  assert.equal(codes(await validatePoe1(dir)).includes("source-request-failed"), warns,
+    `pre-marker PoE 1 legacy probe HTTP ${status} is classified during reuse`);
+}
 
 assert.ok(codes(await validatePoe1(await poe1Tree((t) => { t.prices.prices["Rogues Marker"] = { c: 0 }; })))
   .includes("price-not-positive"), "a zero price fails publication");

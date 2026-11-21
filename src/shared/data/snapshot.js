@@ -231,14 +231,15 @@ export function qualityNotes(quality, { game, league } = {}) {
         if (!check.detail.some((name) => selected.includes(name))) continue;
       }
       // Existing reports label per-league files as League/sources.json, etc.
-      const owner = check?.message?.match(/^(.+?)\/[^/\s]+\.json\b/)?.[1];
+      const owner = check?.message?.match(/^(.+?)\/[^/\s:]+(?:[:/\s]|$)/)?.[1];
       if (owner && !selected.includes(owner)) continue;
     }
     if (check?.level === "failure") notes.push({ level: "error", text: `${label}${check.code}: ${check.message}` });
     else if (check?.level === "degraded") notes.push({ level: "warning", text: `${label}${check.code}: ${check.message}` });
     else if (check?.level === "warning") notes.push({ level: "notice", text: `${label}${check.message}` });
   }
-  if (notes.length > 3) notes.length = 3; // the banner is a summary, not the report
+  notes.sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level));
+  if (notes.length > 3) notes.length = 3; // errors must survive the summary limit
   return notes;
 }
 
@@ -270,8 +271,10 @@ export function summarize({ documents = {}, required = [], quality, generatedAt,
   const age = freshness(generatedAt, { now, staleAfterHours, deadAfterHours });
   if (age.level === "stale" || age.level === "dead") {
     notes.push({
-      level: age.level === "dead" ? "warning" : "notice",
-      text: `Prices were last updated ${describeAge(age.ageHours)}; the hourly snapshot job may be failing.`,
+      level: league?.group === "previous" ? "notice" : age.level === "dead" ? "warning" : "notice",
+      text: league?.group === "previous"
+        ? `Archived league prices were last observed ${describeAge(age.ageHours)}; they are historical.`
+        : `Prices were last updated ${describeAge(age.ageHours)}; the hourly snapshot job may be failing.`,
     });
   }
   if (age.level === "future") notes.push({ level: "notice", text: "This snapshot is stamped in the future — check the clock on whatever generated it." });
@@ -280,5 +283,6 @@ export function summarize({ documents = {}, required = [], quality, generatedAt,
 
   const state = worstState(states);
   const level = worstLevel([levelFor(state), ...notes.map((note) => note.level)]);
-  return { state, level, notes, freshness: age, usable: state !== INCOMPATIBLE && state !== CORRUPT };
+  return { state, level, notes, freshness: age, archived: league?.group === "previous",
+    usable: state !== INCOMPATIBLE && state !== CORRUPT };
 }

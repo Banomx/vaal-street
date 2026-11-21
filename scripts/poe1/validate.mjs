@@ -323,7 +323,14 @@ export async function validatePoe1(dir, { previousDir = null, report = new Quali
            keep those snapshots readable; schema 2 is the explicit boundary
            where complete provenance becomes a publication requirement. */
         if (index.schemaVersion >= 2) {
-          checkSourceRecords(report, `${label}/${manifest.sources}`, provenance.sources, {
+          // Older manifests did not mark these optional legacy probes. Keep
+          // their failed records, but an unsupported endpoint is not an outage.
+          const sources = Array.isArray(provenance.sources) ? provenance.sources.map((record) => ({
+            ...record,
+            optional: record?.optional ?? (record?.id === "ninja.poe1.discovery"
+              && /^https:\/\/poe\.ninja\/api\/data\/(currencyoverview|itemoverview)\?/.test(record?.url)),
+          })) : provenance.sources;
+          checkSourceRecords(report, `${label}/${manifest.sources}`, sources, {
             requiredPrefixes: [...claimedSources],
           });
           const previousProvenance = previousDir

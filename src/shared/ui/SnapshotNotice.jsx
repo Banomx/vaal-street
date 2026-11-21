@@ -20,7 +20,8 @@ export default function SnapshotNotice({ verdict, className = "", headline }) {
   if (!verdict || verdict.level === "ok" || !verdict.notes?.length) return null;
   const level = verdict.level;
   const stale = verdict.stale || ["stale", "dead"].includes(verdict.freshness?.level);
-  const title = headline || (level !== "error" && stale ? "This data may be out of date" : HEADLINE[level]);
+  const title = headline || (level !== "error" && verdict.archived ? "Archived league data"
+    : level !== "error" && stale ? "This data may be out of date" : HEADLINE[level]);
   return (
     <SourceStrip className={`app-source-strip--spaced app-snapshot-notice ${className}`.trim()} tone={TONE[level] || "quiet"}>
       <details open={level === "error"}>

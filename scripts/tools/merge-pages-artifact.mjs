@@ -209,8 +209,10 @@ async function main() {
 
   let rebuilt = 0;
   let rateless = [];
+  const poe1Index = await readJson(path.join(TARGET, "poe1", "index.json"));
   for (const slug of poe1.slugs) {
-    const result = await rebuildDerivedHistory(path.join(TARGET, "poe1", slug), DERIVED_KEYS);
+    const archived = poe1Index?.leagues?.some((league) => league.slug === slug && league.group === "previous");
+    const result = await rebuildDerivedHistory(path.join(TARGET, "poe1", slug), DERIVED_KEYS, { archived });
     rebuilt += result.rebuilt;
     if (result.rebuilt && !result.ratePoints) rateless.push(slug);
   }

@@ -169,6 +169,7 @@ export function sourceRecord({
   requestedAt = null,
   observedAt = null,
   ok = true,
+  optional = null,
   status = null,
   etag = null,
   lastModified = null,
@@ -190,6 +191,7 @@ export function sourceRecord({
     requestedAt,
     observedAt,
     ok: !!ok,
+    optional,
     status,
     etag,
     lastModified,
@@ -229,7 +231,7 @@ export function checkSourceRecords(report, label, records, { requiredPrefixes = 
       malformed.push(record?.id || "unnamed");
       continue;
     }
-    if (!record.ok) failed.push(record.id);
+    if (!record.ok && !(record.optional === true && [404, 410].includes(record.status))) failed.push(record.id);
     const raw = Number(record.rawRows);
     const rejected = Number(record.rejected);
     const accepted = Number(record.accepted);

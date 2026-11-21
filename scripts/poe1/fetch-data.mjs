@@ -31,7 +31,7 @@ import {
   GEM_HISTORY_CAP, GEM_HISTORY_HOURLY_HOURS, HOUR_MS, RATE_HISTORY_CAP, SELF_HISTORY_CAP,
   applySelfChanges, buildRateHistory, historyOrigin, historySourceOf, mergeBackfill,
   SIGNED_HISTORY_KEYS, mergeHistorySeedDocument, mergeSelfHistory, normalizePoint, ratePointsFrom,
-  rateSane, rebuildDerivedHistory, sanitizeCarried, stitchHistory, thinPoints,
+  rateSane, rebuildDerivedHistory, sanitizeCarried, stitchHistory, thinPoints, archivedFamilySnapshot,
 } from "./history.mjs";
 import { CATEGORIES, CATEGORY_BY_KEY, FETCHED_CATEGORIES } from "../../src/games/poe1/catalogue/categories.js";
 import {
@@ -110,7 +110,7 @@ function rawRowCount(payload) {
   return undefined;
 }
 
-async function getJson(url) {
+async function getJson(url, { optional = null } = {}) {
   const requestedAt = new Date().toISOString();
   const meta = activeSourceRecords ? ninjaSourceMeta(url) : null;
   let res;
@@ -119,16 +119,16 @@ async function getJson(url) {
       headers: HEADERS, timeoutMs: FETCH_TIMEOUT_MS, onResponse: (response) => { res = response; },
     });
     if (meta) activeSourceRecords.push(sourceRecord({
-      ...meta, url, requestedAt, observedAt: requestedAt, ok: true,
+      ...meta, url, requestedAt, observedAt: requestedAt, ok: true, optional,
       status: res.status, rawRows: rawRowCount(payload),
     }));
     return payload;
   } catch (error) {
-    if (meta) activeSourceRecords.push(sourceRecord({ ...meta, url, requestedAt, ok: false, status: res?.status, warnings: [error.message] }));
+    if (meta) activeSourceRecords.push(sourceRecord({ ...meta, url, requestedAt, ok: false, optional, status: res?.status, warnings: [error.message] }));
     throw error;
   }
 }
-async function tryJson(url) { try { return await getJson(url); } catch { return null; } }
+async function tryJson(url, options) { try { return await getJson(url, options); } catch { return null; } }
 
 const median = (arr) => {
   const s = arr.filter((v) => isFinite(v) && v > 0).sort((a, b) => a - b);
@@ -622,7 +622,7 @@ async function getPriceMap(lgParams, ctx, watch = null) {
   // 4. legacy, for anything the documented families never answered
   for (const t of LEGACY_TYPES) {
     if (counts[t] || counts[`exch:${t}`]) continue;
-    const j = await tryJson(legacyUrl(p, t));
+    const j = await tryJson(legacyUrl(p, t), { optional: true });
     await sleep(DELAY_MS);
     let n = 0;
     for (const l of (j?.lines || [])) {
@@ -1321,11 +1321,11 @@ function familyHistoryFiles({ backfill, self, t0Ms }) {
    orientations and keeps whichever produces plausible rates. When it is dead
    the curve still grows from our own snapshots, so failure is silent. */
 async function getDivineRateBackfill(lgParam) {
-  const overview = await tryJson(`${NINJA}/api/data/currencyoverview?league=${encodeURIComponent(lgParam)}&type=Currency`);
+  const overview = await tryJson(`${NINJA}/api/data/currencyoverview?league=${encodeURIComponent(lgParam)}&type=Currency`, { optional: true });
   const divine = (overview?.currencyDetails || []).find((d) => d?.name === "Divine Orb");
   if (!divine?.id) return [];
   await sleep(DELAY_MS);
-  const j = await tryJson(`${NINJA}/api/data/currencyhistory?league=${encodeURIComponent(lgParam)}&type=Currency&currencyId=${divine.id}`);
+  const j = await tryJson(`${NINJA}/api/data/currencyhistory?league=${encodeURIComponent(lgParam)}&type=Currency&currencyId=${divine.id}`, { optional: true });
   if (!j) return [];
   const candidates = Array.isArray(j)
     ? [j]
@@ -1508,7 +1508,7 @@ async function mirrorExisting() {
   if (restored) console.log(`Merged ${restored} checked-in history recovery file(s).`);
   let rebuilt = 0;
   for (const league of kept) {
-    rebuilt += (await rebuildDerivedHistory(path.join(OUT, league.slug), DERIVED_KEYS)).rebuilt;
+    rebuilt += (await rebuildDerivedHistory(path.join(OUT, league.slug), DERIVED_KEYS, { archived: league.group === "previous" })).rebuilt;
   }
   if (rebuilt) console.log(`Rebuilt ${rebuilt} derived history file(s) from the merged raw snapshots.`);
   const listed = [];
@@ -1713,7 +1713,8 @@ async function main() {
          cannot be re-anchored later, so storing it is what lets reuse mode
          rebuild these curves without calling poe.ninja for the league start. */
       const historyOriginISO = origin ? new Date(origin.t0Ms).toISOString() : null;
-      await writeFile(path.join(dir, "scarabs.json"), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate, priceSource: scarabSource, historySource, historyAxis, historyOrigin: historyOriginISO, rateHistory, rateHistorySource, items }));
+      const scarabSnapshot = { schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate, priceSource: scarabSource, historySource, historyAxis, historyOrigin: historyOriginISO, rateHistory, rateHistorySource, items };
+      await writeFile(path.join(dir, "scarabs.json"), JSON.stringify(lg.group === "previous" ? archivedFamilySnapshot(scarabSnapshot, self) : scarabSnapshot));
       await writeFile(path.join(dir, "scarabs-history.json"), JSON.stringify(history));
       await writeFile(path.join(dir, "scarabs-selfhistory.json"), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, ...self }));
       if (scarabHist.backfillFile) await writeFile(path.join(dir, "scarabs-backfill.json"), JSON.stringify(scarabHist.backfillFile));
@@ -1880,7 +1881,8 @@ async function main() {
             watch: catItems.filter((item) => watchNames.has(item.name) && !ggg?.prices?.[item.name]).length,
             ninja: catItems.filter((item) => ninjaNames.has(item.name) && !ggg?.prices?.[item.name]).length,
           });
-          await writeFile(path.join(dir, `${cat.key}.json`), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate: rate2, priceSource: catPriceSource, historySource: catHistorySource, historyAxis, historyOrigin: historyOriginISO, rateHistory, rateHistorySource, items: catItems }));
+          const catSnapshot = { schemaVersion: POE1_SCHEMA_VERSION, generatedAt, gggHour: ggg ? gggExchange.hourISO : null, divineRate: rate2, priceSource: catPriceSource, historySource: catHistorySource, historyAxis, historyOrigin: historyOriginISO, rateHistory, rateHistorySource, items: catItems };
+          await writeFile(path.join(dir, `${cat.key}.json`), JSON.stringify(lg.group === "previous" ? archivedFamilySnapshot(catSnapshot, catFam.self) : catSnapshot));
           await writeFile(path.join(dir, `${cat.key}-history.json`), JSON.stringify(catHist));
           await writeFile(path.join(dir, `${cat.key}-selfhistory.json`), JSON.stringify({ schemaVersion: POE1_SCHEMA_VERSION, ...catFam.self }));
           if (catFam.backfillFile) await writeFile(path.join(dir, `${cat.key}-backfill.json`), JSON.stringify(catFam.backfillFile));
