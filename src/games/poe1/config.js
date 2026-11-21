@@ -40,6 +40,7 @@ export const POE1_LEAGUE_FILES = {
   ...Object.fromEntries(CATEGORIES.flatMap((category) => [
     [category.key, `${category.key}.json`],
     [`${category.key}History`, `${category.key}-history.json`],
+    [`${category.key}Selfhistory`, `${category.key}-selfhistory.json`],
   ])),
 };
 

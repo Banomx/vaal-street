@@ -7,8 +7,9 @@ Both games open on an **Overview** with three featured categories and a compact
 queue. Each category shows up to three real results; one unpinned category
 rotates every seven seconds. Hover or keyboard focus pauses rotation; pins,
 Pause and Next controls keep inspection predictable. Reduced-motion settings
-start with rotation paused. **Popular farms** shows all ten Thread prices, ordered by movement, with rising
-and falling filters over a selectable window. Enable
+start with rotation paused. **Popular farms** shows all ten Thread prices, highest
+price first, with a 48-hour price timeline beside each name and rising/falling
+filters over a selectable change window. Enable
 **Show legacy Scarabs** to compare older leagues.
 Archived family prices and change windows refer to their final stored observation.
 For Umbra and later dated challenge leagues, the overview explains the Threads

@@ -4,7 +4,7 @@ import {
   identityKind, similarity, stableId,
 } from "../../../src/games/poe1/catalogue/catalogue.js";
 import { CATEGORIES, CATEGORY_BY_KEY, FETCHED_CATEGORIES, TAB_CATEGORIES } from "../../../src/games/poe1/catalogue/categories.js";
-import { threadMovers, threadPriceRows } from "../../../src/games/poe1/features/farms/threadMovers.js";
+import { threadMovers, threadPriceRows, threadTimeline } from "../../../src/games/poe1/features/farms/threadMovers.js";
 import { GROUPS, groupForName } from "../../../src/games/poe1/catalogue/scarabs.js";
 
 /* ---- category catalogue ---- */
@@ -310,13 +310,28 @@ assert.deepEqual(threads.rising.map(({ name, movement }) => [name, movement]), [
 assert.equal(classifyItem({name:"Frayed Thread"}, "threads").match, true);
 
 const allThreads = threadPriceRows([
- { name: "Expedition Thread", chaosValue: 2, change24: -10 },
+ { name: "Expedition Thread", chaosValue: 8, change24: -10 },
  { name: "Legion Thread", chaosValue: 4, change24: 5 },
  { name: "Ritual Thread", chaosValue: 3, change24: 0 },
 ], "24h");
 assert.equal(allThreads.length, 10, "every mechanic remains visible regardless of direction or quote availability");
-assert.equal(allThreads[0].name, "Legion Thread");
-assert.equal(allThreads.find(({ name }) => name === "Expedition Thread").price, 2);
+assert.equal(allThreads[0].name, "Expedition Thread", "highest price ranks above the biggest gain");
+assert.equal(allThreads.find(({ name }) => name === "Expedition Thread").price, 8);
 assert.equal(allThreads.find(({ name }) => name === "Ritual Thread").movement, 0);
 assert.equal(allThreads.find(({ name }) => name === "Abyss Thread").price, null);
 assert.equal(threadPriceRows([], "1h").filter(({movement}) => movement !== null).length, 0);
+assert.equal(allThreads.at(-1).price, null, "unquoted items follow all priced rows");
+
+const TIMELINE_END = Date.parse("2026-11-21T10:00:00Z");
+const atHour = (hours, value) => ({ t: new Date(TIMELINE_END + hours * 3600_000).toISOString(), values: { "Abyss Thread": value } });
+const timeline = threadTimeline({ points: [
+  atHour(-49, 100), atHour(-48, 1), atHour(-47, 2),
+  atHour(-46, null), atHour(-45, 3), atHour(-40, 4),
+  atHour(-1, 5), atHour(0, 6),
+] }, "Abyss Thread");
+assert.equal(timeline.start, TIMELINE_END - 48 * 3600_000);
+assert.deepEqual(timeline.points.map(({value}) => value), [1, 2, 3, 4, 5, 6], "only actual positive quotes inside the 48h window plot");
+assert.deepEqual(timeline.segments.map((segment) => segment.length), [2, 1, 1, 2], "missing values and missed hourly runs break lines");
+assert.equal(threadTimeline({ points: [atHour(0, null)] }, "Abyss Thread").points.length, 0);
+assert.equal(threadTimeline({ points: [atHour(0, 1)] }, "Abyss Thread").points.length, 1, "a single observation remains a single observation");
+assert.deepEqual(threadTimeline("missing", "Abyss Thread").points, []);

@@ -1263,8 +1263,14 @@ Explicit zero counts do not require quotes. Older snapshots are labelled.
 No drop rates are inferred from trades, and the baskets are not patch drop tables.
 
 Popular farms displays all ten mechanic Threads and their current prices by
-default, with rising entries first. Falling, flat and unmeasured prices stay
-visible; filters can narrow the list to rises or falls. The Threads family uses existing
+default, highest current Chaos price first, with unquoted items last. Falling,
+flat and unmeasured prices stay visible; rising/falling filters retain price order.
+Each row renders a compact SVG timeline from `threads-selfhistory.json` on the
+same 48-hour time axis ending at the latest stored observation. Timestamps
+determine horizontal positions; absent prices and gaps over 2h15m break lines.
+Fewer than two observations shows an unavailable-history label. Point tooltips
+give time and Chaos price; the percentage window does not change the 48-hour graph.
+The Threads family uses existing
 Fragment quotes for mechanic Threads, Currency quotes for Frayed Thread,
 and the shared hourly history pipeline. Only matching observed
 windows count toward a gain; upstream sparklines do not substitute for missing

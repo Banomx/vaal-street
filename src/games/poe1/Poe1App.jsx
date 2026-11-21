@@ -1368,6 +1368,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
       {tab === "farms" && <>
         {legacyFarms ? (threads && <SourceStrip>Choose an older league to see its archived Scarab prices.</SourceStrip>)
           : <PopularThreads key={league} currency={currency} window={chgWindow} setWindow={setChgWindow} stale={staticInfo?.stale}
+              historyUrl={leagueFileUrl(STATIC_BASE, staticLeagueRef.current[league], "threadsSelfhistory", POE1_LEAGUE_FILES)}
               priceUrl={leagueFileUrl(STATIC_BASE, staticLeagueRef.current[league], "threads", POE1_LEAGUE_FILES)} />}
       </>}
       {tab === "farms" && legacyFarms && !threads && (
