@@ -7,8 +7,27 @@
 .popular-threads-list b { color: #d4c5ba; text-align: right; font-variant-numeric: tabular-nums; }
 .thread-timeline-wrap { min-width: 0; display: flex; align-items: center; min-height: 32px; }
 .thread-timeline { display: block; width: 100%; height: 32px; border-radius: 3px; }
-.thread-timeline:focus-visible { outline: 2px solid #c89561; outline-offset: 3px; }
-.thread-timeline-guide { fill: none; stroke: #8e7052; stroke-opacity: 0.2; stroke-dasharray: 2 4; }
+.thread-chart { position: relative; min-width: 0; width: 100%; }
+.thread-chart-surface { display: block; width: 100%; padding: 0; background: transparent; border: 0; border-radius: 4px; color: inherit; touch-action: pan-y; }
+button.thread-chart-surface { cursor: crosshair; }
+.thread-chart-surface:hover { background: #c8956109; }
+.thread-chart-surface:focus-visible { outline: 2px solid #c89561; outline-offset: 3px; }
+.thread-timeline-guide { fill: none; stroke: #8e7052; stroke-opacity: 0.25; stroke-dasharray: 2 4; }
+.thread-chart-gap { fill: #c89561; fill-opacity: 0.09; stroke: #c89561; stroke-opacity: 0.2; stroke-dasharray: 3 4; }
+.thread-chart-crosshair { fill: none; stroke: #f1d2a1; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.thread-chart-selected { stroke: #17100d; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.thread-chart-axis { fill: #c5b5a5; font: 12px system-ui, sans-serif; }
+.thread-chart-tooltip { position: absolute; z-index: 10; bottom: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: min(270px, 70vw); padding: 8px 10px; border: 1px solid #8c633e; border-radius: 6px; background: #1a120df5; box-shadow: 0 4px 18px #0008; font-size: 13px; font-weight: 400; color: #f1e3d5; pointer-events: none; }
+.thread-chart-tooltip--gap { color: #dec59e; }
+.thread-chart-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.thread-history-panel { grid-column: 1 / -1; padding: 14px 0 2px; border-top: 1px solid #69463266; margin-top: 6px; min-width: 0; }
+.thread-history-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.thread-history-panel > header > button { min-height: 36px; padding: 6px 12px; border: 1px solid #694632; background: #241710; color: #eee2d7; border-radius: 5px; cursor: pointer; }
+.thread-chart--detail .thread-timeline { height: 210px; }
+.thread-chart--detail .thread-chart-tooltip { bottom: auto; top: 2px; }
+.thread-chart-meta { display: flex; gap: 8px 20px; flex-wrap: wrap; padding: 8px 8px 0; color: #c5b5a5; font-size: 13px; }
+.thread-chart-meta strong { color: #e7d5c3; }
+.thread-chart-gap-key { display: inline-block; width: 12px; height: 10px; margin-right: 5px; background: #c8956118; border: 1px dashed #c8956155; }
 .thread-timeline-empty { font-size: 12px; color: #b6a596; }
 .popular-threads .thread-timeline-caption { font-size: 12px; }
 .thread-current-price { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -27,4 +46,6 @@
   .thread-timeline-wrap { grid-column: 2; grid-row: 1; }
   .thread-current-price { grid-column: 1; grid-row: 2; text-align: left; }
   .thread-price-move { grid-column: 2; grid-row: 2; }
+  .thread-chart--compact .thread-chart-tooltip { left: auto !important; right: 0; transform: none; }
+  .thread-chart--detail .thread-chart-tooltip { left: 50% !important; max-width: calc(100% - 16px); }
 }

@@ -1266,10 +1266,15 @@ Popular farms displays all ten mechanic Threads and their current prices by
 default, highest current Chaos price first, with unquoted items last. Falling,
 flat and unmeasured prices stay visible; rising/falling filters retain price order.
 Each row renders a compact SVG timeline from `threads-selfhistory.json` on the
-same 48-hour time axis ending at the latest stored observation. Timestamps
-determine horizontal positions; absent prices and gaps over 2h15m break lines.
-Fewer than two observations shows an unavailable-history label. Point tooltips
-give time and Chaos price; the percentage window does not change the 48-hour graph.
+selected 1h–48h axis ending at the latest stored observation. The boundary can
+include the nearest preceding snapshot within 15 minutes to allow hourly drift.
+Timestamps determine horizontal positions; absent prices and gaps over 2h15m
+break lines. Missing intervals are shaded and inspect as unavailable prices.
+Hover/touch cursors snap to real observations, with time and Chaos-price tooltips;
+arrow keys and Home/End inspect those observations from the keyboard. A graph
+button opens one larger chart with readable axes, observation count and range.
+Both chart sizes follow the selected timeframe; a single observed price remains
+a dot with no inferred trend. Empty windows show an unavailable-history label.
 The Threads family uses existing
 Fragment quotes for mechanic Threads, Currency quotes for Frayed Thread,
 and the shared hourly history pipeline. Only matching observed

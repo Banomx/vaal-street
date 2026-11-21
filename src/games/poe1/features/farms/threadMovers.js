@@ -1,5 +1,5 @@
 import { THREAD_ITEMS } from "../../catalogue/categories.js";
-import { CHANGE_KEYS } from "../pricing/marketWindows.js";
+import { CHANGE_KEYS, CHANGE_WINDOW_OPTIONS } from "../pricing/marketWindows.js";
 
 export function threadMovers(items, window) {
   const key = CHANGE_KEYS[window];
@@ -27,20 +27,24 @@ export function threadPriceRows(items = [], window) {
 
 const HOUR = 3600_000;
 
-// Keep one shared 48h time axis and break lines across missing hourly data.
-export function threadTimeline(history, name) {
+// Every row shares the selected time axis. Hourly jobs get 15m boundary slack.
+export function threadTimeline(history, name, window = "48h") {
   const byTime = new Map();
   for (const point of history?.points || []) {
     const t = Date.parse(point?.t);
     if (Number.isFinite(t)) byTime.set(t, point.values?.[name]);
   }
-  if (!byTime.size) return { points: [], segments: [], start: null, end: null };
+  if (!byTime.size) return { points: [], segments: [], gaps: [], start: null, end: null };
   const end = Math.max(...byTime.keys());
-  const start = end - 48 * HOUR;
+  const hours = CHANGE_WINDOW_OPTIONS.includes(window) ? parseInt(window, 10) : 48;
+  const target = end - hours * HOUR;
+  const sorted = [...byTime].sort((a, b) => a[0] - b[0]);
+  const boundary = sorted.filter(([t]) => t <= target && t >= target - HOUR / 4).at(-1);
+  const start = boundary?.[0] ?? target;
   const points = [];
   const segments = [];
   let segment = null;
-  for (const [t, value] of [...byTime].sort((a, b) => a[0] - b[0])) {
+  for (const [t, value] of sorted) {
     if (t < start) continue;
     if (!Number.isFinite(value) || value <= 0) { segment = null; continue; }
     const point = { t, value };
@@ -51,5 +55,23 @@ export function threadTimeline(history, name) {
     segment.push(point);
     points.push(point);
   }
-  return { points, segments, start, end };
+  const gaps = [];
+  let previous = start;
+  for (const segment of segments) {
+    if (segment[0].t - previous > HOUR / 4) gaps.push({ start: previous, end: segment[0].t });
+    previous = segment.at(-1).t;
+  }
+  if (end - previous > HOUR / 4) gaps.push({ start: previous, end });
+  return { points, segments, gaps, start, end };
+}
+
+export function threadChartCursor(timeline, time) {
+  if (!timeline.points.length || !Number.isFinite(time)) return null;
+  const gap = timeline.gaps.find((gap) => time > gap.start && time < gap.end);
+  if (gap) return { gap };
+  let index = 0;
+  for (let i = 1; i < timeline.points.length; i++) {
+    if (Math.abs(timeline.points[i].t - time) < Math.abs(timeline.points[index].t - time)) index = i;
+  }
+  return { point: timeline.points[index], index };
 }

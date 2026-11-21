@@ -4,42 +4,15 @@ import { freshness, isUsable, loadDocument } from "../../../../shared/data/snaps
 import { POE1_SCHEMA_VERSIONS, requiredFields } from "../../config.js";
 import { fmtPrice } from "../pricing/money.js";
 import { CHANGE_WINDOW_OPTIONS } from "../pricing/marketWindows.js";
-import { threadPriceRows, threadTimeline } from "./threadMovers.js";
+import { threadPriceRows } from "./threadMovers.js";
+import ThreadPriceChart from "./ThreadPriceChart.jsx";
 import "./popularThreads.css";
-
-function ThreadTimeline({ history, name }) {
-  const { points, segments, start, end } = threadTimeline(history, name);
-  if (points.length < 2) return <span className="thread-timeline-empty">{
-    history === null ? "Loading history…" : history === "missing" ? "History unavailable" : "Not enough 48h history"
-  }</span>;
-  const low = Math.min(...points.map((point) => point.value));
-  const high = Math.max(...points.map((point) => point.value));
-  const x = (point) => 4 + (point.t - start) / (end - start) * 312;
-  const y = (point) => high === low ? 16 : 27 - (point.value - low) / (high - low) * 22;
-  const colour = points.at(-1).value > points[0].value ? "#a5d4a0"
-    : points.at(-1).value < points[0].value ? "#ffaaa2" : "#d4c5ba";
-  const quote = (value) => `${value.toLocaleString(undefined, { maximumFractionDigits: 4 })}c`;
-  const title = `${name}: 48h price history in Chaos, ending ${new Date(end).toLocaleString()}. ${points.length} observations; ${quote(points[0].value)} → ${quote(points.at(-1).value)}. Range ${quote(low)}–${quote(high)}. Gaps mean missing observations.`;
-  return <svg className="thread-timeline" viewBox="0 0 320 32" preserveAspectRatio="none"
-    role="img" tabIndex={0} aria-label={title}>
-    <title>{title}</title>
-    <path className="thread-timeline-guide" d="M4,16 H316" />
-    {segments.map((segment) => <path key={segment[0].t}
-      d={segment.map((point, index) => `${index ? "L" : "M"}${x(point).toFixed(2)},${y(point).toFixed(2)}`).join(" ")}
-      fill="none" stroke={colour} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />)}
-    {points.map((point) => <g key={point.t}>
-      <circle cx={x(point)} cy={y(point)} r="1.4" fill={colour} />
-      <circle cx={x(point)} cy={y(point)} r="5" fill="transparent">
-        <title>{new Date(point.t).toLocaleString()} · {quote(point.value)}</title>
-      </circle>
-    </g>)}
-  </svg>;
-}
 
 export default function PopularThreads({ priceUrl, historyUrl, currency, window, setWindow, stale }) {
   const [snapshot, setSnapshot] = useState(null);
   const [history, setHistory] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [openThread, setOpenThread] = useState(null);
   useEffect(() => {
     let cancelled = false;
     setSnapshot(null);
@@ -78,13 +51,23 @@ export default function PopularThreads({ priceUrl, historyUrl, currency, window,
     <div className="app-segmented" role="group" aria-label="Filter Thread prices">
       {[["all", "All Threads"], ["rising", "Rising"], ["falling", "Falling"]].map(([value, label]) => <button type="button" key={value} className={filter === value ? "on" : ""} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
     </div>
-    <p className="thread-timeline-caption">48h price history · Chaos · ending at the latest recorded snapshot. Hover a point for its time and price; gaps show missing observations.</p>
+    <p className="thread-timeline-caption">{window} price history · Chaos · hover or drag to inspect. Select a graph to expand it. Shaded areas have no snapshots.</p>
     <ol className="popular-threads-list" aria-label="Thread prices and movement">
       {visible.map((item) => <li key={item.id}>
         <strong>{item.name}</strong>
-        <div className="thread-timeline-wrap"><ThreadTimeline history={history} name={item.name} /></div>
+        <div className="thread-timeline-wrap"><ThreadPriceChart key={window} history={history} name={item.name} window={window}
+          compact expanded={openThread === item.name} onInspect={() => setOpenThread(openThread === item.name ? null : item.name)} /></div>
         <span className="thread-current-price">{item.price === null ? "Awaiting quote" : fmtPrice(item.price, rate > 0 ? currency : "chaos", rate)}</span>
         <b className={`thread-price-move ${item.movement < 0 ? "falling" : item.movement > 0 ? "rising" : "unmeasured"}`}>{item.movement === null ? "No comparison" : `${item.movement > 0 ? "+" : ""}${item.movement.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`}</b>
+        {openThread === item.name && <div className="thread-history-panel">
+          <header><strong>{item.name} · {window} price history</strong>
+            <button type="button" onClick={(event) => {
+              event.currentTarget.closest("li").querySelector(".thread-chart--compact .thread-chart-surface")?.focus();
+              setOpenThread(null);
+            }} aria-label={`Close ${item.name} price history`}>Close</button>
+          </header>
+          <ThreadPriceChart key={window} history={history} name={item.name} window={window} />
+        </div>}
       </li>)}
     </ol>
     {!visible.length && <p>No Threads {filter === "rising" ? "rose" : "fell"} over the selected {window} window.</p>}

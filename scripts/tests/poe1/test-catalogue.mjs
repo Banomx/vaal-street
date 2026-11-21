@@ -4,7 +4,7 @@ import {
   identityKind, similarity, stableId,
 } from "../../../src/games/poe1/catalogue/catalogue.js";
 import { CATEGORIES, CATEGORY_BY_KEY, FETCHED_CATEGORIES, TAB_CATEGORIES } from "../../../src/games/poe1/catalogue/categories.js";
-import { threadMovers, threadPriceRows, threadTimeline } from "../../../src/games/poe1/features/farms/threadMovers.js";
+import { threadMovers, threadPriceRows, threadTimeline, threadChartCursor } from "../../../src/games/poe1/features/farms/threadMovers.js";
 import { GROUPS, groupForName } from "../../../src/games/poe1/catalogue/scarabs.js";
 
 /* ---- category catalogue ---- */
@@ -335,3 +335,21 @@ assert.deepEqual(timeline.segments.map((segment) => segment.length), [2, 1, 1, 2
 assert.equal(threadTimeline({ points: [atHour(0, null)] }, "Abyss Thread").points.length, 0);
 assert.equal(threadTimeline({ points: [atHour(0, 1)] }, "Abyss Thread").points.length, 1, "a single observation remains a single observation");
 assert.deepEqual(threadTimeline("missing", "Abyss Thread").points, []);
+const selectable = { points: [atHour(-49, 100), atHour(-2.01, 2), atHour(-1.02, 3), atHour(0, 4)] };
+for (const window of ["1h", "2h", "4h", "8h", "12h", "24h", "48h"]) {
+  const result = threadTimeline(selectable, "Abyss Thread", window);
+  assert.equal(result.end, TIMELINE_END);
+  assert.ok(result.start <= result.end - parseInt(window) * 3600_000);
+  assert.ok(result.start >= result.end - (parseInt(window) + 0.25) * 3600_000,
+    "only 15 minutes of drift is allowed at the selected boundary");
+  assert.ok(result.points.every((point) => point.t >= result.start && point.t <= result.end));
+}
+assert.equal(threadTimeline(selectable, "Abyss Thread", "1h").points.length, 2, "hourly drift does not hide the reference observation");
+assert.equal(threadTimeline(selectable, "Abyss Thread", "2h").points.length, 3);
+assert.deepEqual(threadChartCursor(timeline, TIMELINE_END - 44 * 3600_000).gap,
+  { start: TIMELINE_END - 45 * 3600_000, end: TIMELINE_END - 40 * 3600_000 },
+  "hovering a missing interval describes its gap, not an invented price");
+assert.equal(threadChartCursor(timeline, TIMELINE_END - 0.2 * 3600_000).point.value, 6);
+assert.equal(threadChartCursor(threadTimeline(null, "Abyss Thread"), TIMELINE_END), null);
+const absent = threadTimeline({ points: [atHour(-1, 1), atHour(0, null)] }, "Abyss Thread", "2h");
+assert.equal(absent.gaps.at(-1).end, TIMELINE_END, "a missing latest quote remains a gap at the right edge");
