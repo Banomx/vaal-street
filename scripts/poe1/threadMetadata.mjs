@@ -1,13 +1,11 @@
+import { THREAD_ITEMS } from "../../src/games/poe1/catalogue/categories.js";
 import { contentHash, sourceRecord } from "../shared/dataset.mjs";
 
 // Verified 2026-11-14 against GGG's completed-trade Metadata IDs and
 // https://www.pathofexile.com/api/trade/data/static (Fragments).
 // RePoE currently omits these. Never derive arbitrary item names from paths.
-export const THREAD_METADATA = Object.fromEntries([
-  "Abyss", "Bestiary", "Betrayal", "Blight", "Breach",
-  "Expedition", "Incursion", "Legion", "Ritual", "Ultimatum",
-].map((mechanic) => [`Metadata/Items/Threads/Thread${mechanic}`, {
-  name: `${mechanic} Thread`, item_class: "MapFragment", tags: [],
+export const THREAD_METADATA = Object.fromEntries(THREAD_ITEMS.map(({ id, name }) => [id, {
+  name, item_class: "MapFragment", tags: [],
 }]));
 
 // Same verification: exchange IDs identify the mechanic, while the official

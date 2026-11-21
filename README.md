@@ -7,7 +7,8 @@ Both games open on an **Overview** with three featured categories and a compact
 queue. Each category shows up to three real results; one unpinned category
 rotates every seven seconds. Hover or keyboard focus pauses rotation; pins,
 Pause and Next controls keep inspection predictable. Reduced-motion settings
-start with rotation paused. **Popular farms** ranks rising Thread prices over a selectable window. Enable
+start with rotation paused. **Popular farms** shows all ten Thread prices, ordered by movement, with rising
+and falling filters over a selectable window. Enable
 **Show legacy Scarabs** to compare older leagues.
 For Umbra and later dated challenge leagues, the overview explains the Threads
 transition. Scarab tools remain available for older leagues. Boss EV is available

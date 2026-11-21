@@ -4,7 +4,7 @@ import {
   identityKind, similarity, stableId,
 } from "../../../src/games/poe1/catalogue/catalogue.js";
 import { CATEGORIES, CATEGORY_BY_KEY, FETCHED_CATEGORIES, TAB_CATEGORIES } from "../../../src/games/poe1/catalogue/categories.js";
-import { threadMovers } from "../../../src/games/poe1/features/farms/threadMovers.js";
+import { threadMovers, threadPriceRows } from "../../../src/games/poe1/features/farms/threadMovers.js";
 import { GROUPS, groupForName } from "../../../src/games/poe1/catalogue/scarabs.js";
 
 /* ---- category catalogue ---- */
@@ -308,3 +308,15 @@ assert.equal(threads.measured, 3);
 assert.deepEqual(threads.rising.map(({ name, movement }) => [name, movement]), [["Blight Thread", 50], ["Abyss Thread", 20]]);
 
 assert.equal(classifyItem({name:"Frayed Thread"}, "threads").match, true);
+
+const allThreads = threadPriceRows([
+ { name: "Expedition Thread", chaosValue: 2, change24: -10 },
+ { name: "Legion Thread", chaosValue: 4, change24: 5 },
+ { name: "Ritual Thread", chaosValue: 3, change24: 0 },
+], "24h");
+assert.equal(allThreads.length, 10, "every mechanic remains visible regardless of direction or quote availability");
+assert.equal(allThreads[0].name, "Legion Thread");
+assert.equal(allThreads.find(({ name }) => name === "Expedition Thread").price, 2);
+assert.equal(allThreads.find(({ name }) => name === "Ritual Thread").movement, 0);
+assert.equal(allThreads.find(({ name }) => name === "Abyss Thread").price, null);
+assert.equal(threadPriceRows([], "1h").filter(({movement}) => movement !== null).length, 0);

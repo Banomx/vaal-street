@@ -4,9 +4,16 @@
 .popular-threads p { color: #d4c5ba; font-size: 14px; }
 .popular-threads-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .popular-threads-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(64px, auto); gap: 12px; align-items: center; padding: 12px 14px; background: #17100d; border: 1px solid var(--app-art-border, #694632); border-radius: 7px; }
-.popular-threads-list b { color: #a5d4a0; text-align: right; font-variant-numeric: tabular-nums; }
+.popular-threads-list b { color: #d4c5ba; text-align: right; font-variant-numeric: tabular-nums; }
 .popular-farms-legacy { display: flex; align-items: center; gap: 8px; margin: 10px 0; min-height: 36px; font-size: 14px; width: fit-content; cursor: pointer; }
 @media (max-width: 600px) {
   .popular-threads > header > .app-segmented { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); width: 100%; }
   .popular-threads > header > .app-segmented > button { min-width: 0; padding-inline: 0; min-height: 44px; }
+}
+
+.popular-threads-list b.rising { color: #a5d4a0; }
+.popular-threads-list b.falling { color: #ffaaa2; }
+@media (max-width: 450px) {
+  .popular-threads-list > li { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .popular-threads-list > li > strong { grid-column: 1 / -1; }
 }

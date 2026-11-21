@@ -1,4 +1,7 @@
-export const THREAD_NAME = /^(?:Abyss|Blight|Legion|Breach|Incursion|Betrayal|Bestiary|Expedition|Ultimatum|Ritual|Frayed) Thread$/i;
+export const THREAD_MECHANICS = ["Expedition", "Abyss", "Breach", "Ritual", "Ultimatum", "Legion", "Blight", "Bestiary", "Betrayal", "Incursion"];
+export const THREAD_ITEMS = THREAD_MECHANICS.map((mechanic) => ({ name: `${mechanic} Thread`, id: `Metadata/Items/Threads/Thread${mechanic}` }));
+export const THREAD_NAME = new RegExp(`^(?:${THREAD_MECHANICS.join("|")}|Frayed) Thread$`, "i");
+
 
 /* Market categories — one definition, read by both sides.
 

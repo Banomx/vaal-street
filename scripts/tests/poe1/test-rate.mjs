@@ -29,7 +29,8 @@ const NOPE = () => new Response("gone", { status: 404 });
 
 const NOW = Date.now();
 const ago = (hours) => new Date(NOW - hours * 3600e3).toISOString();
-const LEAGUE_START = new Date(NOW - 8 * 86400e3).toISOString();
+// Allflame must remain pre-3.30 even when this test runs months later.
+const LEAGUE_START = "2026-07-24T20:00:00Z";
 
 /* chaos costs 0.1 exalted -> everything quoted in the primary is x10 to reach
    chaos, and a divine at 130 exalted is 1300c. */
@@ -155,9 +156,10 @@ ok(rh.every((p, i) => i === 0 || p.day >= rh[i - 1].day), "rateHistory must be s
 ok(rh.every((p) => p.day >= 0), "no rate point may sit before day 0");
 ok(near(rh[rh.length - 1].rate, 1300, 1), `last rate ${rh[rh.length - 1].rate} != 1300`);
 
-// league start is 8 days back and known, so day 0 is league start
-ok(rh.some((p) => near(p.day, 6, 0.05) && near(p.rate, 1000, 1)), "48h-ago snapshot should land on day 6 at 1000c");
-ok(!rh.some((p) => p.day > 7.4 && p.day < 7.6), "the rate-less point must not contribute a rate");
+// The fixed legacy league start anchors current observations on the same axis.
+const dayAgo = (days) => (NOW - days * 86400e3 - Date.parse(LEAGUE_START)) / 86400e3;
+ok(rh.some((p) => near(p.day, dayAgo(2), 0.05) && near(p.rate, 1000, 1)), "48h-ago snapshot should retain its league day and 1000c rate");
+ok(!rh.some((p) => near(p.day, dayAgo(0.5), 0.1)), "the rate-less point must not contribute a rate");
 
 // the extra category tabs get their own series on their own axis
 const astro = await read("astrolabes.json");

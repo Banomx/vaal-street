@@ -824,6 +824,9 @@ for the selected window. Negative movement uses a readable red accent.
 `scripts/tests/poe1/test-history.mjs` runs the whole layer against a stubbed deployment:
 backfill reuse, recovery merging, stitching, the shared axis, carry-forward and
 thinning.
+Legacy history/rate fixtures pin their league start to the historical Allflame
+launch so they keep exercising scarabs after 3.30. Observation timestamps remain
+relative to the test run; expected league days are calculated from that fixed start.
 
 ## Coverage boundary
 
@@ -1246,7 +1249,9 @@ inputs and missing or carried quotes for positive counts suppress ranking.
 Explicit zero counts do not require quotes. Older snapshots are labelled.
 No drop rates are inferred from trades, and the baskets are not patch drop tables.
 
-Popular farms defaults to rising Thread prices. The Threads family uses existing
+Popular farms displays all ten mechanic Threads and their current prices by
+default, with rising entries first. Falling, flat and unmeasured prices stay
+visible; filters can narrow the list to rises or falls. The Threads family uses existing
 Fragment quotes for mechanic Threads, Currency quotes for Frayed Thread,
 and the shared hourly history pipeline. Only matching observed
 windows count toward a gain; upstream sparklines do not substitute for missing
@@ -1420,3 +1425,4 @@ The calculator shows the hourly range and explains normal Apex access versus
 Uber Cradle of Sacrifice requirements on hover and in an expandable disclosure.
 Additional Temple-building costs and changed 3.30 drops remain unmodelled.
 Archived leagues retain their original Mortal Fragment entry.
+

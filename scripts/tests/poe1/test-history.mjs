@@ -34,7 +34,8 @@ const NOPE = () => new Response("gone", { status: 404 });
 
 const NOW = Date.now();
 const ago = (hours) => new Date(NOW - hours * 3600e3).toISOString();
-const LEAGUE_START = new Date(NOW - 10 * 86400e3).toISOString();
+// Allflame must remain pre-3.30 even when this test runs months later.
+const LEAGUE_START = "2026-07-24T20:00:00Z";
 
 const CHAOS_IN_PRIMARY = 0.1;
 const CORE = {
@@ -167,9 +168,10 @@ ok(storedBackfill.series[SCARAB].every((p) => Date.parse(p.t) > 0),
 const hist = await read("scarabs-history.json");
 const series = hist[SCARAB] || [];
 const at = (day) => series.find((p) => near(p.day, day, 0.05));
-ok(near(at(1)?.value, 90), `day 1 comes from the backfill: ${at(1)?.value}`);
-ok(near(at(2)?.value, 95), `day 2 comes from the backfill: ${at(2)?.value}`);
-ok(near(at(9)?.value, 160), "in the overlap our own snapshot wins, not the backfill's 5c");
+const dayAgo = (days) => (NOW - days * 86400e3 - Date.parse(LEAGUE_START)) / 86400e3;
+ok(near(at(dayAgo(9))?.value, 90), "the older backfill point retains its price");
+ok(near(at(dayAgo(8))?.value, 95), "the newer backfill point retains its price");
+ok(near(at(dayAgo(1))?.value, 160), "in the overlap our own snapshot wins, not the backfill's 5c");
 ok(series.every((p, i) => i === 0 || p.day >= series[i - 1].day), "history must be sorted by day");
 ok(series.every((p) => p.day >= 0), "no point may sit before day 0");
 ok(near(series[series.length - 1].value, 180), "the curve ends at today's price");
