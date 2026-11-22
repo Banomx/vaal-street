@@ -43,6 +43,24 @@ export const CATEGORIES = [
     tab: null, // shown inside Popular farms
   },
   {
+    key: "tattoos",
+    label: "Tattoos",
+    file: "tattoos.json",
+    ninjaType: "Tattoo",
+    re: /^(?:Tattoo of the |Journey Tattoo |Honoured Tattoo |Loyalty Tattoo |Ancestral Tattoo )/i,
+    watch: ["currency", "tattoo"],
+    tab: null, // attribute pools and prices in Kingsmarch
+  },
+  {
+    key: "runegrafts",
+    label: "Runegrafts",
+    file: "runegrafts.json",
+    ninjaType: "Runegraft",
+    re: /^Runegraft of /i,
+    watch: ["currency", "runegraft"],
+    tab: null,
+  },
+  {
     key: "astrolabes",
     label: "Astrolabes",
     file: "astrolabes.json",

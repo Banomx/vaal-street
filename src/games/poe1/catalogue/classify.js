@@ -36,6 +36,8 @@ const metadataPath = (item) => [item?.gggId, item?.id, item?.metadataPath]
 const astrolabePath = (item) => /^Metadata\/Items\/Currency\/Astrolabe[A-Za-z0-9_]*$/.test(metadataPath(item));
 
 const METADATA_RULES = {
+  tattoos: (item) => /^Metadata\/Items\/Currency\/AncestralTattoo/.test(metadataPath(item)),
+  runegrafts: (item) => /^Metadata\/Items\/Currency\/Runegraft/.test(metadataPath(item)),
   threads: (item) => /^Metadata\/Items\/Threads\/Thread(?:Abyss|Bestiary|Betrayal|Blight|Breach|Expedition|Incursion|Legion|Ritual|Ultimatum)$/.test(metadataPath(item)),
   scarabs: (item) => has(item, "scarab") || classIs(item, "Scarab"),
   astrolabes: (item) => astrolabePath(item) || has(item, "astrolabe") || classIs(item, "Astrolabe"),
@@ -54,6 +56,8 @@ export const CLASSIFICATION_EXCEPTIONS = [
 
 /* Anchored so a unique with the word in its name cannot claim the family. */
 const NAME_RULES = {
+  tattoos: /^(?:Tattoo of the |Journey Tattoo |Honoured Tattoo |Loyalty Tattoo |Ancestral Tattoo )/i,
+  runegrafts: /^Runegraft of /i,
   threads: THREAD_NAME,
   scarabs: /scarab/i,
   astrolabes: /astrolabe$/i,

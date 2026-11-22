@@ -1,0 +1,7 @@
+.st-time-chart { width: 100%; min-width: 0; color: #ddcbb7; }
+.st-time-chart .recharts-wrapper:focus-visible { outline: 2px solid #b68a56; outline-offset: 2px; }
+.st-time-tooltip { display: grid; gap: 4px; max-width: min(270px, 70vw); padding: 9px 11px; border: 1px solid #694632; border-radius: 5px; background: #17100d; color: #e7d5c3; font-size: 13px; font-weight: 400; white-space: normal; }
+.st-time-tooltip strong { font-size: 14px; }
+.st-time-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 6px 8px; color: #c5b5a5; font-size: 13px; }
+.st-time-empty { padding: 8px; color: #b6a596; font-size: 13px; }
+.st-time-chart--compact .st-time-empty { padding: 0; }

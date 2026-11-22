@@ -21,6 +21,10 @@ with a warning that 3.30 encounter and drop assumptions are unverified.
 Log your drop counts, time and costs to compare tracked net per run and per
 hour using the selected league's prices. Samples stay in your browser.
 
+**Kingsmarch** compares equal-weight tattoo and runegraft item prices across
+the six shipping ports, with port-average and individual-item history. These
+averages are not drop-weighted shipment profit; equipment rewards are excluded.
+
 The separate **Strat Watcher** stores up to ten custom setups, each with five
 scarabs plus one Astrolabe. Saved icons expose their full item names immediately
 on hover or keyboard focus; duplicate scarabs count as separate map-device

@@ -8,12 +8,14 @@ import { threadMovers, threadPriceRows, threadTimeline, threadChartCursor } from
 import { GROUPS, groupForName } from "../../../src/games/poe1/catalogue/scarabs.js";
 
 /* ---- category catalogue ---- */
+const CATEGORY_EXAMPLES = { threads: "Abyss Thread", tattoos: "Tattoo of the Ramako Archer", runegrafts: "Runegraft of the River" };
 assert.ok(CATEGORIES.length >= 5);
 for (const cat of CATEGORIES) {
   assert.ok(cat.key && cat.label && cat.file, `${cat.key} is fully described`);
   assert.ok(cat.re instanceof RegExp, `${cat.key} matches names by regex, not by a name list`);
   assert.ok(Array.isArray(cat.watch) && cat.watch.length, `${cat.key} narrows poe.watch categories`);
-  assert.ok(cat.re.test(cat.key === "threads" ? "Abyss Thread" : `Some ${cat.label.replace(/s$/, "")}`), `${cat.key} regex matches its own family`);
+  const example = CATEGORY_EXAMPLES[cat.key];
+  assert.ok(cat.re.test(example || `Some ${cat.label.replace(/s$/, "")}`), `${cat.key} regex matches its own family`);
 }
 assert.equal(new Set(CATEGORIES.map((c) => c.key)).size, CATEGORIES.length, "category keys are unique");
 assert.equal(CATEGORY_BY_KEY.catalysts.ninjaType, "Currency");
@@ -243,10 +245,10 @@ assert.ok(CLASSIFICATION_EXCEPTIONS.every((entry) => entry.name && entry.key && 
    silently emptying after a GGG tag change. */
 for (const category of CATEGORIES) {
   const probe = { name: `Test ${category.label.replace(/s$/, "")}`, tags: [] };
-  const byName = classifyItem({ ...probe, name: category.key === "threads" ? "Abyss Thread" : category.key === "scarabs" ? "Test Scarab"
+  const byName = classifyItem({ ...probe, name: CATEGORY_EXAMPLES[category.key] || (category.key === "scarabs" ? "Test Scarab"
     : category.key === "astrolabes" ? "Test Astrolabe"
       : category.key === "catalysts" ? "Test Catalyst"
-        : category.key === "fossils" ? "Test Fossil" : "Test Resonator" }, category.key);
+        : category.key === "fossils" ? "Test Fossil" : "Test Resonator") }, category.key);
   assert.equal(byName.match, true, `${category.key} must still resolve for a plainly named item`);
 }
 

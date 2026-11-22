@@ -9,6 +9,7 @@ import BossProfit from "./features/bosses/BossProfit.jsx";
 import Delve from "./features/delve/Delve.jsx";
 import PopularThreads from "./features/farms/PopularThreads.jsx";
 import MechanicValue from "./features/mechanics/MechanicValue.jsx";
+import Kingsmarch from "./features/kingsmarch/Kingsmarch.jsx";
 import Gems from "./features/gems/Gems.jsx";
 import GameSwitcher from "../../shared/ui/GameSwitcher.jsx";
 import { AppHeader, AppTabs, SourceStrip, LoadingPanel } from "../../shared/ui/AppShell.jsx";
@@ -264,7 +265,7 @@ function StrategySlotPicker({ index, value, items, kind = "scarab", open, query,
 
 /* Tabs that render their own control strip instead of the shared one, and
    so also opt out of the shared connection banners. */
-const OWN_BAR = { overview: true, bosses: true, delve: true };
+const OWN_BAR = { overview: true, bosses: true, delve: true, kingsmarch: true };
 
 /* Which families get their own tab, and how to fetch them live. Defined in
    catalogue/categories.js so the snapshot script and the app cannot disagree. */
@@ -404,7 +405,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
   const [showHorned, setShowHorned] = useState(true);
   const [chgWindow, setChgWindow] = useState("24h");      // 24h | 48h
   const [legacyFarms, setLegacyFarms] = useState(false);
-  const [tab, setTab] = useState("overview");             // overview | farms | watcher | prices | astrolabes | catalysts | bosses | gems | delve
+  const [tab, setTab] = useState("overview");             // overview | farms | watcher | prices | astrolabes | catalysts | bosses | gems | delve | kingsmarch
   const [bossTarget, setBossTarget] = useState(null);      // boss opened from an Overview signal
   const [openGroup, setOpenGroup] = useState(null);
   const [focusScarab, setFocusScarab] = useState(null);
@@ -943,7 +944,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
           <GameSwitcher activeGame={activeGame} onChange={onGameChange} />
           <label className="app-control st-ctl">
             <span>League</span>
-            <select value={league} disabled={mode !== "live"} onChange={(e) => { const v = e.target.value; setLeague(v); setStaticInfo(null); setTab((current) => current === "farms" ? current : "overview"); (dataSource === "static" ? loadStaticLeague(v) : loadLeague(v)).catch(() => {}); }}>
+            <select value={league} disabled={mode !== "live"} onChange={(e) => { const v = e.target.value; setLeague(v); setStaticInfo(null); setTab((current) => (current === "farms" || current === "kingsmarch") ? current : "overview"); (dataSource === "static" ? loadStaticLeague(v) : loadLeague(v)).catch(() => {}); }}>
               {["current", "previous"].map((g) => {
                 const opts = leagues.filter((l) => (l.group || "current") === g);
                 if (!opts.length) return null;
@@ -973,6 +974,7 @@ export default function Poe1App({ activeGame, onGameChange }) {
         {!threads && <button className={tab === "prices" ? "on" : ""} onClick={() => { setTab("prices"); setDragSel(null); }}>Scarabs</button>}
         <button className={tab === "astrolabes" ? "on" : ""} onClick={() => { setTab("astrolabes"); setDragSel(null); }}>Astrolabes</button>
         <button className={tab === "catalysts" ? "on" : ""} onClick={() => { setTab("catalysts"); setDragSel(null); }}>Catalysts</button>
+        <button className={tab === "kingsmarch" ? "on" : ""} onClick={() => { setTab("kingsmarch"); setDragSel(null); }}>Kingsmarch</button>
         <button className={tab === "bosses" ? "on" : ""}
           onClick={() => {
             setTab("bosses"); setBossTarget(null); setDragSel(null);
@@ -1282,6 +1284,11 @@ export default function Poe1App({ activeGame, onGameChange }) {
           rateHistory={activeRateHistory}
         />
       )}
+
+      {tab === "kingsmarch" && <Kingsmarch key={league} league={league} currency={currency}
+        window={chgWindow} setWindow={setChgWindow} stale={staticInfo?.stale}
+        files={Object.fromEntries(["prices", "tattoos", "runegrafts", "tattoosSelfhistory", "runegraftsSelfhistory"]
+          .map((key) => [key, leagueFileUrl(STATIC_BASE, staticLeagueRef.current[league], key, POE1_LEAGUE_FILES)]))} />}
 
       {tab === "mechanics" && (
         <MechanicValue key={league} league={league} currency={currency} stale={staticInfo?.stale}

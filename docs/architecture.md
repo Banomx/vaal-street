@@ -1078,9 +1078,11 @@ reaches `prices.json`.
 
 `src/games/poe1/features/pricing/PriceChart.jsx` is the PoE 1 price graph: six callers, one
 `rows = [{ day, value, chaos, rate, overlay? }]` contract. It also exports
-`Sparkline`, the list-sized version — plain SVG, because instantiating Recharts
-once per table row is not affordable, and it renders a dash rather than a flat
-line when there are fewer than two points.
+`Sparkline`, a lightweight SVG preview used by gem lists. `TimePriceChart`
+uses the existing Recharts engine for timestamp-based Thread and Kingsmarch
+graphs, with animation disabled, debounced resizing and no custom SVG
+measurement or React state updates for every pointer movement. Missing
+intervals insert null points so the line never bridges unrecorded prices.
 `src/games/poe1/features/pricing/PriceCell.jsx`
 is the editable price cell, shared by the Boss and Delve drop tables — click
 the figure to override it, `↺` to put the market price back, and the tooltip
@@ -1265,16 +1267,40 @@ No drop rates are inferred from trades, and the baskets are not patch drop table
 Popular farms displays all ten mechanic Threads and their current prices by
 default, highest current Chaos price first, with unquoted items last. Falling,
 flat and unmeasured prices stay visible; rising/falling filters retain price order.
-Each row renders a compact SVG timeline from `threads-selfhistory.json` on the
+Each row renders a compact Recharts timeline from `threads-selfhistory.json` on the
 selected 1h–48h axis ending at the latest stored observation. The boundary can
 include the nearest preceding snapshot within 15 minutes to allow hourly drift.
 Timestamps determine horizontal positions; absent prices and gaps over 2h15m
 break lines. Missing intervals are shaded and inspect as unavailable prices.
 Hover/touch cursors snap to real observations, with time and Chaos-price tooltips;
-arrow keys and Home/End inspect those observations from the keyboard. A graph
+arrow keys inspect those observations through the chart's accessibility layer. A graph
 button opens one larger chart with readable axes, observation count and range.
 Both chart sizes follow the selected timeframe; a single observed price remains
 a dot with no inferred trend. Empty windows show an unavailable-history label.
+
+Kingsmarch owns six reviewed shipping pools under
+`features/kingsmarch/ports.js`: Ngakanu/STR tattoos (21), Te Onui/DEX tattoos
+(15), Moti Aro/INT tattoos (17), Riben Fell/DEX runegrafts (11), Pondium/INT
+runegrafts (13) and Kalguur/STR runegrafts (13). The three shared runegrafts
+appear in each Kalguuran port; the union contains 53 tattoos and 31 runegrafts.
+The catalogue follows the PoE Wiki's eligible shipment items, reviewed
+2026-11-22, and excludes drop-disabled tattoos and equipment.
+
+Port means divide the sum of usable item prices by the priced item count.
+Missing, non-positive and carried quotes do not become zero. Partial means
+remain labelled and rank below complete pools; median prices provide context
+for rare-item outliers. No probabilities, shipment quantities or profit are
+inferred. Historical port means require every pool member at that timestamp,
+so changing coverage cannot masquerade as price movement.
+
+The tattoo/runegraft entries in `catalogue/categories.js` use the existing
+hourly family pipeline, raw self-history, provenance and recovery rules.
+Kingsmarch uses the fresher of its dedicated family and broad price snapshots.
+The initial Covens family snapshots retain the broad snapshot's original
+timestamp, selected quotes and source labels; their raw histories recover 45 actual snapshots
+from retained PoE 1 artifacts (2026-11-20 00:34 UTC to 2026-11-21 23:13 UTC).
+Only the new family files are seeded; existing history is not rewritten.
+The graph selection and gap rules live in `pricing/marketTimeline.js`.
 The Threads family uses existing
 Fragment quotes for mechanic Threads, Currency quotes for Frayed Thread,
 and the shared hourly history pipeline. Only matching observed

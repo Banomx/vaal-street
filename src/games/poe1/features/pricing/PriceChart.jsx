@@ -4,6 +4,7 @@ import {
   Tooltip, ReferenceDot, ReferenceArea,
 } from "recharts";
 import { fmtChaos, fmtDiv } from "./money.js";
+import "./price-charts.css";
 
 /* ================================================================
    SHARED PRICE CHART
@@ -216,3 +217,60 @@ export function PriceChart({
 }
 
 export default PriceChart;
+
+/* Timestamp charts use the same Recharts renderer as the existing price tabs.
+   No per-pointer React state, custom SVG resizing or chart animations. */
+export function TimePriceChart({ timeline, label, compact = false, empty = "No recorded prices in this window." }) {
+  const { points = [], gaps = [], start, end } = timeline || {};
+  const rows = useMemo(() => [...points, ...gaps.map((gap) => ({ t: (gap.start + gap.end) / 2, value: null }))]
+    .sort((a, b) => a.t - b.t), [points, gaps]);
+  const number = (value) => value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  const date = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  if (!points.length) return <div className="st-time-empty">{empty}</div>;
+  const low = Math.min(...points.map((point) => point.value));
+  const high = Math.max(...points.map((point) => point.value));
+  const pad = Math.max((high - low) * 0.12, high * 0.025, 0.0001);
+  const colour = points.at(-1).value > points[0].value ? "#a5d4a0" : points.at(-1).value < points[0].value ? "#ffaaa2" : "#d4c5ba";
+  const ticks = [start, (start + end) / 2, end];
+  const timeTick = (t) => end - start >= 23 * 3600_000
+    ? new Date(t).toLocaleDateString([], { month: "short", day: "numeric" })
+    : new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const tooltip = ({ active, label: at, payload }) => {
+    if (!active || at == null) return null;
+    const gap = gaps.find((gap) => at > gap.start && at < gap.end);
+    const point = payload?.find((entry) => Number.isFinite(entry.value))?.payload;
+    if (!gap && !point) return null;
+    return <div className="st-time-tooltip" role="tooltip">
+      <strong>{gap ? "Missing snapshots" : `${number(point.value)}c`}</strong>
+      <span>{gap ? `${date(gap.start)} – ${date(gap.end)}` : date(point.t)}</span>
+      {gap && <span>No recorded prices in this interval.</span>}
+    </div>;
+  };
+  return <div className={`st-time-chart${compact ? " st-time-chart--compact" : ""}`} aria-label={label}>
+    <ResponsiveContainer width="100%" height={compact ? 32 : 230} debounce={80}>
+      <ComposedChart data={rows} accessibilityLayer={!compact}
+        margin={compact ? { top: 3, right: 3, bottom: 3, left: 3 } : { top: 12, right: 28, bottom: 8, left: 0 }}>
+        {!compact && <CartesianGrid stroke="#3a332a" strokeDasharray="2 5" vertical={false} />}
+        <XAxis hide={compact} dataKey="t" type="number" domain={[start, end]} ticks={ticks}
+          tick={{ fill: "#b6a795", fontSize: 12 }} stroke="#4a4234" tickFormatter={timeTick} minTickGap={30} />
+        <YAxis hide={compact} domain={[Math.max(0, low - pad), high + pad]} width={54}
+          tick={{ fill: "#b6a795", fontSize: 12 }} stroke="#4a4234"
+          tickFormatter={(v) => `${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toLocaleString(undefined, { maximumFractionDigits: high < 1 ? 3 : 2 })}c`} />
+        <Tooltip content={tooltip} isAnimationActive={false} useTranslate3d={false}
+          allowEscapeViewBox={{ x: false, y: true }} wrapperStyle={{ zIndex: 20, pointerEvents: "none" }}
+          cursor={{ stroke: "#ad8e69", strokeDasharray: "3 3" }} />
+        {gaps.map((gap) => <ReferenceArea key={gap.start} x1={gap.start} x2={gap.end}
+          fill="#b28b55" fillOpacity={0.09} strokeOpacity={0} />)}
+        <Line type="linear" dataKey="value" stroke={colour} strokeWidth={compact ? 1.5 : 2}
+          dot={compact && points.length > 1 ? false : { r: 2 }} activeDot={{ r: 3 }}
+          connectNulls={false} isAnimationActive={false} />
+      </ComposedChart>
+    </ResponsiveContainer>
+    {!compact && <div className="st-time-meta">
+      <span>{points.length} recorded prices</span><span>Low {number(low)}c · High {number(high)}c</span>
+      <span>{date(start)} – {date(end)}</span>
+      {points.length === 1 && <span>One observation; trend unavailable.</span>}
+      {gaps.length > 0 && <span>Shaded areas have no snapshots</span>}
+    </div>}
+  </div>;
+}
